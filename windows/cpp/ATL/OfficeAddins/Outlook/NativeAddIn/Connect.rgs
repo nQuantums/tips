@@ -1,0 +1,46 @@
+HKCR
+{
+	NativeAddin.Connect = s 'Connect class'  
+	{  
+		CLSID = s '{94d172b9-e3b5-44cf-9483-0822f429cc0a}'
+	}  
+	NoRemove CLSID
+	{
+		ForceRemove {94d172b9-e3b5-44cf-9483-0822f429cc0a} = s 'Connect class'
+		{
+			ForceRemove Programmable
+			ProgID = s 'NativeAddin.Connect'
+			InprocServer32 = s '%MODULE%'
+			{
+				val ThreadingModel = s 'Apartment'
+			}
+			TypeLib = s '{5ce2978f-238f-4c52-aeb6-f9545da50eb5}'
+			Version = s '1.0'
+		}
+	}
+}
+
+HKCU
+{
+	NoRemove Software
+	{
+		NoRemove Microsoft
+		{
+			NoRemove Office
+			{
+				NoRemove Outlook
+				{
+					NoRemove Addins
+					{
+						NativeAddin.Connect
+						{
+							val Description = s 'Sample Addin'
+							val FriendlyName = s 'Sample Addin'
+							val LoadBehavior = d 3
+						}
+					}
+				}
+			}
+		}
+	}
+}

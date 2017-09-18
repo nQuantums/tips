@@ -1,0 +1,36 @@
+// NativeAddIn.idl : NativeAddIn の IDL ソース
+//
+
+// このファイルは、タイプ ライブラリ ([!output SAFE_IDL_NAME].tlb) およびマーシャリング コードを
+// タイプ ライブラリ (NativeAddIn.tlb) とマーシャリング コードを生成します。
+
+import "oaidl.idl";
+import "ocidl.idl";
+
+[
+	object,
+	uuid(eb3a0b1c-8c27-4219-b7d9-02d26f966e5c),
+	dual,
+	nonextensible,
+	pointer_default(unique)
+]
+interface IConnect : IDispatch
+{
+};
+[
+	uuid(5ce2978f-238f-4c52-aeb6-f9545da50eb5),
+	version(1.0),
+]
+library NativeAddInLib
+{
+	importlib("stdole2.tlb");
+	[
+		uuid(94d172b9-e3b5-44cf-9483-0822f429cc0a)
+	]
+	coclass Connect
+	{
+		[default] interface IConnect;
+	};
+};
+
+import "shobjidl.idl";
