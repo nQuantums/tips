@@ -3,11 +3,40 @@
 #include <exception>
 #include "PipeServer.h"
 
+template<typename Functor>
+struct finally_guard {
+	finally_guard(Functor f)
+		: functor(std::move(f))
+		, active(true) {
+	}
+
+	finally_guard(finally_guard&& other)
+		: functor(std::move(other.functor))
+		, active(other.active) {
+		other.active = false;
+	}
+
+	finally_guard& operator=(finally_guard&&) = delete;
+
+	~finally_guard() {
+		if (active)
+			functor();
+	}
+
+	Functor functor;
+	bool active;
+};
+
+template<typename F> finally_guard<typename std::decay<F>::type> finally(F&& f) {
+	return { std::forward<F>(f) };
+}
+
 //==============================================================================
 //		パイプによるサーバー
 
 PipeServer::PipeServer() {
 	m_RequestStop = false;
+	m_hRequestStopEvent = ::CreateEventW(NULL, TRUE, FALSE, NULL);
 	m_SendBufferSize = 0;
 	m_RecvBufferSize = 0;
 	m_DefaultTimeout = 0;
@@ -17,9 +46,11 @@ PipeServer::~PipeServer() {
 	Stop();
 
 	// TODO: 全クライアント用スレッドが終了するまで待つ
+
+	::CloseHandle(m_hRequestStopEvent);
 }
 
-bool PipeServer::Start(const wchar_t* pszPipeName, DWORD sendBufferSize, DWORD recvBufferSize, DWORD defaultTimeout) {
+void PipeServer::Start(const wchar_t* pszPipeName, DWORD sendBufferSize, DWORD recvBufferSize, DWORD defaultTimeout) {
 	Stop();
 
 	m_PipeName = pszPipeName;
@@ -28,39 +59,34 @@ bool PipeServer::Start(const wchar_t* pszPipeName, DWORD sendBufferSize, DWORD r
 	m_DefaultTimeout = defaultTimeout;
 
 	m_RequestStop = false;
-	m_RequestStopEvent.Reset();
-	return m_AcceptanceThread.Start(&ThreadStart, this);
+	::ResetEvent(m_hRequestStopEvent);
+	m_AcceptanceThread = std::thread([this] { this->ThreadProc(); });
 }
 
 //! サーバー処理スレッドを停止する、スレッドアンセーフ
 void PipeServer::Stop() {
-	// まずサーバーの接続受付を停止させる
-	m_RequestStop = true;
-	m_RequestStopEvent.Set();
-	m_AcceptanceThread.Join();
-
-	// 全クライアントの通信スレッドを停止する
-	std::vector<ClientContext*> clients;
-
+	// 現在管理下のクライアント通信を取得する
+	std::vector<std::shared_ptr<ClientContext>> clients;
 	{
-		jk::CriticalSectionLock lock(&m_ClientsCs);
+		std::lock_guard<std::mutex> lock(m_ClientsCs);
 		clients = m_Clients;
 	}
 
-	for (size_t i = 0; i < clients.size(); i++) {
-		RemoveClient(clients[i], true);
-	}
-}
+	// まずサーバーの接続受付を停止させる
+	m_RequestStop = true;
+	::SetEvent(m_hRequestStopEvent);
+	if (m_AcceptanceThread.joinable())
+		m_AcceptanceThread.join();
 
-//! 接続受付スレッド開始アドレス
-intptr_t PipeServer::ThreadStart(void* pObj) {
-	((PipeServer*)pObj)->ThreadProc();
-	return 0;
+	// クライアント通信スレッドの停止を待つ
+	for (auto& c : clients) {
+		c.get()->Stop();
+	}
 }
 
 //! 接続受付スレッド処理
 void PipeServer::ThreadProc() {
-	HANDLE hCancelEvent = m_RequestStopEvent.m_hEvent;
+	HANDLE hCancelEvent = m_hRequestStopEvent;
 	CancelablePipe pipe(hCancelEvent);
 
 	for (;;) {
@@ -89,18 +115,21 @@ void PipeServer::ThreadProc() {
 
 //! 指定クライアントを管理下へ追加する
 void PipeServer::AddClient(ClientContext* pClient) {
-	jk::CriticalSectionLock lock(&m_ClientsCs);
-	m_Clients.push_back(pClient);
+	std::lock_guard<std::mutex> lock(m_ClientsCs);
+	m_Clients.push_back(std::shared_ptr<ClientContext>(pClient));
 }
 
 //! 指定クライアントを管理下から除外する
-bool PipeServer::RemoveClient(ClientContext* pClient, bool wait) {
-	jk::CriticalSectionLock lock(&m_ClientsCs);
+bool PipeServer::RemoveClient(ClientContext* pClient) {
+	auto& sync = m_ClientsCs;
+	sync.lock();
+	auto guard = finally([&sync] { sync.unlock(); });
+
 	for (size_t i = 0; i < m_Clients.size(); i++) {
-		if (m_Clients[i] == pClient) {
+		if (m_Clients[i].get() == pClient) {
 			m_Clients.erase(m_Clients.begin() + i);
-			lock.Detach(true);
-			pClient->Stop(wait);
+			sync.unlock();
+			guard.active = false;
 			return true;
 		}
 	}
@@ -111,13 +140,8 @@ bool PipeServer::RemoveClient(ClientContext* pClient, bool wait) {
 //==============================================================================
 //		クライアントとの通信処理
 
-intptr_t PipeServer::ClientContext::ThreadStart(void* pObj) {
-	((PipeServer::ClientContext*)pObj)->ThreadProc();
-	return 0;
-}
-
 //! クライアント用通信スレッド処理
-void PipeServer::ClientContext::ThreadProc() {
+void PipeServer::ClientContext::ThreadProc(std::shared_ptr<ClientContext>&& clientContext) {
 	CancelablePipe pipe = m_Pipe;
 	std::vector<char> buf(4096);
 	std::vector<uint8_t> tempBuf;
@@ -146,6 +170,8 @@ void PipeServer::ClientContext::ThreadProc() {
 		std::cout << &buf[0] << std::endl;
 	}
 
-	// 自分自身を破棄
-	delete this;
+	// 自分を管理対象から取り除く
+	auto owner = m_pOwner;
+	if (owner)
+		owner->RemoveClient(this);
 }

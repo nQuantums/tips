@@ -111,6 +111,13 @@ protected:
 //! イベント
 class JUNKAPICLASS Event {
 public:
+#if defined __GNUC__
+
+#else
+	typedef HANDLE Handle; //!< ハンドル型
+#endif
+
+public:
 	Event(); //!< コンストラクタ
 	~Event(); // デストラクタ
 	void Set(); //!< イベントをシグナル状態にする

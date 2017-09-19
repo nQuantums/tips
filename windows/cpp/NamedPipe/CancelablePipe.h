@@ -1,16 +1,14 @@
 #pragma once
 #include <Windows.h>
 #include <iostream>
-#include "../../Junk/JunkConfig.h"
-
 
 //! 待機キャンセル機能付きのパイプ
 struct CancelablePipe : OVERLAPPED {
 	HANDLE hUnownedCancelEvent; //!< 読み書き待ちのキャンセルイベント、PipeOverlapped はこのハンドルの所有権を持たない、使用者側が管理する必要がある
 	HANDLE hPipe; //!< パイプ
 
-	_FINLINE CancelablePipe() {}
-	_FINLINE CancelablePipe(HANDLE hCancel) {
+	__forceinline CancelablePipe() {}
+	__forceinline CancelablePipe(HANDLE hCancel) {
 		::ZeroMemory(this, sizeof(*this));
 		this->hUnownedCancelEvent = hCancel;
 		this->hPipe = INVALID_HANDLE_VALUE;
@@ -25,7 +23,7 @@ struct CancelablePipe : OVERLAPPED {
 	}
 
 	//! パイプハンドル作成
-	_FINLINE bool Create(LPCWSTR lpName, DWORD dwOpenMode, DWORD dwPipeMode, DWORD nMaxInstances, DWORD nOutBufferSize, DWORD nInBufferSize, DWORD nDefaultTimeOut, LPSECURITY_ATTRIBUTES lpSecurityAttributes) {
+	bool Create(LPCWSTR lpName, DWORD dwOpenMode, DWORD dwPipeMode, DWORD nMaxInstances, DWORD nOutBufferSize, DWORD nInBufferSize, DWORD nDefaultTimeOut, LPSECURITY_ATTRIBUTES lpSecurityAttributes) {
 		HANDLE h = ::CreateNamedPipeW(lpName, dwOpenMode, dwPipeMode, nMaxInstances, nOutBufferSize, nInBufferSize, nDefaultTimeOut, lpSecurityAttributes);
 		if (h == INVALID_HANDLE_VALUE)
 			return false;
@@ -38,7 +36,7 @@ struct CancelablePipe : OVERLAPPED {
 	}
 
 	//! 接続待ち受け
-	_FINLINE bool Accept() {
+	bool Accept() {
 		if (::ConnectNamedPipe(this->hPipe, this))
 			return true;
 		if (::GetLastError() != ERROR_IO_PENDING)
@@ -49,7 +47,7 @@ struct CancelablePipe : OVERLAPPED {
 	}
 
 	//! 完了とキャンセルイベントハンドル配列の取得
-	_FINLINE const HANDLE* Handles() const {
+	__forceinline const HANDLE* Handles() const {
 		return &this->hEvent;
 	}
 
