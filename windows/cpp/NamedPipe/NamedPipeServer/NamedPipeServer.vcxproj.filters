@@ -13,9 +13,6 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Junk">
-      <UniqueIdentifier>{7cf3f8cf-9aba-428b-9a46-c0c853897d69}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
@@ -27,26 +24,11 @@
     <ClInclude Include="targetver.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Junk\JunkConfig.h">
-      <Filter>Junk</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Junk\JunkDef.h">
-      <Filter>Junk</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Junk\Thread.h">
-      <Filter>Junk</Filter>
-    </ClInclude>
     <ClInclude Include="PipeServer.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
     <ClInclude Include="..\CancelablePipe.h">
       <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Junk\Error.h">
-      <Filter>Junk</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Junk\Str.h">
-      <Filter>Junk</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -56,17 +38,8 @@
     <ClCompile Include="NamedPipeServer.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\Junk\Thread.cpp">
-      <Filter>Junk</Filter>
-    </ClCompile>
     <ClCompile Include="PipeServer.cpp">
       <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\Junk\Error.cpp">
-      <Filter>Junk</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\Junk\Str.cpp">
-      <Filter>Junk</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

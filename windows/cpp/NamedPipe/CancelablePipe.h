@@ -1,6 +1,6 @@
 #pragma once
 #include <Windows.h>
-#include <iostream>
+#include <vector>
 
 //! 待機キャンセル機能付きのパイプ
 struct CancelablePipe : OVERLAPPED {
@@ -58,14 +58,12 @@ struct CancelablePipe : OVERLAPPED {
 			DWORD n = 0;
 			if (!::ReadFile(this->hPipe, (char*)pBuf + len, (DWORD)size, &n, this)) {
 				if (::GetLastError() != ERROR_IO_PENDING) {
-					std::wcout << L"Failed to ReadFile." << std::endl;
 					return false;
 				}
 
 				DWORD r = ::WaitForMultipleObjects(2, this->Handles(), FALSE, INFINITE);
 				if (r == WAIT_OBJECT_0) {
 					if (!::GetOverlappedResult(this->hPipe, this, &n, FALSE)) {
-						std::wcout << L"Failed to GetOverlappedResult." << std::endl;
 						return false;
 					}
 				} else {
@@ -86,14 +84,12 @@ struct CancelablePipe : OVERLAPPED {
 			DWORD n = 0;
 			if (!::WriteFile(this->hPipe, (char*)pBuf + len, (DWORD)size, &n, this)) {
 				if (::GetLastError() != ERROR_IO_PENDING) {
-					std::wcout << L"Failed to WriteFile." << std::endl;
 					return false;
 				}
 
 				DWORD r = ::WaitForMultipleObjects(2, this->Handles(), FALSE, INFINITE);
 				if (r == WAIT_OBJECT_0) {
 					if (!::GetOverlappedResult(this->hPipe, this, &n, FALSE)) {
-						std::wcout << L"Failed to GetOverlappedResult." << std::endl;
 						return false;
 					}
 				} else {
@@ -105,5 +101,25 @@ struct CancelablePipe : OVERLAPPED {
 			len += n;
 		}
 		return true;
+	}
+
+	//! 指定バッファの終端以降に指定バイト数きっちり読み込む
+	bool CancelablePipe::ReadToBytes(std::vector<uint8_t>& buf, intptr_t size) {
+#ifdef _DEBUG
+		if (!size)
+			return true;
+#endif
+		auto prevSize = buf.size();
+		buf.resize(buf.size() + size);
+		return ReadToBytes(&buf[prevSize], size);
+	}
+
+	//! 指定バッファ全体をきっちり書き込む
+	bool CancelablePipe::WriteToBytes(const std::vector<uint8_t>& buf, intptr_t size) {
+#ifdef _DEBUG
+		if (buf.empty())
+			return true;
+#endif
+		return WriteToBytes(&*buf.begin(), size);
 	}
 };

@@ -14,7 +14,7 @@ public:
 	PipeServer();
 	~PipeServer();
 
-	void Start(const wchar_t* pszPipeName, DWORD sendBufferSize = 4096, DWORD recvBufferSize = 4096, DWORD defaultTimeout = 1000);
+	void Start(const wchar_t* pszPipeName, DWORD sendBufferSize = 4096, DWORD recvBufferSize = 4096, DWORD defaultTimeout = 1000, LPSECURITY_ATTRIBUTES pSecurityAttributes = NULL);
 	void Stop();
 
 protected:
@@ -23,11 +23,19 @@ protected:
 		ClientContext(PipeServer* pOwner, const CancelablePipe& pipe) {
 			m_pOwner = pOwner;
 			m_Pipe = pipe;
-			m_Thread = std::thread([this] { this->ThreadProc(std::shared_ptr<ClientContext>(this)); });
 		}
 		~ClientContext() {
-			Stop();
+			if (m_Thread.joinable()) {
+				if (std::this_thread::get_id() == m_Thread.get_id())
+					m_Thread.detach();
+				else
+					m_Thread.join();
+			}
 			m_Pipe.Destroy();
+		}
+
+		void Start(std::shared_ptr<ClientContext> clientContext) {
+			m_Thread = std::thread([&clientContext] { clientContext->ThreadProc(clientContext); });
 		}
 
 		void Stop() {
@@ -36,7 +44,7 @@ protected:
 		}
 
 	protected:
-		void ThreadProc(std::shared_ptr<ClientContext>&& clientContext);
+		void ThreadProc(std::shared_ptr<ClientContext> clientContext);
 
 	protected:
 		PipeServer* m_pOwner;
@@ -46,12 +54,12 @@ protected:
 
 protected:
 	void ThreadProc(); //!< 接続受付スレッド処理
-	void AddClient(ClientContext* pClient); //!< 指定クライアントを管理下へ追加する
-	bool RemoveClient(ClientContext* pClient); //!< 指定クライアントを管理下から除外する
+	void AddClient(std::shared_ptr<ClientContext> clientContext); //!< 指定クライアントを管理下へ追加する
+	bool RemoveClient(std::shared_ptr<ClientContext> clientContext); //!< 指定クライアントを管理下から除外する
 
 protected:
 	std::wstring m_PipeName; //!< 受付パイプ名
-	volatile bool m_RequestStop; //!< サーバー停止要求フラグ
+	LPSECURITY_ATTRIBUTES m_pSecurityAttributes; //!< 作成するパイプのセキュリティ記述子
 	HANDLE m_hRequestStopEvent; //!< サーバー停止要求イベント
 	std::thread m_AcceptanceThread; //!< 接続受付処理スレッド
 	DWORD m_SendBufferSize; //!< パイプ送信バッファサイズ

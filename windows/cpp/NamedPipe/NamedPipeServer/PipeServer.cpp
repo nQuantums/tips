@@ -35,7 +35,7 @@ template<typename F> finally_guard<typename std::decay<F>::type> finally(F&& f) 
 //		パイプによるサーバー
 
 PipeServer::PipeServer() {
-	m_RequestStop = false;
+	m_pSecurityAttributes = NULL;
 	m_hRequestStopEvent = ::CreateEventW(NULL, TRUE, FALSE, NULL);
 	m_SendBufferSize = 0;
 	m_RecvBufferSize = 0;
@@ -50,15 +50,15 @@ PipeServer::~PipeServer() {
 	::CloseHandle(m_hRequestStopEvent);
 }
 
-void PipeServer::Start(const wchar_t* pszPipeName, DWORD sendBufferSize, DWORD recvBufferSize, DWORD defaultTimeout) {
+void PipeServer::Start(const wchar_t* pszPipeName, DWORD sendBufferSize, DWORD recvBufferSize, DWORD defaultTimeout, LPSECURITY_ATTRIBUTES pSecurityAttributes) {
 	Stop();
 
 	m_PipeName = pszPipeName;
 	m_SendBufferSize = sendBufferSize;
 	m_RecvBufferSize = recvBufferSize;
 	m_DefaultTimeout = defaultTimeout;
+	m_pSecurityAttributes = pSecurityAttributes;
 
-	m_RequestStop = false;
 	::ResetEvent(m_hRequestStopEvent);
 	m_AcceptanceThread = std::thread([this] { this->ThreadProc(); });
 }
@@ -73,7 +73,6 @@ void PipeServer::Stop() {
 	}
 
 	// まずサーバーの接続受付を停止させる
-	m_RequestStop = true;
 	::SetEvent(m_hRequestStopEvent);
 	if (m_AcceptanceThread.joinable())
 		m_AcceptanceThread.join();
@@ -89,9 +88,11 @@ void PipeServer::ThreadProc() {
 	HANDLE hCancelEvent = m_hRequestStopEvent;
 	CancelablePipe pipe(hCancelEvent);
 
+	std::wcout << L"Server started." << std::endl;
+
 	for (;;) {
 		// 所定の名前でパイプ作成
-		if (!pipe.Create(m_PipeName.c_str(), PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, m_SendBufferSize, m_RecvBufferSize, m_DefaultTimeout, NULL)) {
+		if (!pipe.Create(m_PipeName.c_str(), PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, m_SendBufferSize, m_RecvBufferSize, m_DefaultTimeout, m_pSecurityAttributes)) {
 			std::wcout << L"Failed to create pipe." << std::endl;
 			break;
 		}
@@ -103,10 +104,15 @@ void PipeServer::ThreadProc() {
 		}
 
 		// 接続されたのでクライアント接続情報追加
-		AddClient(new ClientContext(this, pipe));
+		std::wcout << L"Connected." << std::endl;
+		auto clientContext = std::make_shared<ClientContext>(this, pipe);
+		AddClient(clientContext);
 
 		// ハンドルの所有権が移ったのでクリア
 		pipe = CancelablePipe(hCancelEvent);
+
+		// クライアントとの通信スレッド開始
+		clientContext->Start(clientContext);
 	}
 
 	// 不要なハンドルを破棄
@@ -114,19 +120,20 @@ void PipeServer::ThreadProc() {
 }
 
 //! 指定クライアントを管理下へ追加する
-void PipeServer::AddClient(ClientContext* pClient) {
+void PipeServer::AddClient(std::shared_ptr<ClientContext> clientContext) {
 	std::lock_guard<std::mutex> lock(m_ClientsCs);
-	m_Clients.push_back(std::shared_ptr<ClientContext>(pClient));
+	m_Clients.push_back(clientContext);
 }
 
 //! 指定クライアントを管理下から除外する
-bool PipeServer::RemoveClient(ClientContext* pClient) {
+bool PipeServer::RemoveClient(std::shared_ptr<ClientContext> clientContext) {
 	auto& sync = m_ClientsCs;
 	sync.lock();
 	auto guard = finally([&sync] { sync.unlock(); });
+	auto p = clientContext.get();
 
 	for (size_t i = 0; i < m_Clients.size(); i++) {
-		if (m_Clients[i].get() == pClient) {
+		if (m_Clients[i].get() == p) {
 			m_Clients.erase(m_Clients.begin() + i);
 			sync.unlock();
 			guard.active = false;
@@ -141,15 +148,18 @@ bool PipeServer::RemoveClient(ClientContext* pClient) {
 //		クライアントとの通信処理
 
 //! クライアント用通信スレッド処理
-void PipeServer::ClientContext::ThreadProc(std::shared_ptr<ClientContext>&& clientContext) {
+void PipeServer::ClientContext::ThreadProc(std::shared_ptr<ClientContext> clientContext) {
 	CancelablePipe pipe = m_Pipe;
-	std::vector<char> buf(4096);
-	std::vector<uint8_t> tempBuf;
+	std::vector<uint8_t> recvbuf;
+	std::vector<uint8_t> sendbuf;
+
+	recvbuf.reserve(4096);
+	sendbuf.reserve(4096);
 
 	for (;;) {
 		// まずパケットサイズを読み込む
-		int packetSize;
-		if (!pipe.ReadToBytes(&packetSize, 4))
+		int32_t packetSize;
+		if (!pipe.ReadToBytes(&packetSize, sizeof(packetSize)))
 			break;
 
 		// パケットサイズが無茶な値なら攻撃かもしれない
@@ -159,19 +169,28 @@ void PipeServer::ClientContext::ThreadProc(std::shared_ptr<ClientContext>&& clie
 		}
 
 		// パケット内容を読み込む
-		if ((intptr_t)buf.size() < packetSize + 1)
-			buf.resize(packetSize + 1);
-		if (!pipe.ReadToBytes(&buf[0], packetSize))
+		recvbuf.resize(0);
+		if (!pipe.ReadToBytes(recvbuf, packetSize))
 			break;
-
-		buf[packetSize + 1] = '\0';
+		recvbuf.push_back(0);
 
 		std::cout << "Received:" << std::endl;
-		std::cout << &buf[0] << std::endl;
+		std::cout << "\t" << &recvbuf[0] << std::endl;
+
+		// 応答を返す
+		auto response = "OK";
+		packetSize = (int)strlen(response);
+		sendbuf.resize(0);
+		sendbuf.insert(sendbuf.end(), (char*)&packetSize, (char*)&packetSize + sizeof(packetSize));
+		sendbuf.insert(sendbuf.end(), response, response + packetSize);
+		if (!pipe.WriteToBytes(&sendbuf[0], sendbuf.size()))
+			break;
 	}
+
+	std::cout << "Disconnected." << std::endl;
 
 	// 自分を管理対象から取り除く
 	auto owner = m_pOwner;
 	if (owner)
-		owner->RemoveClient(this);
+		owner->RemoveClient(clientContext);
 }
