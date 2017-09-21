@@ -1,11 +1,13 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 10.00
-# Visual Studio 2008
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Server", "Server\Server.vcproj", "{8B528C78-AF0C-4306-BB22-04F0A19B868B}"
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.26730.15
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Server", "Server\Server.vcxproj", "{8B528C78-AF0C-4306-BB22-04F0A19B868B}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Client", "Client\Client.vcproj", "{42BF4417-57B2-49F4-BED1-5A67461CC760}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Client", "Client\Client.vcxproj", "{42BF4417-57B2-49F4-BED1-5A67461CC760}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NetClientApi", "NetClientApi\NetClientApi.vcproj", "{A16D0615-9F54-4050-A83F-00736AE93859}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NetClientApi", "NetClientApi\NetClientApi.vcxproj", "{A16D0615-9F54-4050-A83F-00736AE93859}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -28,5 +30,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F091BA01-AA06-4EB8-8F4A-3EDE920D3409}
 	EndGlobalSection
 EndGlobal
