@@ -25,13 +25,6 @@ namespace NetClientApi {
 	}
 
 	// 指定バッファへ文字列を追加しバッファ内でのオフセットを返す
-	__forceinline size_t ToBuffer(PacketBuffer& buffer, const char* value) {
-		size_t offset = buffer.size();
-		buffer.insert(buffer.end(), reinterpret_cast<const uint8_t*>(value), reinterpret_cast<const uint8_t*>(value + strlen(value)));
-		return offset;
-	}
-
-	// 指定バッファへ文字列を追加しバッファ内でのオフセットを返す
 	__forceinline size_t ToBuffer(PacketBuffer& buffer, const wchar_t* value) {
 		size_t offset = buffer.size();
 		buffer.insert(buffer.end(), reinterpret_cast<const uint8_t*>(value), reinterpret_cast<const uint8_t*>(value + wcslen(value)));
@@ -54,11 +47,6 @@ namespace NetClientApi {
 
 		// 指定値を追加しバッファ内でのオフセットを返す
 		template<class T> __forceinline size_t Write(const T& value) {
-			return ToBuffer(*this->buffer_ptr, value);
-		}
-
-		// 指定バッファへ文字列を追加しバッファ内でのオフセットを返す
-		__forceinline size_t Write(const char* value) {
 			return ToBuffer(*this->buffer_ptr, value);
 		}
 
@@ -89,7 +77,7 @@ namespace NetClientApi {
 		pktsize_t size; // 以降に続く(guid含む)パケット内データサイズ(bytes)
 		GUID guid; // パケットフォーマットID
 
-				   // パケットデータ領域へのポインタ取得
+		// パケットデータ領域へのポインタ取得
 		__forceinline const void* Data() const {
 			return reinterpret_cast<const uint8_t*>(this) + sizeof(*this);
 		}
