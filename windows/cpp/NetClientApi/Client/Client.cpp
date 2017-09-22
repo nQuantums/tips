@@ -3,7 +3,7 @@
 
 #include "stdafx.h"
 #include <iostream>
-#include "../NetClientApi/Packets.h"
+#include "../NetClientApi/Commands.h"
 
 using namespace NetClientApi;
 
@@ -13,20 +13,20 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	// とりあえずバッファにコマンド構築
 	IsFileExistsCmd::Write(buffer, L"testfile.zip", L"1asfsfasfsaffeerr");
-	CopyFileIfExistsCmd::Write(buffer, L"testfile.zip", L"1asfsfasfsaffeerr", L"c:\\work");
+	CopyFileCmd::Write(buffer, L"testfile.zip", L"1asfsfasfsaffeerr", L"c:\\work");
 
 	// バッファからコマンド読み込み
 	IsFileExistsCmd cmd1;
-	CopyFileIfExistsCmd cmd2;
+	CopyFileCmd cmd2;
 
 	position_t position = 0;
 	while (Unpacker::IsUnpackable(buffer, position)) {
 		Unpacker unpacker(buffer, position);
 
 		if (cmd1.Read(unpacker)) {
-			std::wcout << L"指定ファイル存在確認コマンド, " << cmd1.file_name << ", " << cmd1.file_hash << std::endl;
+			std::wcout << L"IsFileExistsCmd, " << cmd1.file_name << ", " << cmd1.file_hash << std::endl;
 		} else if (cmd2.Read(unpacker)) {
-			std::wcout << L"指定ファイルが存在したら指定フォルダへコピーコマンド, " << cmd2.file_name << ", " << cmd2.file_hash << ", " << cmd2.folder_path << std::endl;
+			std::wcout << L"CopyFileIfExistsCmd, " << cmd2.file_name << ", " << cmd2.file_hash << ", " << cmd2.folder_path << std::endl;
 		}
 	}
 

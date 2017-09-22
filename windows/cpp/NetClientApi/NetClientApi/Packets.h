@@ -61,8 +61,13 @@ namespace NetClientApi {
 			buf.insert(buf.end(), reinterpret_cast<const uint8_t*>(&initial_size), reinterpret_cast<const uint8_t*>(&initial_size) + sizeof(initial_size));
 			buf.insert(buf.end(), reinterpret_cast<const uint8_t*>(&guid), reinterpret_cast<const uint8_t*>(&guid) + sizeof(guid));
 		}
+
 		__forceinline ~Packer() {
 			reinterpret_cast<pktsize_t&>(buffer_ptr->at(this->start)) = this->buffer_ptr->size() - this->start - sizeof(pktsize_t);
+		}
+
+		__forceinline PacketBuffer& Buffer() const {
+			return *this->buffer_ptr;
 		}
 
 		// 指定値を追加しバッファ内でのオフセットを返す
@@ -108,7 +113,7 @@ namespace NetClientApi {
 		GUID guid; // パケット種類GUID
 		position_t end; // バッファ内でのパケット終了位置+1(bytes)
 
-		Unpacker(PacketBuffer& buf, position_t& position) {
+		Unpacker(PacketBuffer& buf, position_t& position, const Unpacker* parent = NULL) {
 			this->buffer_ptr = &buf;
 			this->position_ptr = &position;
 
@@ -136,6 +141,11 @@ namespace NetClientApi {
 				ss << "Buffer size not enough for packet.\nPacket GUID: " << GuidToString(this->guid) << "\nPacket end position: " << end << "\nBuffer size: " << buf.size();
 				throw UnpackingException(ss.str().c_str());
 			}
+			if (parent && parent->end < end) {
+				std::stringstream ss;
+				ss << "Packet protrudes the parent packet.\nPacket GUID: " << GuidToString(this->guid) << "\nPacket end position: " << end << "\nParent packet end position: " << end;
+				throw UnpackingException(ss.str().c_str());
+			}
 			this->end = end;
 
 			*this->position_ptr = start + sizeof(pktsize_t) + sizeof(GUID);
@@ -143,6 +153,14 @@ namespace NetClientApi {
 
 		__forceinline ~Unpacker() {
 			*this->position_ptr = this->end;
+		}
+
+		__forceinline PacketBuffer& Buffer() const {
+			return *this->buffer_ptr;
+		}
+
+		__forceinline position_t Position() const {
+			return *this->position_ptr;
 		}
 
 		static __forceinline bool IsUnpackable(PacketBuffer& buf, position_t position) {
@@ -170,14 +188,6 @@ namespace NetClientApi {
 
 		__forceinline bool IsEndOfPacket() const {
 			return *this->position_ptr == this->end;
-		}
-
-		__forceinline PacketBuffer& Buffer() const {
-			return *this->buffer_ptr;
-		}
-
-		__forceinline position_t Position() const {
-			return *this->position_ptr;
 		}
 
 		// バッファ内の現在位置から指定値を取得し次の値を指すよう現在位置をずらす
@@ -230,19 +240,10 @@ namespace NetClientApi {
 	struct Packet {
 		pktsize_t size; // 以降に続く(guid含む)パケット内データサイズ(bytes)
 		GUID guid; // パケットの種類を示すID
-
-				   // パケットデータ領域へのポインタ取得
-		__forceinline const void* Data() const {
-			return reinterpret_cast<const uint8_t*>(this) + sizeof(*this);
-		}
-		// パケットデータ領域へのポインタ取得
-		__forceinline void* Data() {
-			return reinterpret_cast<uint8_t*>(this) + sizeof(*this);
-		}
 	};
 
 	// __uuidof でGUID取得できるクラス(末端の継承先クラス)を明示的に指定したパケット
-	template<class _TypeOfId> struct PacketIdLinked : Packet {
+	template<class _TypeOfId> struct PacketWithId : Packet {
 		typedef _TypeOfId TypeOfId;
 
 		struct MyPacker : Packer {
@@ -279,7 +280,7 @@ namespace NetClientApi {
 			position_t position = unpacker.Position();
 			position_t end = unpacker.end;
 			while (position != end) {
-				Unpacker tmp_unpacker(buffer, position);
+				Unpacker tmp_unpacker(buffer, positionm, &unpacker);
 				if (reinterpret_cast<_TypeOfId*>(this)->Read(tmp_unpacker)) // 継承先クラスで実装されているされている Read() で読み込む
 					return true;
 			}
@@ -287,8 +288,8 @@ namespace NetClientApi {
 		}
 	};
 
-	// パケットのデータ領域に意味のある値が１つだけ入ってるパケット
-	template<class _TypeOfId, class _ValueType> struct ValuePacket : PacketIdLinked<_TypeOfId> {
+	// パケットのデータ領域に値が１つ入ってるパケット
+	template<class _TypeOfId, class _ValueType> struct ValuePacket : PacketWithId<_TypeOfId> {
 		typedef _ValueType ValueType;
 
 		static __forceinline void Write(PacketBuffer& buffer, const _ValueType& value) {
@@ -308,7 +309,7 @@ namespace NetClientApi {
 			position_t position = unpacker.Position();
 			position_t end = unpacker.end;
 			while (position != end) {
-				Unpacker tmp_unpacker(buffer, position);
+				Unpacker tmp_unpacker(buffer, position, &unpacker);
 				if (_TypeOfId::IsReadable(tmp_unpacker)) {
 					tmp_unpacker.Read(value);
 					return true;
@@ -323,7 +324,7 @@ namespace NetClientApi {
 			position_t position = unpacker.Position();
 			position_t end = unpacker.end;
 			while (position != end) {
-				Unpacker tmp_unpacker(buffer, position);
+				Unpacker tmp_unpacker(buffer, position, &unpacker);
 				if (_TypeOfId::IsReadable(tmp_unpacker)) {
 					_ValueType value;
 					tmp_unpacker.Read(value);
@@ -331,96 +332,6 @@ namespace NetClientApi {
 				}
 			}
 			throw NoArgUnpackingException(GuidToString(__uuidof(_TypeOfId)).c_str());
-		}
-	};
-
-	// ファイル名引数
-	struct PKTID("4D844928-3409-4b99-90C6-D144B3734C90") FileNameArg : ValuePacket<FileNameArg, std::wstring> {};
-	// ハッシュ値引数
-	struct PKTID("7CB273A6-50F2-4343-8AF4-7F6200BE8FAD") FileHashArg : ValuePacket<FileHashArg, std::wstring> {};
-	// フォルダパス名引数
-	struct PKTID("6E382AA0-A1B0-4816-B0A6-A6A9BDE26BBF") FolderPathArg : ValuePacket<FolderPathArg, std::wstring> {};
-	// BOOL 値引数
-	struct PKTID("3508B202-B300-4DD2-9BC3-0275C2448645") BoolArg : ValuePacket<BoolArg, BOOL> {};
-	// HRESULT 値引数
-	struct PKTID("7496B65F-51BF-44e8-A741-D4D576301018") HresultArg : ValuePacket<HresultArg, HRESULT> {};
-
-
-	// 指定ファイル存在確認コマンド
-	struct PKTID("C8B436AC-B8BB-4939-8447-576814E0F973") IsFileExistsCmd : PacketIdLinked<IsFileExistsCmd> {
-		std::wstring file_name; // ファイル名
-		std::wstring file_hash; // ファイル内容ハッシュ値
-
-		static void Write(PacketBuffer& buffer, const wchar_t* file_name, const wchar_t* file_hash) {
-			MyPacker p(buffer);
-			FileNameArg::Write(buffer, file_name);
-			FileHashArg::Write(buffer, file_hash);
-		}
-		bool Read(Unpacker& unpacker) {
-			if (!this->ReadHeader(unpacker))
-				return false;
-			this->file_name = FileNameArg::Value(unpacker);
-			this->file_hash = FileHashArg::Value(unpacker);
-			return true;
-		}
-	};
-	// 指定ファイル存在確認応答
-	struct PKTID("91BFBE77-39F2-427D-B379-206DF312E064") IsFileExistsRes : PacketIdLinked<IsFileExistsCmd> {
-		HRESULT hr; // チェック途中で発生したエラー
-		BOOL exists; // ファイルの有無
-
-		static __forceinline void Write(PacketBuffer& buffer, HRESULT hr, BOOL exists) {
-			MyPacker p(buffer);
-			HresultArg::Write(buffer, hr);
-			BoolArg::Write(buffer, exists);
-		}
-		bool Read(Unpacker& unpacker) {
-			if (!this->ReadHeader(unpacker))
-				return false;
-			this->hr = HresultArg::Value(unpacker);
-			this->exists = BoolArg::Value(unpacker);
-			return true;
-		}
-	};
-
-
-	// 指定ファイルが存在したら指定フォルダへコピーコマンド
-	struct PKTID("232C49F2-FB4B-4079-898D-227A0BB52601") CopyFileIfExistsCmd : PacketIdLinked<CopyFileIfExistsCmd> {
-		std::wstring file_name; // ファイル名
-		std::wstring file_hash; // ファイル内容ハッシュ値
-		std::wstring folder_path; // コピー先フォルダパス名
-
-		static void Write(PacketBuffer& buffer, const wchar_t* file_name, const wchar_t* file_hash, const wchar_t* folder_path) {
-			MyPacker p(buffer);
-			FileNameArg::Write(buffer, file_name);
-			FileHashArg::Write(buffer, file_hash);
-			FolderPathArg::Write(buffer, folder_path);
-		}
-		bool Read(Unpacker& unpacker) {
-			if (!this->ReadHeader(unpacker))
-				return false;
-			this->file_name = FileNameArg::Value(unpacker);
-			this->file_hash = FileHashArg::Value(unpacker);
-			this->folder_path = FolderPathArg::Value(unpacker);
-			return true;
-		}
-	};
-	// 指定ファイル存在確認応答
-	struct PKTID("2E68DE5D-94A9-4ADF-AFEB-851ED3BAF523") CopyFileIfExistsRes : PacketIdLinked<CopyFileIfExistsRes> {
-		HRESULT hr; // チェック途中で発生したエラー
-		BOOL exists; // ファイルの有無
-
-		static __forceinline void Write(PacketBuffer& buffer, HRESULT hr, BOOL exists) {
-			MyPacker p(buffer);
-			HresultArg::Write(buffer, hr);
-			BoolArg::Write(buffer, exists);
-		}
-		bool Read(Unpacker& unpacker) {
-			if (!this->ReadHeader(unpacker))
-				return false;
-			this->hr = HresultArg::Value(unpacker);
-			this->exists = BoolArg::Value(unpacker);
-			return true;
 		}
 	};
 #pragma pack(pop)
