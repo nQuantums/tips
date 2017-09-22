@@ -1,4 +1,5 @@
 #pragma once
+#include <Windows.h>
 #include <assert.h>
 #include <ctype.h>
 #include <stddef.h>
@@ -32,4 +33,24 @@ typedef unsigned long long uint_fast64_t;
 #else
 #include <stdint.h>
 #endif
+#include <exception>
 
+namespace NetClientApi {
+	// NetClientApi —p—áŠO
+	class Exception : std::exception {
+	public:
+		Exception(char const* const _Message) : std::exception(_Message) {
+			hr_ = S_OK;
+		}
+		Exception(char const* const _Message, HRESULT hr) : std::exception(_Message) {
+			hr_ = hr;
+		}
+
+		HRESULT GetHresult() const {
+			return hr_;
+		}
+
+	protected:
+		HRESULT hr_;
+	};
+}
