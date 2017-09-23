@@ -123,6 +123,7 @@ void SessionLifeCycleTest() {
 			s.GetAllTexts();
 			if (i % 1000 == 0)
 				std::wcout << i << std::endl;
+			//::Sleep(0);
 		}
 	} catch (Exception& ex) {
 		std::cout << ex.what() << "\n" << ex.MessageFromHresultA() << std::endl;

@@ -18,10 +18,10 @@ public:
 };
 
 // ConnectNamedPipe 失敗例外
-class ConnectNamedPipeException : public PipeException {
+class PipeConnectException : public PipeException {
 public:
-	ConnectNamedPipeException(char const* const _Message) : PipeException(_Message) {}
-	ConnectNamedPipeException(char const* const _Message, HRESULT hr) : PipeException(_Message, hr) {}
+	PipeConnectException(char const* const _Message) : PipeException(_Message) {}
+	PipeConnectException(char const* const _Message, HRESULT hr) : PipeException(_Message, hr) {}
 };
 
 // パイプ書き込み失敗例外
@@ -80,7 +80,7 @@ struct CancelablePipe : OVERLAPPED {
 		if (::ConnectNamedPipe(this->hPipe, this))
 			return;
 		if (::GetLastError() != ERROR_IO_PENDING)
-			throw ConnectNamedPipeException("Failed to ConnectNamedPipe.");
+			throw PipeConnectException("Failed to ConnectNamedPipe.");
 		switch (::WaitForMultipleObjects(this->HandlesCount(), this->Handles(), FALSE, INFINITE)) {
 		case WAIT_OBJECT_0:
 			return;

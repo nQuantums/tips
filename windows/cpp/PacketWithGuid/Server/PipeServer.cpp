@@ -37,11 +37,15 @@ bool PipeServer::Start(const wchar_t* pszPipeName, DWORD sendBufferSize, DWORD r
 	security_attributes_ = pSecurityAttributes;
 	::ResetEvent(request_stop_event_);
 
-	if (!thread_pool_.Create(32))
+	// 指定数のスレッドを作成し名前付きパイプでクライアントとやり取りを行う
+	// このスレッド数が同時処理できるクライアント数となる
+	size_t thread_count = 32;
+	if (!thread_pool_.Create(thread_count))
 		return false;
-
-	if (!thread_pool_.QueueTask(new TaskForAccept(this))) {
-		throw Exception("Failed to QueueTask.");
+	for (size_t i = 0; i < thread_count; i++) {
+		if (!thread_pool_.QueueTask(new TaskForClient(this))) {
+			throw Exception("Failed to QueueTask.");
+		}
 	}
 
 	return true;
@@ -57,108 +61,80 @@ void PipeServer::Stop() {
 	thread_pool_.Destroy();
 }
 
-//! 接続受付処理
-void PipeServer::AcceptProc() {
-	HANDLE hCancelEvent = request_stop_event_;
-	CancelablePipe pipe(hCancelEvent);
-
-	std::wcout << L"Server started." << std::endl;
-
-	try {
-		for (;;) {
-			try {
-				// TODO: ソケットとは違い accept() してスレッド作るのではなく、予め最大スレッド数作って名前付きパイプ作って待たせておく必要がある、で接続受け付けたスレッドのままクライアントと処理をする
-
-				// 所定の名前でパイプ作成
-				pipe.Destroy();
-				pipe.Create(pipe_name_.c_str(), PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, send_buffer_size_, recv_buffer_size_, default_timeout_, security_attributes_);
-
-				// 接続待ち受け
-				pipe.Accept();
-
-				// 接続されたのでサーバークライアント間通信タスク開始
-				//std::wcout << L"Connected." << std::endl;
-				TaskForClient* task = new TaskForClient(pipe);
-				if (!thread_pool_.QueueTask(task)) {
-					continue;
-				}
-
-				// ハンドルの所有権が移ったのでクリア
-				pipe = CancelablePipe(hCancelEvent);
-			} catch (PipeException&) {
-			}
-		}
-	} catch (Exception& ex) {
-		std::cout << ex.what() << "\n" << ex.MessageFromHresultA() << std::endl;
-	} catch (std::exception& stdex) {
-		std::cout << stdex.what() << std::endl;
-	}
-
-	// 不要なハンドルを破棄
-	pipe.Destroy();
-}
-
-
-//==============================================================================
-//		クライアント接続受付処理
-
-void PipeServer::TaskForAccept::DoTask() {
-	owner_->AcceptProc();
-}
-
 
 //==============================================================================
 //		クライアントとの通信処理
 
 void PipeServer::TaskForClient::DoTask() {
-	CancelablePipe pipe = pipe_;
-	ByteBuffer recvbuf;
-	ByteBuffer sendbuf;
-	std::vector<std::wstring> texts;
-
-	recvbuf.reserve(4096);
-	sendbuf.reserve(4096);
+	HANDLE hCancelEvent = owner_->request_stop_event_;
+	CancelablePipe pipe(hCancelEvent);
 
 	try {
+		// 所定の名前でパイプ作成
+		pipe.Create(
+			owner_->pipe_name_.c_str(),
+			PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES,
+			owner_->send_buffer_size_,
+			owner_->recv_buffer_size_,
+			owner_->default_timeout_,
+			owner_->security_attributes_);
+
 		for (;;) {
-			// まずパケットサイズを読み込む
-			pktsize_t packetSize;
-			pipe.ReadToBytes(&packetSize, sizeof(packetSize));
+			try {
+				// 接続待機
+				pipe.Accept();
 
-			// パケットサイズが無茶な値なら攻撃かもしれない
-			Unpacker::VeryfySize(packetSize);
+				// クライアントとやりとり
+				ByteBuffer recvbuf;
+				ByteBuffer sendbuf;
+				std::vector<std::wstring> texts;
+				recvbuf.reserve(4096);
+				sendbuf.reserve(4096);
+				for (;;) {
+					// まずパケットサイズを読み込む
+					pktsize_t packetSize;
+					pipe.ReadToBytes(&packetSize, sizeof(packetSize));
 
-			// １パケット分データ受信
-			recvbuf.resize(0);
-			ToBuffer(recvbuf, packetSize);
-			pipe.ReadToBytes(recvbuf, packetSize);
+					// パケットサイズが無茶な値なら攻撃かもしれない
+					Unpacker::VeryfySize(packetSize);
 
-			// パケットをアンパッキングして解析する
-			position_t position = 0;
-			Unpacker up(recvbuf, position);
+					// １パケット分データ受信
+					recvbuf.resize(0);
+					ToBuffer(recvbuf, packetSize);
+					pipe.ReadToBytes(recvbuf, packetSize);
 
-			// パケット種類毎の処理を行う
-			sendbuf.resize(0);
-			if (AddTextCmd::IsReadable(up)) {
-				AddTextCmd cmd(up);
-				texts.push_back(std::move(cmd.text));
-				//::Sleep(1000);
-				AddTextRes::Write(sendbuf, S_OK);
-			} else if (GetAllTextsCmd::IsReadable(up)) {
-				GetAllTextsCmd cmd(up);
-				//::Sleep(1000);
-				GetAllTextsRes::Write(sendbuf, texts);
+					// パケットをアンパッキングして解析する
+					position_t position = 0;
+					Unpacker up(recvbuf, position);
+
+					// パケット種類毎の処理を行う
+					sendbuf.resize(0);
+					if (AddTextCmd::IsReadable(up)) {
+						AddTextCmd cmd(up);
+						texts.push_back(std::move(cmd.text));
+						//::Sleep(1000);
+						AddTextRes::Write(sendbuf, S_OK);
+					} else if (GetAllTextsCmd::IsReadable(up)) {
+						GetAllTextsCmd cmd(up);
+						//::Sleep(1000);
+						GetAllTextsRes::Write(sendbuf, texts);
+					}
+
+					// 応答を返す
+					if (!sendbuf.empty())
+						pipe.WriteToBytes(&sendbuf[0], sendbuf.size());
+				}
+			} catch (PipeException&) {
 			}
 
-			// 応答を返す
-			if (!sendbuf.empty())
-				pipe.WriteToBytes(&sendbuf[0], sendbuf.size());
+			// 切断して再度接続待機できるようにする
+			pipe.Disconnect();
 		}
-
-		//std::cout << "Disconnected." << std::endl;
 	} catch (Exception& ex) {
 		std::cout << ex.what() << "\n" << ex.MessageFromHresultA() << std::endl;
 	} catch (std::exception& stdex) {
 		std::cout << stdex.what() << std::endl;
 	}
+
+	pipe.Destroy();
 }

@@ -17,12 +17,11 @@ public:
 	void Stop();
 
 protected:
-	friend class TaskForAccept;
-	class TaskForAccept : public ThreadPool::Task {
+	friend class TaskForClient;
+
+	class TaskForClient : public ThreadPool::Task {
 	public:
-		TaskForAccept(PipeServer* owner) {
-			owner_ = owner;
-		}
+		TaskForClient(PipeServer* owner) : owner_(owner) {}
 
 		void Finalize() {
 			delete this;
@@ -32,27 +31,6 @@ protected:
 	protected:
 		PipeServer* owner_;
 	};
-
-	class TaskForClient : public ThreadPool::Task {
-	public:
-		TaskForClient(const CancelablePipe& pipe) {
-			pipe_ = pipe;
-		}
-		~TaskForClient() {
-			pipe_.Destroy();
-		}
-
-		void Finalize() {
-			delete this;
-		}
-		void DoTask();
-
-	protected:
-		CancelablePipe pipe_;
-	};
-
-protected:
-	void AcceptProc(); //!< 接続受付処理
 
 protected:
 	std::wstring pipe_name_; //!< 受付パイプ名
