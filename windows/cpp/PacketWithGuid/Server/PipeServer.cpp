@@ -68,6 +68,10 @@ void PipeServer::Stop() {
 void PipeServer::TaskForClient::DoTask() {
 	HANDLE hCancelEvent = owner_->request_stop_event_;
 	CancelablePipe pipe(hCancelEvent);
+	ByteBuffer recvbuf;
+	ByteBuffer sendbuf;
+	recvbuf.reserve(4096);
+	sendbuf.reserve(4096);
 
 	try {
 		// 所定の名前でパイプ作成
@@ -85,11 +89,9 @@ void PipeServer::TaskForClient::DoTask() {
 				pipe.Accept();
 
 				// クライアントとやりとり
-				ByteBuffer recvbuf;
-				ByteBuffer sendbuf;
 				std::vector<std::wstring> texts;
-				recvbuf.reserve(4096);
-				sendbuf.reserve(4096);
+				recvbuf.resize(0);
+				sendbuf.resize(0);
 				for (;;) {
 					// まずパケットサイズを読み込む
 					pktsize_t packetSize;

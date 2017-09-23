@@ -21,8 +21,6 @@ namespace Packets {
 	struct PKTID("{96FABA44-DB79-40CC-8FE2-5749D37BC27A}") AddTextCmd : UniquePacket<AddTextCmd> {
 		std::wstring text; // テキスト
 
-		AddTextCmd() {
-		}
 		AddTextCmd(Unpacker& unpacker) {
 			this->ReadHeader(unpacker);
 			this->text = TextArg::Value(unpacker);
@@ -37,8 +35,6 @@ namespace Packets {
 	struct PKTID("F82162F6-1FB5-4E19-8A42-F396EC88503F") AddTextRes : UniquePacket<AddTextRes> {
 		HRESULT hr; // チェック途中で発生したエラー
 
-		AddTextRes() {
-		}
 		AddTextRes(Unpacker& unpacker) {
 			this->ReadHeader(unpacker);
 			this->hr = HresultArg::Value(unpacker);
@@ -53,8 +49,6 @@ namespace Packets {
 
 	// 全テキスト取得コマンド
 	struct PKTID("135F3A96-B2D9-44B4-8DDF-158EE6B2E993") GetAllTextsCmd : UniquePacket<GetAllTextsCmd> {
-		GetAllTextsCmd() {
-		}
 		GetAllTextsCmd(Unpacker& unpacker) {
 			this->ReadHeader(unpacker);
 		}
@@ -67,8 +61,6 @@ namespace Packets {
 	struct PKTID("65C3EC0A-93F8-47FC-82E8-160F72ABF239") GetAllTextsRes : UniquePacket<GetAllTextsRes> {
 		std::vector<std::wstring> texts; // テキスト配列
 
-		GetAllTextsRes() {
-		}
 		GetAllTextsRes(Unpacker& unpacker) {
 			this->ReadHeader(unpacker);
 			TextArg::Array(unpacker, this->texts);
