@@ -41,7 +41,7 @@ struct CancelablePipe : OVERLAPPED {
 			return true;
 		if (::GetLastError() != ERROR_IO_PENDING)
 			return false;
-		if (::WaitForMultipleObjects(2, this->Handles(), FALSE, INFINITE) == WAIT_OBJECT_0)
+		if (::WaitForMultipleObjects(this->HandlesCount(), this->Handles(), FALSE, INFINITE) == WAIT_OBJECT_0)
 			return true;
 		return false;
 	}
@@ -49,6 +49,11 @@ struct CancelablePipe : OVERLAPPED {
 	//! 完了とキャンセルイベントハンドル配列の取得
 	__forceinline const HANDLE* Handles() const {
 		return &this->hEvent;
+	}
+
+	//! Handles() が指すハンドル数
+	__forceinline const DWORD HandlesCount() const {
+		return 2;
 	}
 
 	//! 指定バイト数きっちり読み込む
@@ -61,7 +66,7 @@ struct CancelablePipe : OVERLAPPED {
 					return false;
 				}
 
-				DWORD r = ::WaitForMultipleObjects(2, this->Handles(), FALSE, INFINITE);
+				DWORD r = ::WaitForMultipleObjects(this->HandlesCount(), this->Handles(), FALSE, INFINITE);
 				if (r == WAIT_OBJECT_0) {
 					if (!::GetOverlappedResult(this->hPipe, this, &n, FALSE)) {
 						return false;
@@ -87,7 +92,7 @@ struct CancelablePipe : OVERLAPPED {
 					return false;
 				}
 
-				DWORD r = ::WaitForMultipleObjects(2, this->Handles(), FALSE, INFINITE);
+				DWORD r = ::WaitForMultipleObjects(this->HandlesCount(), this->Handles(), FALSE, INFINITE);
 				if (r == WAIT_OBJECT_0) {
 					if (!::GetOverlappedResult(this->hPipe, this, &n, FALSE)) {
 						return false;
