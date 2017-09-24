@@ -130,6 +130,9 @@ void PipeServer::TaskForClient::DoTask() {
 
 			// Ø’f‚µ‚ÄÄ“xÚ‘±‘Ò‹@‚Å‚«‚é‚æ‚¤‚É‚·‚é
 			pipe.Disconnect();
+
+			if (::WaitForSingleObject(hCancelEvent, 0) == WAIT_OBJECT_0)
+				break;
 		}
 	} catch (Exception& ex) {
 		std::cout << ex.what() << "\n" << ex.MessageFromHresultA() << std::endl;
