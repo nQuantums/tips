@@ -41,7 +41,7 @@ public:
 
 //! 待機キャンセル機能付きのパイプ
 struct CancelablePipe : OVERLAPPED {
-	HANDLE hUnownedCancelEvent; //!< 読み書き待ちのキャンセルイベント、PipeOverlapped はこのハンドルの所有権を持たない、使用者側が管理する必要がある
+	HANDLE hUnownedCancelEvent; //!< 読み書き待ちのキャンセルイベント、このハンドルの所有権は使用者側にある
 	HANDLE hPipe; //!< パイプ
 
 	__forceinline CancelablePipe() {}
