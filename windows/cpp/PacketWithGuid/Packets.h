@@ -251,11 +251,13 @@ namespace Packets {
 		}
 
 		// 指定アンパッカーの現在位置パケットからヘッダ部分を読み込む
-		void ReadHeader(Unpacker& unpacker) {
-			if (memcmp(&unpacker.guid, &__uuidof(_TypeOfId), sizeof(unpacker.guid)) != 0) {
-				std::stringstream ss;
-				ss << "Packet GUID mismatch.\nPacket GUID: " << GuidToString(__uuidof(_TypeOfId)) << "\nPacket GUID received: " << GuidToString(unpacker.guid);
-				throw UnpackingException(ss.str().c_str());
+		void ReadHeader(Unpacker& unpacker, bool check_guid = true) {
+			if (check_guid) {
+				if (memcmp(&unpacker.guid, &__uuidof(_TypeOfId), sizeof(unpacker.guid)) != 0) {
+					std::stringstream ss;
+					ss << "Packet GUID mismatch.\nPacket GUID: " << GuidToString(__uuidof(_TypeOfId)) << "\nPacket GUID received: " << GuidToString(unpacker.guid);
+					throw UnpackingException(ss.str().c_str());
+				}
 			}
 			this->size = unpacker.size;
 			this->guid = unpacker.guid;

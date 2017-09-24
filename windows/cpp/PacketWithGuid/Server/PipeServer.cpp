@@ -111,12 +111,12 @@ void PipeServer::TaskForClient::DoTask() {
 					// パケット種類毎の処理を行う
 					sendbuf.resize(0);
 					if (AddTextCmd::IsReadable(up)) {
-						AddTextCmd cmd(up);
+						AddTextCmd cmd(up, false);
 						texts.push_back(std::move(cmd.text));
 						//::Sleep(1000);
 						AddTextRes::Write(sendbuf, S_OK);
 					} else if (GetAllTextsCmd::IsReadable(up)) {
-						GetAllTextsCmd cmd(up);
+						GetAllTextsCmd cmd(up, false);
 						::Sleep(1000);
 						GetAllTextsRes::Write(sendbuf, texts);
 					}
