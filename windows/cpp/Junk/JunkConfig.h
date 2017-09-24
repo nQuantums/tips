@@ -5,7 +5,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <stddef.h>
-#if _MSC_VER <= 1500
+#if defined(_MSC_VER) && _MSC_VER <= 1500
 typedef signed char        int8_t;
 typedef short              int16_t;
 typedef int                int32_t;
@@ -62,10 +62,10 @@ typedef unsigned long long uint_fast64_t;
 #endif
 
 // 強制インライン展開マクロ
-#if defined __GNUC__
-#define _FINLINE inline __attribute__((always_inline))
-#elif defined  _MSC_VER
+#if defined  _MSC_VER
 #define _FINLINE inline __forceinline
+#else
+#define _FINLINE inline __attribute__((always_inline))
 #endif
 
 

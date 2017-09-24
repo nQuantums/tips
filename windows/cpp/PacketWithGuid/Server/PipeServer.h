@@ -17,8 +17,6 @@ public:
 	void Stop();
 
 protected:
-	friend class TaskForClient;
-
 	class TaskForClient : public ThreadPool::Task {
 	public:
 		TaskForClient(PipeServer* owner) : owner_(owner) {}

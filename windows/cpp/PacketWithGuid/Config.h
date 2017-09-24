@@ -82,3 +82,10 @@ public:
 protected:
 	HRESULT hr_;
 };
+
+// ˆ—’†~‚ğ¦‚·—áŠO
+class AbortException : public Exception {
+public:
+	AbortException(char const* const _Message) : Exception(_Message) {}
+	AbortException(char const* const _Message, HRESULT hr) : Exception(_Message, hr) {}
+};

@@ -24,18 +24,11 @@ public:
 	PipeConnectException(char const* const _Message, HRESULT hr) : PipeException(_Message, hr) {}
 };
 
-// パイプ書き込み失敗例外
-class PipeWriteException : public PipeException {
+// パイプ読み書き失敗例外
+class PipeReadWriteException : public PipeException {
 public:
-	PipeWriteException(char const* const _Message) : PipeException(_Message) {}
-	PipeWriteException(char const* const _Message, HRESULT hr) : PipeException(_Message, hr) {}
-};
-
-// パイプ読み込み例外
-class PipeReadException : public PipeException {
-public:
-	PipeReadException(char const* const _Message) : PipeException(_Message) {}
-	PipeReadException(char const* const _Message, HRESULT hr) : PipeException(_Message, hr) {}
+	PipeReadWriteException(char const* const _Message) : PipeException(_Message) {}
+	PipeReadWriteException(char const* const _Message, HRESULT hr) : PipeException(_Message, hr) {}
 };
 
 
@@ -106,9 +99,9 @@ struct CancelablePipe : OVERLAPPED {
 		case WAIT_OBJECT_0:
 			return;
 		case WAIT_OBJECT_0 + 1:
-			throw Exception("Accept cancelled.");
+			throw PipeException("Accept cancelled.");
 		default:
-			throw Exception("Failed to WaitForMultipleObjects.");
+			throw PipeException("Failed to WaitForMultipleObjects.");
 		}
 	}
 
@@ -134,19 +127,19 @@ struct CancelablePipe : OVERLAPPED {
 			DWORD n = 0;
 			if (!::ReadFile(this->hPipe, (char*)pBuf + len, (DWORD)size, &n, this)) {
 				if (::GetLastError() != ERROR_IO_PENDING) {
-					throw PipeReadException("Failed to ReadFile.");
+					throw PipeReadWriteException("Failed to ReadFile.");
 				}
 
 				switch (::WaitForMultipleObjects(this->HandlesCount(), this->Handles(), FALSE, INFINITE)) {
 				case WAIT_OBJECT_0:
 					if (!::GetOverlappedResult(this->hPipe, this, &n, FALSE)) {
-						throw PipeReadException("Failed to GetOverlappedResult.");
+						throw PipeReadWriteException("Failed to GetOverlappedResult.");
 					}
 					break;
 				case WAIT_OBJECT_0 + 1:
-					throw PipeReadException("ReadToBytes cancelled.");
+					throw PipeReadWriteException("ReadToBytes cancelled.");
 				default:
-					throw PipeReadException("Failed to WaitForMultipleObjects.");
+					throw PipeReadWriteException("Failed to WaitForMultipleObjects.");
 				}
 			}
 
@@ -162,19 +155,19 @@ struct CancelablePipe : OVERLAPPED {
 			DWORD n = 0;
 			if (!::WriteFile(this->hPipe, (char*)pBuf + len, (DWORD)size, &n, this)) {
 				if (::GetLastError() != ERROR_IO_PENDING) {
-					throw PipeReadException("Failed to WriteFile.");
+					throw PipeReadWriteException("Failed to WriteFile.");
 				}
 
 				switch (::WaitForMultipleObjects(this->HandlesCount(), this->Handles(), FALSE, INFINITE)) {
 				case WAIT_OBJECT_0:
 					if (!::GetOverlappedResult(this->hPipe, this, &n, FALSE)) {
-						throw PipeReadException("Failed to GetOverlappedResult.");
+						throw PipeReadWriteException("Failed to GetOverlappedResult.");
 					}
 					break;
 				case WAIT_OBJECT_0 + 1:
-					throw PipeReadException("WriteToBytes cancelled.");
+					throw PipeReadWriteException("WriteToBytes cancelled.");
 				default:
-					throw PipeReadException("Failed to WaitForMultipleObjects.");
+					throw PipeReadWriteException("Failed to WaitForMultipleObjects.");
 				}
 			}
 
