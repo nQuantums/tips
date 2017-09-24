@@ -45,7 +45,7 @@ struct CancelablePipe : OVERLAPPED {
 	HANDLE hPipe; //!< パイプ
 
 	__forceinline CancelablePipe() {}
-	__forceinline CancelablePipe(HANDLE hCancel) {
+	CancelablePipe(HANDLE hCancel) {
 		::ZeroMemory(this, sizeof(*this));
 		this->hUnownedCancelEvent = hCancel;
 		this->hPipe = INVALID_HANDLE_VALUE;
@@ -68,6 +68,27 @@ struct CancelablePipe : OVERLAPPED {
 		HANDLE h = ::CreateNamedPipeW(lpName, dwOpenMode, dwPipeMode, nMaxInstances, nOutBufferSize, nInBufferSize, nDefaultTimeOut, lpSecurityAttributes);
 		if (h == INVALID_HANDLE_VALUE)
 			throw PipeCreateException("Failed to CreateNamedPipe.");
+		this->hPipe = h;
+		h = ::CreateEvent(NULL, FALSE, FALSE, NULL);
+		if (h == NULL)
+			throw Exception("Failed to CreateEvent.");
+		this->hEvent = h;
+	}
+
+	//! 既存のパイプ接続
+	void Open(LPCWSTR lpName) {
+		HANDLE h = ::CreateFileW(
+			lpName,               // pipe name 
+			GENERIC_READ |        // read and write access 
+			GENERIC_WRITE,
+			0,                    // no sharing 
+			NULL,                 // default security attributes
+			OPEN_EXISTING,        // opens existing pipe 
+			FILE_FLAG_OVERLAPPED, // 途中キャンセルできるようオーバーラップにする
+			NULL);                // no template file 
+		if (h == INVALID_HANDLE_VALUE) {
+			throw PipeException("Failed to create file.");
+		}
 		this->hPipe = h;
 		h = ::CreateEvent(NULL, FALSE, FALSE, NULL);
 		if (h == NULL)

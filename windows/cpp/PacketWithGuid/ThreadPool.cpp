@@ -3,35 +3,32 @@
 #include "ThreadPool.h"
 
 
-//
-//	スレッド名設定
-//	SetThreadName (https://msdn.microsoft.com/ja-jp/library/xcb2z8hs.aspx)
-//
-const DWORD MS_VC_EXCEPTION = 0x406D1388;  
-#pragma pack(push,8)  
-typedef struct tagTHREADNAME_INFO  
-{  
-    DWORD dwType; // Must be 0x1000.  
-    LPCSTR szName; // Pointer to name (in user addr space).  
-    DWORD dwThreadID; // Thread ID (-1=caller thread).  
-    DWORD dwFlags; // Reserved for future use, must be zero.  
- } THREADNAME_INFO;  
-#pragma pack(pop)  
-inline void SetThreadName(DWORD dwThreadID, const char* threadName) {  
-    THREADNAME_INFO info;  
-    info.dwType = 0x1000;  
-    info.szName = threadName;  
-    info.dwThreadID = dwThreadID;  
-    info.dwFlags = 0;  
-#pragma warning(push)  
-#pragma warning(disable: 6320 6322)  
-    __try{  
-        RaiseException(MS_VC_EXCEPTION, 0, sizeof(info) / sizeof(ULONG_PTR), (ULONG_PTR*)&info);  
-    }  
-    __except (EXCEPTION_EXECUTE_HANDLER){  
-    }  
-#pragma warning(pop)  
-} 
+////
+////	スレッド名設定
+////	SetThreadName (https://msdn.microsoft.com/ja-jp/library/xcb2z8hs.aspx)
+////
+//const DWORD MS_VC_EXCEPTION = 0x406D1388;
+//#pragma pack(push,8)  
+//typedef struct tagTHREADNAME_INFO {
+//	DWORD dwType; // Must be 0x1000.  
+//	LPCSTR szName; // Pointer to name (in user addr space).  
+//	DWORD dwThreadID; // Thread ID (-1=caller thread).  
+//	DWORD dwFlags; // Reserved for future use, must be zero.  
+//} THREADNAME_INFO;
+//#pragma pack(pop)  
+//inline void SetThreadName(DWORD dwThreadID, const char* threadName) {
+//	THREADNAME_INFO info;
+//	info.dwType = 0x1000;
+//	info.szName = threadName;
+//	info.dwThreadID = dwThreadID;
+//	info.dwFlags = 0;
+//#pragma warning(push)  
+//#pragma warning(disable: 6320 6322)  
+//	__try {
+//		RaiseException(MS_VC_EXCEPTION, 0, sizeof(info) / sizeof(ULONG_PTR), (ULONG_PTR*)&info);
+//	} __except (EXCEPTION_EXECUTE_HANDLER) {}
+//#pragma warning(pop)  
+//}
 
 
 
@@ -45,19 +42,19 @@ ThreadPool::~ThreadPool() {
 
 // 指定数のワーカースレッドを持つスレッドプールを作成する(スレッドアンセーフ)
 bool ThreadPool::Create(size_t thread_count) {
-	if(!worker_threads_.empty())
+	if (!worker_threads_.empty())
 		return false;
 
 	worker_threads_.resize(thread_count);
 	running_tasks_.resize(thread_count);
 	running_tasks_locks_.resize(thread_count);
 
-	for(size_t i = 0; i < thread_count; i++) {
+	for (size_t i = 0; i < thread_count; i++) {
 		WorkerThreadArg* pArg = new WorkerThreadArg();
 		pArg->thread_pool_ = this;
 		pArg->index_ = i;
 		HANDLE handle = reinterpret_cast<HANDLE>(_beginthreadex(NULL, 0, &ThreadPool::ThreadProc, pArg, 0, NULL));
-		if(handle == NULL)
+		if (handle == NULL)
 			return false;
 
 		worker_threads_[i] = handle;
@@ -68,7 +65,7 @@ bool ThreadPool::Create(size_t thread_count) {
 
 // スレッドプールを破棄する(スレッドアンセーフ)、実行中のタスクには終了要求を行い、キュー内の未実行タスクは直接破棄する、
 void ThreadPool::Destroy() {
-	if(worker_threads_.empty())
+	if (worker_threads_.empty())
 		return;
 
 	// ※以降 Create() が呼び出されるまで、Run() が呼び出されてはいけない
@@ -82,20 +79,20 @@ void ThreadPool::Destroy() {
 
 		// 未実行タスクを破棄する
 		LockGuard<ThreadQueue<Task*>> lock(&wq);
-		for(size_t i = 0, n = wq.Count(); i < n; i++) {
+		for (size_t i = 0, n = wq.Count(); i < n; i++) {
 			Task* pTask = wq[i];
-			pTask->OnDestroy();
+			pTask->Dispose();
 			pTask->Finalize();
 		}
 		worker_queue_.Clear();
 	}
 
 	// 実行中タスクへ終了要求を行う
-	for(size_t i = 0, n = worker_threads_.size(); i < n; i++) {
+	for (size_t i = 0, n = worker_threads_.size(); i < n; i++) {
 		LockGuard<CriticalSection> lock(&running_tasks_locks_[i]);
 
 		Task* pTask = running_tasks_[i];
-		if(pTask != NULL) {
+		if (pTask != NULL) {
 			pTask->RequestStop();
 		}
 	}
@@ -103,7 +100,7 @@ void ThreadPool::Destroy() {
 	// スレッドを停止
 	LockGuard<CriticalSection> scope_guard(&lock_);
 	::WaitForMultipleObjects(static_cast<DWORD>(worker_threads_.size()), &worker_threads_[0], TRUE, INFINITE);
-	for(std::vector<HANDLE>::const_iterator iter = worker_threads_.begin(); iter != worker_threads_.end(); ++iter) {
+	for (std::vector<HANDLE>::const_iterator iter = worker_threads_.begin(); iter != worker_threads_.end(); ++iter) {
 		::CloseHandle(*iter);
 	}
 	worker_threads_.clear();
@@ -131,15 +128,15 @@ UINT ThreadPool::ThreadProc(void* pData) {
 //	ワーカースレッド処理
 //
 UINT ThreadPool::WorkerThread(intptr_t index) {
-	SetThreadName(::GetCurrentThreadId(), "ThreadPool");
+	//SetThreadName(::GetCurrentThreadId(), "ThreadPool");
 
 	CriticalSection& cs = running_tasks_locks_[index];
 	LockGuard<CriticalSection> lock(&cs);
 
-	for(;;) {
+	for (;;) {
 		// キューからタスクを取得し
 		Task* pTask;
-		if(!worker_queue_.Pop(pTask)) {
+		if (!worker_queue_.Pop(pTask)) {
 			running_tasks_[index] = NULL;
 			break;
 		}
@@ -148,9 +145,9 @@ UINT ThreadPool::WorkerThread(intptr_t index) {
 
 		// 実行する
 		pTask->DoTask();
-		pTask->OnDestroy();
+		pTask->Dispose();
 
-		// もう用済みなので破棄する
+		// そして破棄する
 		cs.Lock();
 		running_tasks_[index] = NULL;
 		pTask->Finalize();

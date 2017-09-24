@@ -57,7 +57,7 @@ namespace Packets {
 		ByteBuffer* buffer_ptr; // 書き込み先バッファ
 		position_t start; // バッファ内でのパケット開始位置(bytes)
 
-		__forceinline Packer(ByteBuffer& buf, const GUID& guid) {
+		Packer(ByteBuffer& buf, const GUID& guid) {
 			this->buffer_ptr = &buf;
 			this->start = buf.size();
 
@@ -75,7 +75,7 @@ namespace Packets {
 		}
 
 		// 指定値を追加しバッファ内でのオフセットを返す
-		template<class T> __forceinline position_t Write(const T& value) {
+		template<class T> position_t Write(const T& value) {
 			ByteBuffer& buffer = *this->buffer_ptr;
 			position_t offset = buffer.size();
 			buffer.insert(buffer.end(), reinterpret_cast<const ByteItem*>(&value), reinterpret_cast<const ByteItem*>(&value) + sizeof(value));
@@ -83,7 +83,7 @@ namespace Packets {
 		}
 
 		// 指定バッファへ文字列を追加しバッファ内でのオフセットを返す
-		__forceinline position_t Write(const wchar_t* value, size_t len) {
+		position_t Write(const wchar_t* value, size_t len) {
 			ByteBuffer& buffer = *this->buffer_ptr;
 			position_t offset = buffer.size();
 			buffer.insert(buffer.end(), reinterpret_cast<const ByteItem*>(value), reinterpret_cast<const ByteItem*>(value + len));
@@ -98,10 +98,6 @@ namespace Packets {
 		// 指定バッファへ文字列を追加しバッファ内でのオフセットを返す
 		__forceinline position_t Write(const std::wstring& value) {
 			return Write(value.c_str(), value.size());
-		}
-
-		operator ByteBuffer&() {
-			return *this->buffer_ptr;
 		}
 	};
 
@@ -163,11 +159,11 @@ namespace Packets {
 			return *this->position_ptr;
 		}
 
-		static __forceinline bool IsSizeValid(pktsize_t size) {
+		static bool IsSizeValid(pktsize_t size) {
 			return MIN_PACKET_SIZE <= size && size <= MAX_PACKET_SIZE;
 		}
 
-		static __forceinline void VeryfySize(pktsize_t size) {
+		static void VeryfySize(pktsize_t size) {
 			if (!IsSizeValid(size)) {
 				std::stringstream ss;
 				ss << "Invalid packet size.\nPacket size: " << size;
@@ -215,10 +211,6 @@ namespace Packets {
 		__forceinline void Read(std::wstring& value) {
 			Read(this->data_size / sizeof(wchar_t), value);
 		}
-
-		operator ByteBuffer&() {
-			return *this->buffer_ptr;
-		}
 	};
 
 
@@ -247,7 +239,7 @@ namespace Packets {
 			return __uuidof(_TypeOfId);
 		}
 
-		__forceinline std::string GuidString() const {
+		std::string GuidString() const {
 			char buf[40];
 			GuidToString(guid, buf);
 			return buf;
@@ -255,12 +247,11 @@ namespace Packets {
 
 		// 指定アンパッカーの現在位置パケットが読み込み可能なものか調べる
 		static __forceinline bool IsReadable(Unpacker& unpacker) {
-			const GUID& guid = __uuidof(_TypeOfId);
-			return memcmp(&unpacker.guid, &guid, sizeof(unpacker.guid)) == 0;
+			return memcmp(&unpacker.guid, &__uuidof(_TypeOfId), sizeof(unpacker.guid)) == 0;
 		}
 
 		// 指定アンパッカーの現在位置パケットからヘッダ部分を読み込む
-		__forceinline void ReadHeader(Unpacker& unpacker) {
+		void ReadHeader(Unpacker& unpacker) {
 			if (memcmp(&unpacker.guid, &__uuidof(_TypeOfId), sizeof(unpacker.guid)) != 0) {
 				std::stringstream ss;
 				ss << "Packet GUID mismatch.\nPacket GUID: " << GuidToString(__uuidof(_TypeOfId)) << "\nPacket GUID received: " << GuidToString(unpacker.guid);

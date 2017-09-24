@@ -105,7 +105,6 @@ void PipeServer::TaskForClient::DoTask() {
 					ToBuffer(recvbuf, packetSize);
 					pipe.ReadToBytes(recvbuf, packetSize);
 
-					// パケットをアンパッキングして解析する
 					position_t position = 0;
 					Unpacker up(recvbuf, position);
 
@@ -118,7 +117,7 @@ void PipeServer::TaskForClient::DoTask() {
 						AddTextRes::Write(sendbuf, S_OK);
 					} else if (GetAllTextsCmd::IsReadable(up)) {
 						GetAllTextsCmd cmd(up);
-						//::Sleep(1000);
+						::Sleep(1000);
 						GetAllTextsRes::Write(sendbuf, texts);
 					}
 

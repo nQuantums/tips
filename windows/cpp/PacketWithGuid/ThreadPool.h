@@ -9,12 +9,12 @@ public:
 	// ThreadPool で実行するタスク基本クラス
 	struct Task {
 		virtual ~Task() {}
-		// タスクオブジェクト破棄処理、通常 delete this を呼び出す、クリティカルセクション内から呼び出されるので注意が必要
+		// タスクの破棄処理、Finalize() 直前のクリティカルセクション外から呼び出される、重い処理してもいい
+		virtual void Dispose() {}
+		// タスクオブジェクト破棄処理、必要ならメモリ解放のため delete this を呼び出す、クリティカルセクション内から呼び出されるため重い処理はやらないで欲しい
 		virtual void Finalize() {}
 		// タスク実行処理
 		virtual void DoTask() {}
-		// タスクの破棄処理、Finalize() 直前のクリティカルセクション外から呼び出される
-		virtual void OnDestroy() {}
 		// タスクの停止要求を行う、DoTask()、OnTaskEnd()、OnDestroy() 実行中に呼び出され得る
 		virtual void RequestStop() {}
 	};
