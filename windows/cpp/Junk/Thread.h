@@ -111,13 +111,6 @@ protected:
 //! イベント
 class JUNKAPICLASS Event {
 public:
-#if defined __GNUC__
-
-#else
-	typedef HANDLE Handle; //!< ハンドル型
-#endif
-
-public:
 	Event(); //!< コンストラクタ
 	~Event(); // デストラクタ
 	void Set(); //!< イベントをシグナル状態にする
@@ -126,7 +119,7 @@ public:
 	void Initialize(); //!< コンストラクタと同じように内部オブジェクトを初期化する
 	void Destroy(); //!< デストラクタと同じように内部オブジェクトを破棄する
 
-public:
+protected:
 #if defined __GNUC__
 	pthread_cond_t m_ready;
 	pthread_mutex_t m_lock;
