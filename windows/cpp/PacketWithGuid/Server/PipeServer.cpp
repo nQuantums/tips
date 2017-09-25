@@ -126,6 +126,7 @@ void PipeServer::TaskForClient::DoTask() {
 						pipe.WriteToBytes(&sendbuf[0], sendbuf.size());
 				}
 			} catch (PipeException&) {
+			} catch (UnpackingException&) {
 			}
 
 			// Ø’f‚µ‚ÄÄ“xÚ‘±‘Ò‹@‚Å‚«‚é‚æ‚¤‚É‚·‚é

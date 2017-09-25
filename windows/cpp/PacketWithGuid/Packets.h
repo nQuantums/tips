@@ -15,6 +15,7 @@
 // パケットデータ領域最大サイズ
 #define MAX_PACKET_SIZE 4096
 
+#define GUID_STRING_BUF_SIZE 64
 
 namespace Packets {
 	typedef intptr_t position_t;
@@ -36,12 +37,12 @@ namespace Packets {
 	};
 
 
-	inline void GuidToString(const GUID& guid, char buf[40]) {
-		_snprintf_s(buf, sizeof(buf), sizeof(buf), "{%08X-%04hX-%04hX-%02X%02X-%02X%02X%02X%02X%02X%02X}", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
+	inline void GuidToString(const GUID& guid, char buf[GUID_STRING_BUF_SIZE]) {
+		_snprintf_s(buf, GUID_STRING_BUF_SIZE, GUID_STRING_BUF_SIZE, "{%08X-%04hX-%04hX-%02X%02X-%02X%02X%02X%02X%02X%02X}", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
 	}
 
 	inline std::string GuidToString(const GUID& guid) {
-		char buf[40];
+		char buf[GUID_STRING_BUF_SIZE];
 		GuidToString(guid, buf);
 		return buf;
 	}
@@ -241,7 +242,7 @@ namespace Packets {
 		}
 
 		std::string GuidString() const {
-			char buf[40];
+			char buf[GUID_STRING_BUF_SIZE];
 			GuidToString(guid, buf);
 			return buf;
 		}
