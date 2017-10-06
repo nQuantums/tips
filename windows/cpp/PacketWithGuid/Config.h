@@ -37,7 +37,7 @@ typedef unsigned long long uint_fast64_t;
 #include <vector>
 
 #pragma pack(push, 1)
-// ƒRƒ“ƒXƒgƒ‰ƒNƒ^–³‚µ‚Ì‚PƒoƒCƒgƒf[ƒ^
+// ã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ç„¡ã—ã®ï¼‘ãƒã‚¤ãƒˆãƒ‡ãƒ¼ã‚¿
 struct ByteItem {
 	uint8_t value;
 
@@ -45,14 +45,14 @@ struct ByteItem {
 };
 #pragma pack(pop)
 
-// ƒoƒbƒtƒ@Šg’£‚É0–„‚ß‚ğs‚í‚È‚¢ƒoƒbƒtƒ@
+// ãƒãƒƒãƒ•ã‚¡æ‹¡å¼µæ™‚ã«0åŸ‹ã‚ã‚’è¡Œã‚ãªã„ãƒãƒƒãƒ•ã‚¡
 typedef std::vector<ByteItem> ByteBuffer;
 
-// HRESULT ‚ğ‚Â—áŠO
+// HRESULT ã‚’æŒã¤ä¾‹å¤–
 class Exception : public std::exception {
 public:
 	Exception(char const* const _Message) : std::exception(_Message) {
-		hr_ = ::GetLastError();
+		hr_ = HRESULT_FROM_WIN32(::GetLastError());
 	}
 	Exception(char const* const _Message, HRESULT hr) : std::exception(_Message) {
 		hr_ = hr;
@@ -83,7 +83,7 @@ protected:
 	HRESULT hr_;
 };
 
-// ˆ—’†~‚ğ¦‚·—áŠO
+// å‡¦ç†ä¸­æ­¢ã‚’ç¤ºã™ä¾‹å¤–
 class AbortException : public Exception {
 public:
 	AbortException(char const* const _Message) : Exception(_Message) {}
