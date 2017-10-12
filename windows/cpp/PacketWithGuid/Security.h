@@ -6,7 +6,7 @@
 #include <initializer_list>
 
 struct SecurityDescriptor {
-	PSECURITY_DESCRIPTOR pSD;
+	PSECURITY_DESCRIPTOR pSd;
 
 	SecurityDescriptor() {
 		PSECURITY_DESCRIPTOR psd;
@@ -16,22 +16,22 @@ struct SecurityDescriptor {
 			throw Exception("Failed to InitializeSecurityDescriptor.");
 		}
 
-		this->pSD = psd;
+		this->pSd = psd;
 	}
 	~SecurityDescriptor() {
-		if (this->pSD) {
-			delete this->pSD;
+		if (this->pSd) {
+			delete this->pSd;
 		}
 	}
 
 	void SetDacl(PACL acl) {
-		if (!::SetSecurityDescriptorDacl(this->pSD, TRUE, acl, FALSE)) {
+		if (!::SetSecurityDescriptorDacl(this->pSd, TRUE, acl, FALSE)) {
 			throw Exception("Failed to SetSecurityDescriptorDacl.");
 		}
 	}
 
 	operator PSECURITY_DESCRIPTOR() const {
-		return this->pSD;
+		return this->pSd;
 	}
 };
 
@@ -167,12 +167,12 @@ struct Acl {
 	}
 	Acl(size_t size) {
 		this->pAcl = (PACL)new char[size];
-		::InitializeAcl(this->pAcl, size, ACL_REVISION);
+		::InitializeAcl(this->pAcl, (DWORD)size, ACL_REVISION);
 	}
 	Acl(std::initializer_list<PSID> sids) {
 		size_t size = AclSize(sids);
 		this->pAcl = (PACL)new char[size];
-		::InitializeAcl(this->pAcl, size, ACL_REVISION);
+		::InitializeAcl(this->pAcl, (DWORD)size, ACL_REVISION);
 	}
 	~Acl() {
 		if (this->pAcl) {
