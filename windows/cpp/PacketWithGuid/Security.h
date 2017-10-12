@@ -39,7 +39,7 @@ struct SecurityDescriptor {
 };
 
 struct Sid {
-	enum class BuildinAuthority {
+	enum class Authority {
 		NullSid,
 		WorldSid,
 		LocalSid,
@@ -55,7 +55,7 @@ struct Sid {
 		this->pSid = NULL;
 		this->DeallocateType = 0;
 	}
-	Sid(BuildinAuthority authority, int subAuthorityCount = 0, DWORD rid0 = 0, DWORD rid1 = 0, DWORD rid2 = 0, DWORD rid3 = 0, DWORD rid4 = 0, DWORD rid5 = 0, DWORD rid6 = 0, DWORD rid7 = 0) {
+	Sid(Authority authority, int subAuthorityCount = 0, DWORD rid0 = 0, DWORD rid1 = 0, DWORD rid2 = 0, DWORD rid3 = 0, DWORD rid4 = 0, DWORD rid5 = 0, DWORD rid6 = 0, DWORD rid7 = 0) {
 		Create(authority, subAuthorityCount, rid0, rid1, rid2, rid3, rid4, rid5, rid6, rid7);
 	}
 	Sid(const wchar_t* accountName, std::wstring* domainName = NULL) {
@@ -76,25 +76,25 @@ struct Sid {
 		}
 	}
 
-	void Create(BuildinAuthority authority, int subAuthorityCount = 0, DWORD rid0 = 0, DWORD rid1 = 0, DWORD rid2 = 0, DWORD rid3 = 0, DWORD rid4 = 0, DWORD rid5 = 0, DWORD rid6 = 0, DWORD rid7 = 0) {
+	void Create(Authority authority, int subAuthorityCount = 0, DWORD rid0 = 0, DWORD rid1 = 0, DWORD rid2 = 0, DWORD rid3 = 0, DWORD rid4 = 0, DWORD rid5 = 0, DWORD rid6 = 0, DWORD rid7 = 0) {
 		SID_IDENTIFIER_AUTHORITY sidauth;
 		switch (authority) {
-		case BuildinAuthority::NullSid:
+		case Authority::NullSid:
 			sidauth = SECURITY_NULL_SID_AUTHORITY;
 			break;
-		case BuildinAuthority::WorldSid:
+		case Authority::WorldSid:
 			sidauth = SECURITY_WORLD_SID_AUTHORITY;
 			break;
-		case BuildinAuthority::LocalSid:
+		case Authority::LocalSid:
 			sidauth = SECURITY_LOCAL_SID_AUTHORITY;
 			break;
-		case BuildinAuthority::CreatorSid:
+		case Authority::CreatorSid:
 			sidauth = SECURITY_CREATOR_SID_AUTHORITY;
 			break;
-		case BuildinAuthority::NonUnique:
+		case Authority::NonUnique:
 			sidauth = SECURITY_NON_UNIQUE_AUTHORITY;
 			break;
-		case BuildinAuthority::ResourceManager:
+		case Authority::ResourceManager:
 			sidauth = SECURITY_RESOURCE_MANAGER_AUTHORITY;
 			break;
 		default:

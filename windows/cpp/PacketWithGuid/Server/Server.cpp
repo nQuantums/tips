@@ -7,7 +7,7 @@
 
 
 int main() {
-	Sid everyone(Sid::BuildinAuthority::WorldSid, 1, SECURITY_WORLD_RID);
+	Sid everyone(Sid::Authority::WorldSid, 1, SECURITY_WORLD_RID);
 	Sid networkUser(L"NT AUTHORITY\\NETWORK");
 	Acl acl({ networkUser , everyone });
 	acl.AddAccessDeniedAce(STANDARD_RIGHTS_ALL | SPECIFIC_RIGHTS_ALL, networkUser); // 他PCからの接続を拒否、これを先に AddAccessDeniedAce しておく必要がある
