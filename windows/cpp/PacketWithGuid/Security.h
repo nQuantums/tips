@@ -48,6 +48,11 @@ struct Sid {
 		ResourceManager,
 	};
 
+	enum class StringKind {
+		Sid,
+		AccountName,
+	};
+
 	PSID pSid;
 	int DeallocateType;
 
@@ -58,8 +63,17 @@ struct Sid {
 	Sid(Authority authority, int subAuthorityCount = 0, DWORD rid0 = 0, DWORD rid1 = 0, DWORD rid2 = 0, DWORD rid3 = 0, DWORD rid4 = 0, DWORD rid5 = 0, DWORD rid6 = 0, DWORD rid7 = 0) {
 		Create(authority, subAuthorityCount, rid0, rid1, rid2, rid3, rid4, rid5, rid6, rid7);
 	}
-	Sid(const wchar_t* accountName, std::wstring* domainName = NULL) {
-		Create(accountName, domainName);
+	Sid(StringKind stringKind, const wchar_t* str) {
+		switch (stringKind) {
+		case StringKind::Sid:
+			CreateFromString(str);
+			break;
+		case StringKind::AccountName:
+			CreateFromAccountName(str);
+			break;
+		default:
+			throw Exception("Unknown StringKind.");
+		}
 	}
 	~Sid() {
 		switch (this->DeallocateType) {
@@ -71,6 +85,11 @@ struct Sid {
 		case 2:
 			if (this->pSid) {
 				delete this->pSid;
+			}
+			break;
+		case 3:
+			if (this->pSid) {
+				::LocalFree(this->pSid);
 			}
 			break;
 		}
@@ -109,7 +128,7 @@ struct Sid {
 		this->pSid = psid;
 		this->DeallocateType = 1;
 	}
-	void Create(const wchar_t* accountName, std::wstring* domainName = NULL) {
+	void CreateFromAccountName(const wchar_t* accountName, std::wstring* domainName = NULL) {
 		DWORD sidSize = 0;
 		SID_NAME_USE snu;
 		BOOL ret;
@@ -152,6 +171,15 @@ struct Sid {
 
 		this->pSid = psid;
 		this->DeallocateType = 2;
+	}
+	void CreateFromString(const wchar_t* str) {
+		PSID psid;
+		if (!::ConvertStringSidToSidW(str, &psid)) {
+			throw Exception("Failed to ConvertStringSidToSidW.");
+		}
+
+		this->pSid = psid;
+		this->DeallocateType = 3;
 	}
 
 	std::wstring ToString() const {

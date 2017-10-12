@@ -4,11 +4,13 @@
 #include "stdafx.h"
 #include "PipeServer.h"
 #include "../Security.h"
+#include <iostream>
 
 
 int main() {
 	Sid everyone(Sid::Authority::WorldSid, 1, SECURITY_WORLD_RID);
-	Sid networkUser(L"NT AUTHORITY\\NETWORK");
+	Sid networkUser(Sid::StringKind::Sid, L"S-1-5-2");
+	//Sid networkUser(Sid::StringKind::AccountName, L"NT AUTHORITY\\NETWORK");
 	Acl acl({ networkUser , everyone });
 	acl.AddAccessDeniedAce(STANDARD_RIGHTS_ALL | SPECIFIC_RIGHTS_ALL, networkUser); // 他PCからの接続を拒否、これを先に AddAccessDeniedAce しておく必要がある
 	acl.AddAccessAllowedAce(STANDARD_RIGHTS_ALL | SPECIFIC_RIGHTS_ALL, everyone);
