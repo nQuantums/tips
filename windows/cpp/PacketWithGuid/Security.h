@@ -9,14 +9,7 @@ struct SecurityDescriptor {
 	PSECURITY_DESCRIPTOR pSd;
 
 	SecurityDescriptor() {
-		PSECURITY_DESCRIPTOR psd;
-		psd = new char[SECURITY_DESCRIPTOR_MIN_LENGTH];
-		if (!InitializeSecurityDescriptor(psd, SECURITY_DESCRIPTOR_REVISION)) {
-			delete psd;
-			throw Exception("Failed to InitializeSecurityDescriptor.");
-		}
-
-		this->pSd = psd;
+		this->pSd = NULL;
 	}
 	~SecurityDescriptor() {
 		if (this->pSd) {
@@ -25,6 +18,16 @@ struct SecurityDescriptor {
 	}
 
 	void SetDacl(PACL acl) {
+		if (!this->pSd) {
+			PSECURITY_DESCRIPTOR psd;
+			psd = new char[SECURITY_DESCRIPTOR_MIN_LENGTH];
+			if (!InitializeSecurityDescriptor(psd, SECURITY_DESCRIPTOR_REVISION)) {
+				delete psd;
+				throw Exception("Failed to InitializeSecurityDescriptor.");
+			}
+			this->pSd = psd;
+		}
+
 		if (!::SetSecurityDescriptorDacl(this->pSd, TRUE, acl, FALSE)) {
 			throw Exception("Failed to SetSecurityDescriptorDacl.");
 		}
@@ -53,6 +56,27 @@ struct Sid {
 		this->DeallocateType = 0;
 	}
 	Sid(BuildinAuthority authority, int subAuthorityCount = 0, DWORD rid0 = 0, DWORD rid1 = 0, DWORD rid2 = 0, DWORD rid3 = 0, DWORD rid4 = 0, DWORD rid5 = 0, DWORD rid6 = 0, DWORD rid7 = 0) {
+		Create(authority, subAuthorityCount, rid0, rid1, rid2, rid3, rid4, rid5, rid6, rid7);
+	}
+	Sid(const wchar_t* accountName, std::wstring* domainName = NULL) {
+		Create(accountName, domainName);
+	}
+	~Sid() {
+		switch (this->DeallocateType) {
+		case 1:
+			if (this->pSid) {
+				::FreeSid(this->pSid);
+			}
+			break;
+		case 2:
+			if (this->pSid) {
+				delete this->pSid;
+			}
+			break;
+		}
+	}
+
+	void Create(BuildinAuthority authority, int subAuthorityCount = 0, DWORD rid0 = 0, DWORD rid1 = 0, DWORD rid2 = 0, DWORD rid3 = 0, DWORD rid4 = 0, DWORD rid5 = 0, DWORD rid6 = 0, DWORD rid7 = 0) {
 		SID_IDENTIFIER_AUTHORITY sidauth;
 		switch (authority) {
 		case BuildinAuthority::NullSid:
@@ -85,7 +109,7 @@ struct Sid {
 		this->pSid = psid;
 		this->DeallocateType = 1;
 	}
-	Sid(const wchar_t* accountName, std::wstring* domainName = NULL) {
+	void Create(const wchar_t* accountName, std::wstring* domainName = NULL) {
 		DWORD sidSize = 0;
 		SID_NAME_USE snu;
 		BOOL ret;
@@ -129,20 +153,6 @@ struct Sid {
 		this->pSid = psid;
 		this->DeallocateType = 2;
 	}
-	~Sid() {
-		switch (this->DeallocateType) {
-		case 1:
-			if (this->pSid) {
-				::FreeSid(this->pSid);
-			}
-			break;
-		case 2:
-			if (this->pSid) {
-				delete this->pSid;
-			}
-			break;
-		}
-	}
 
 	std::wstring ToString() const {
 		LPWSTR p;
@@ -166,18 +176,25 @@ struct Acl {
 		this->pAcl = NULL;
 	}
 	Acl(size_t size) {
-		this->pAcl = (PACL)new char[size];
-		::InitializeAcl(this->pAcl, (DWORD)size, ACL_REVISION);
+		Create(size);
 	}
 	Acl(std::initializer_list<PSID> sids) {
-		size_t size = AclSize(sids);
-		this->pAcl = (PACL)new char[size];
-		::InitializeAcl(this->pAcl, (DWORD)size, ACL_REVISION);
+		Create(sids);
 	}
 	~Acl() {
 		if (this->pAcl) {
 			delete this->pAcl;
 		}
+	}
+
+	void Create(size_t size) {
+		this->pAcl = (PACL)new char[size];
+		::InitializeAcl(this->pAcl, (DWORD)size, ACL_REVISION);
+	}
+	void Create(std::initializer_list<PSID> sids) {
+		size_t size = AclSize(sids);
+		this->pAcl = (PACL)new char[size];
+		::InitializeAcl(this->pAcl, (DWORD)size, ACL_REVISION);
 	}
 
 	void AddAccessAllowedAce(DWORD accessMask, PSID sid) {
