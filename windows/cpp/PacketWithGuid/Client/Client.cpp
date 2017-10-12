@@ -113,10 +113,10 @@ protected:
 };
 
 void InteractiveTest() {
-	Session s;
-	s.Open(PIPE_NAME);
-
 	try {
+		Session s;
+		s.Open(PIPE_NAME);
+
 		for (;;) {
 			std::wstring line;
 			std::getline(std::wcin, line);
@@ -239,9 +239,9 @@ int main() {
 	//std::wcout << pipe.hPipe << std::endl;
 	//pipe.Destroy();
 
-	//InteractiveTest();
+	InteractiveTest();
 	//SessionLifeCycleTest();
-	SessionAbortTest();
+	//SessionAbortTest();
 	return 0;
 }
 
