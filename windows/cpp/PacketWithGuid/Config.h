@@ -52,7 +52,7 @@ typedef std::vector<ByteItem> ByteBuffer;
 class Exception : public std::exception {
 public:
 	Exception(char const* const _Message) : std::exception(_Message) {
-		hr_ = ::GetLastError();
+		hr_ = HRESULT_FROM_WIN32(::GetLastError());
 	}
 	Exception(char const* const _Message, HRESULT hr) : std::exception(_Message) {
 		hr_ = hr;

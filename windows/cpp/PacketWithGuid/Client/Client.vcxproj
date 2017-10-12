@@ -103,6 +103,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <DisableSpecificWarnings>4819</DisableSpecificWarnings>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -152,6 +153,7 @@
     <ClInclude Include="..\Commands.h" />
     <ClInclude Include="..\Config.h" />
     <ClInclude Include="..\Packets.h" />
+    <ClInclude Include="..\Security.h" />
     <ClInclude Include="..\ThreadPool.h" />
     <ClInclude Include="..\ThreadQueue.h" />
     <ClInclude Include="stdafx.h" />

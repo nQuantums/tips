@@ -206,7 +206,11 @@ namespace Packets {
 				throw UnpackingException(ss.str().c_str());
 			}
 			*this->position_ptr = value_end;
-			value.assign(reinterpret_cast<const wchar_t*>(&buffer[value_start]), size);
+			if (size) {
+				value.assign(reinterpret_cast<const wchar_t*>(&buffer[value_start]), size);
+			} else {
+				value.clear();
+			}
 		}
 
 		// バッファ内の現在位置から文字列を取得し次の値を指すよう現在位置をずらす
