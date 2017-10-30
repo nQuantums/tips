@@ -42,12 +42,10 @@ ThreadPool::~ThreadPool() {
 
 // 指定数のワーカースレッドを持つスレッドプールを作成する(スレッドアンセーフ)
 bool ThreadPool::Create(size_t thread_count) {
-	if (!worker_threads_.empty())
+	if (!workers_.empty())
 		return false;
 
-	worker_threads_.resize(thread_count);
-	running_tasks_.resize(thread_count);
-	running_tasks_locks_.resize(thread_count);
+	workers_.resize(thread_count);
 
 	for (size_t i = 0; i < thread_count; i++) {
 		WorkerThreadArg* pArg = new WorkerThreadArg();
@@ -57,7 +55,7 @@ bool ThreadPool::Create(size_t thread_count) {
 		if (handle == NULL)
 			return false;
 
-		worker_threads_[i] = handle;
+		workers_[i] = new Worker(handle);
 	}
 
 	return true;
@@ -65,56 +63,59 @@ bool ThreadPool::Create(size_t thread_count) {
 
 // スレッドプールを破棄する(スレッドアンセーフ)、実行中のタスクには終了要求を行い、キュー内の未実行タスクは直接破棄する、
 void ThreadPool::Destroy() {
-	if (worker_threads_.empty())
+	if (workers_.empty())
 		return;
 
 	// ※以降 Create() が呼び出されるまで、Run() が呼び出されてはいけない
 
 	// キュー内のタスクを破棄する
 	{
-		ThreadQueue<Task*>& wq = worker_queue_;
+		// まだ実行されていないタスクを一旦退避しタスクキューをクリア、スレッドを終了可能にする
+		std::deque<Task*> temp;
+		task_queue_.Clear(&temp);
 
 		// Pop() によるブロックを全て解除する
-		worker_queue_.Quit();
+		task_queue_.Quit();
 
 		// 未実行タスクを破棄する
-		LockGuard<ThreadQueue<Task*>> lock(&wq);
-		for (size_t i = 0, n = wq.Count(); i < n; i++) {
-			Task* pTask = wq[i];
+		for (size_t i = 0, n = temp.size(); i < n; i++) {
+			Task* pTask = temp[i];
 			pTask->Dispose();
 			pTask->Finalize();
 		}
-		worker_queue_.Clear();
 	}
 
 	// 実行中タスクへ終了要求を行う
-	for (size_t i = 0, n = worker_threads_.size(); i < n; i++) {
-		LockGuard<CriticalSection> lock(&running_tasks_locks_[i]);
-
-		Task* pTask = running_tasks_[i];
-		if (pTask != NULL) {
+	size_t worker_count = workers_.size();
+	for (size_t i = 0; i < worker_count; i++) {
+		Worker* worker = workers_[i];
+		LockGuard<CriticalSection> lock(&worker->cs_);
+		Task* pTask = reinterpret_cast<Task*>(::InterlockedExchangePointer((volatile PVOID*)&worker->task_, NULL));
+		if (pTask) {
 			pTask->RequestStop();
 		}
 	}
 
 	// スレッドを停止
 	LockGuard<CriticalSection> scope_guard(&lock_);
-	::WaitForMultipleObjects(static_cast<DWORD>(worker_threads_.size()), &worker_threads_[0], TRUE, INFINITE);
-	for (std::vector<HANDLE>::const_iterator iter = worker_threads_.begin(); iter != worker_threads_.end(); ++iter) {
-		::CloseHandle(*iter);
+	for (size_t i = 0; i < worker_count; i++) {
+		Worker* worker = workers_[i];
+		::WaitForSingleObject(worker->thread_, INFINITE);
+		::CloseHandle(worker->thread_);
 	}
-	worker_threads_.clear();
 
 	// 変数クリア
-	running_tasks_.clear();
-	running_tasks_locks_.clear();
-	worker_queue_.Destroy();
-	worker_queue_.Initialize();
+	for (size_t i = 0; i < worker_count; i++) {
+		delete workers_[i];
+	}
+	workers_.clear();
+	task_queue_.Destroy();
+	task_queue_.Initialize();
 }
 
 // 指定されたタスクをキューへ登録する(スレッドセーフ)、登録されたタスクは不要になった際に delete される
 bool ThreadPool::QueueTask(Task* pTask) {
-	return worker_queue_.Push(pTask);
+	return task_queue_.Push(pTask);
 }
 
 UINT ThreadPool::ThreadProc(void* pData) {
@@ -130,17 +131,18 @@ UINT ThreadPool::ThreadProc(void* pData) {
 UINT ThreadPool::WorkerThread(intptr_t index) {
 	//SetThreadName(::GetCurrentThreadId(), "ThreadPool");
 
-	CriticalSection& cs = running_tasks_locks_[index];
+	Worker* worker = workers_[index];
+	CriticalSection& cs = worker->cs_;
 	LockGuard<CriticalSection> lock(&cs);
 
 	for (;;) {
 		// キューからタスクを取得し
 		Task* pTask;
-		if (!worker_queue_.Pop(pTask)) {
-			running_tasks_[index] = NULL;
+		if (!task_queue_.Pop(pTask)) {
+			worker->task_ = NULL;
 			break;
 		}
-		running_tasks_[index] = pTask;
+		worker->task_ = pTask;
 		cs.Unlock();
 
 		// 実行する
@@ -149,7 +151,7 @@ UINT ThreadPool::WorkerThread(intptr_t index) {
 
 		// そして破棄する
 		cs.Lock();
-		running_tasks_[index] = NULL;
+		worker->task_ = NULL;
 		pTask->Finalize();
 	}
 

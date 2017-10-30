@@ -39,9 +39,18 @@ private:
 	UINT WorkerThread(intptr_t index);
 
 private:
-	std::vector<HANDLE> worker_threads_;
-	std::vector<Task*> running_tasks_;
-	std::vector<CriticalSection> running_tasks_locks_;
+	struct Worker {
+		HANDLE thread_;
+		volatile Task* task_;
+		CriticalSection cs_;
+
+		Worker(HANDLE thread) {
+			thread_ = thread;
+			task_ = NULL;
+		}
+	};
+
+	std::vector<Worker*> workers_;
 	CriticalSection lock_;
-	ThreadQueue<Task*> worker_queue_;
+	ThreadQueue<Task*> task_queue_;
 };
