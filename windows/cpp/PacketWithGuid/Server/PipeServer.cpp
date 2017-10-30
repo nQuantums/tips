@@ -117,7 +117,7 @@ void PipeServer::TaskForClient::DoTask() {
 						AddTextRes::Write(sendbuf, S_OK);
 					} else if (GetAllTextsCmd::IsReadable(up)) {
 						GetAllTextsCmd cmd(up, false);
-						::Sleep(1000);
+						::Sleep(5000);
 						GetAllTextsRes::Write(sendbuf, texts);
 					}
 

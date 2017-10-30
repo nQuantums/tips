@@ -44,9 +44,12 @@ public:
 		return true;
 	}
 
-	// キューをクリアする
-	void Clear() {
+	// キューをクリアする、必要があればキュー内容を退避する
+	void Clear(std::deque<T>* queue_evacuate = NULL) {
 		LockGuard<CriticalSection> lock(&critical_section_);
+		if (queue_evacuate) {
+			*queue_evacuate = queue_;
+		}
 		queue_.clear();
 	}
 
