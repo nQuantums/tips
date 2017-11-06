@@ -20,7 +20,7 @@ struct ConstString {
 		_string = msg;
 	}
 
-	static std::unique_ptr<ConstString> make_unique(const char* string) {
+	static std::unique_ptr<ConstString> New(const char* string) {
 		auto size = sizeof(((ConstString*)0)->_string);
 		auto len = std::strlen(string);
 		size += len + 1;
@@ -48,8 +48,8 @@ private:
 
 int main()
 {
-	auto p = ConstString::make_unique("ptr");
-	auto r = ConstString::make_reference("reference");
+	auto p = ConstString::New("ptr");
+	auto r = ConstString("reference");
 	std::cout << p->String() << std::endl;
 	std::cout << r.String() << std::endl;
 	return 0;
