@@ -9,6 +9,14 @@
 #include <unordered_set>
 
 
+void* operator new(std::size_t size) {
+	return malloc(size);
+}
+void operator delete(void* p) noexcept {
+	free(p);
+}
+
+
 template<class T>
 std::size_t HashFromNullTerminatedArray(const T* nullTerminatedArray) {
 #if defined(_WIN64)
@@ -33,18 +41,13 @@ std::size_t HashFromNullTerminatedArray(const T* nullTerminatedArray) {
 	}
 }
 
-
-void* operator new(std::size_t size) {
-	return malloc(size);
-}
-void operator delete(void* p) noexcept {
-	free(p);
-}
-
 #pragma pack(push, 1)
 // 不変文字列クラス
 // １回のメモリ確保でメンバ変数と文字列領域を同時に確保する
-template<class T> struct ConstString {
+template<class T> class ConstString {
+public:
+	template<class _Ty> friend class ConstStringAllocator;
+
 	using Char = T;
 	using Self = ConstString<Char>;
 	using UniquePtr = std::unique_ptr<Self>;
@@ -80,24 +83,44 @@ template<class T> struct ConstString {
 		}
 	};
 
+
+	static size_t GetLength(const Char* string) {
+		if (!string) {
+			return 0;
+		}
+		auto end = string;
+		while (*end) {
+			end++;
+		}
+		return end - string;
+	}
+
 	// 文字列の std::unique_ptr を作成
-	static std::unique_ptr<ConstString> New(const Char* string) {
+	static std::unique_ptr<Self> New(const Char* string) {
 		auto stringSize = GetLength(string) + 1;
-		auto p = operator new(sizeof(ConstString) + stringSize);
-		return std::unique_ptr<ConstString>(new (p) ConstString(stringSize, string)); // TODO: ここで例外発生したらメモリリークしてしまうのでなんとかする
+		auto p = operator new(sizeof(Self) + stringSize);
+		return std::unique_ptr<Self>(new (p) Self(stringSize, string)); // TODO: ここで例外発生したらメモリリークしてしまうのでなんとかする
 	}
 
 	// 文字列の std::shared_ptr を作成
-	static std::shared_ptr<ConstString> NewShared(const Char* string) {
+	static std::shared_ptr<Self> NewShared(const Char* string) {
 		auto stringSize = GetLength(string) + 1;
-		auto p = operator new(sizeof(ConstString) + stringSize);
-		return std::shared_ptr<ConstString>(new (p) ConstString(stringSize, string)); // TODO: ここで例外発生したらメモリリークしてしまうのでなんとかする
+		struct Bridge : public Self {
+			Bridge(size_t stringSize, const Char* string) noexcept : Self(stringSize, string) {}
+			void operator delete(void* p) {
+				if (!p) {
+					return;
+				}
+				auto pcs = reinterpret_cast<Self*>(p);
+				if (!pcs->_owned) {
+					return;
+				}
+				::operator delete(p);
+			}
+		};
+		return std::allocate_shared<Bridge>(ConstStringAllocator<Bridge>(stringSize), stringSize, string);
 	}
 
-	// 既に確保済みの文字列を指す一時的な変数を作成
-	static ConstString Reference(const Char* string) {
-		return ConstString(string);
-	}
 
 	ConstString() {
 		_string = nullptr;
@@ -105,15 +128,14 @@ template<class T> struct ConstString {
 		_hash = 0;
 		_owned = false;
 	}
-	//ConstString(const ConstString& c) {
-	//	_string = c._string;
-	//	_owned = false;
-	//}
-
-	//ConstString& operator=(const ConstString& c) {
-	//	_string = c._string;
-	//	_owned = false;
-	//}
+	ConstString(const Char* string) {
+		_string = string;
+		_length = GetLength(string);
+		_hash = HashFromNullTerminatedArray(string);
+		_owned = false;
+	}
+	ConstString(const ConstString& c) = delete;
+	ConstString& operator=(const ConstString& c) = delete;
 
 	Char operator[](intptr_t index) const {
 		return _string[index];
@@ -149,11 +171,12 @@ template<class T> struct ConstString {
 		return Equals(c);
 	}
 
+	// ConstString(const Char* string) コンストラクタで生成されたものはメモリ解放の必要が無いため delete をオーバーロードして対処する
 	void operator delete(void* p) {
 		if (!p) {
 			return;
 		}
-		auto pcs = reinterpret_cast<ConstString*>(p);
+		auto pcs = reinterpret_cast<Self*>(p);
 		if (!pcs->_owned) {
 			return;
 		}
@@ -161,38 +184,14 @@ template<class T> struct ConstString {
 	}
 
 private:
-	static size_t GetLength(const Char* string) {
-		if (!string) {
-			return 0;
-		}
-		auto end = string;
-		while (*end) {
-			end++;
-		}
-		return end - string;
-	}
-
-	ConstString(const Char* string) {
-		_string = string;
-		_length = GetLength(string);
-		_hash = HashFromNullTerminatedArray(string);
-		_owned = false;
-	}
 	ConstString(size_t stringSize, const Char* string) noexcept {
 		auto payload = reinterpret_cast<Char*>(this + 1);
 		memcpy(payload, string, stringSize);
 		_string = payload;
 		_length = stringSize - 1;
 		_hash = HashFromNullTerminatedArray(string);
-		_owned = true;;
+		_owned = true;
 	}
-
-	//void* operator new(std::size_t size) {
-	//	return malloc(size);
-	//}
-	//void* operator new(std::size_t size, void* p) noexcept {
-	//	return p;
-	//}
 
 	const Char* _string;
 	size_t _length;
@@ -200,6 +199,85 @@ private:
 	bool _owned;
 };
 #pragma pack(pop)
+
+
+template<class _Ty> class ConstStringAllocator {
+public:
+	using _Not_user_specialized = void;
+
+	using value_type = _Ty;
+
+	using pointer = value_type *;
+	using const_pointer = const value_type *;
+
+	using reference = value_type&;
+	using const_reference = const value_type&;
+
+	using size_type = size_t;
+	using difference_type = ptrdiff_t;
+
+	using propagate_on_container_move_assignment = std::true_type;
+	using is_always_equal = std::true_type;
+
+	template<class _Other> struct rebind {	// convert this type to PayloadAllocator<_Other>
+		using other = ConstStringAllocator<_Other>;
+	};
+
+	pointer address(reference _Val) const _NOEXCEPT {	// return address of mutable _Val
+		return (_STD addressof(_Val));
+	}
+
+	const_pointer address(const_reference _Val) const _NOEXCEPT {	// return address of nonmutable _Val
+		return (_STD addressof(_Val));
+	}
+
+	size_t stringSize;
+
+	ConstStringAllocator() _NOEXCEPT {	// construct default PayloadAllocator (do nothing)
+		this->stringSize = 0;
+	}
+	ConstStringAllocator(size_t payloadSize) _NOEXCEPT {	// construct default PayloadAllocator (do nothing)
+		this->stringSize = payloadSize;
+	}
+
+	ConstStringAllocator(const ConstStringAllocator&) _NOEXCEPT = default;
+	template<class _Other> ConstStringAllocator(const ConstStringAllocator<_Other>& a) _NOEXCEPT {	// construct from a related PayloadAllocator (do nothing)
+		this->stringSize = a.stringSize;
+	}
+
+	void deallocate(const pointer _Ptr, const size_type _Count) {	// deallocate object at _Ptr
+		operator delete(_Ptr);
+	}
+
+	_DECLSPEC_ALLOCATOR pointer allocate(_CRT_GUARDOVERFLOW const size_type _Count) {	// allocate array of _Count elements
+		return static_cast<pointer>(operator new(_Count * (sizeof(_Ty) + this->stringSize)));
+	}
+
+	_DECLSPEC_ALLOCATOR pointer allocate(_CRT_GUARDOVERFLOW const size_type _Count, const void *) {	// allocate array of _Count elements, ignore hint
+		return allocate(_Count);
+	}
+
+	template<class _Objty, class... _Types> void construct(_Objty * const _Ptr, _Types&&... _Args) {	// construct _Objty(_Types...) at _Ptr
+		new (const_cast<void *>(static_cast<const volatile void *>(_Ptr))) _Objty(_STD forward<_Types>(_Args)...);
+	}
+
+	template<class _Uty> void destroy(_Uty * const _Ptr) {	// destroy object at _Ptr
+		_Ptr->~_Uty();
+	}
+
+	size_t max_size() const _NOEXCEPT {	// estimate maximum array size
+		return (static_cast<size_t>(-1) / sizeof(_Ty));
+	}
+};
+
+template<class _Ty, class _Other> inline bool operator==(const ConstStringAllocator<_Ty>&, const ConstStringAllocator<_Other>&) _NOEXCEPT {
+	return (true);
+}
+
+template<class _Ty, class _Other> inline bool operator!=(const ConstStringAllocator<_Ty>&, const ConstStringAllocator<_Other>&) _NOEXCEPT {
+	return (false);
+}
+
 
 namespace std {
 	template<> struct hash<ConstString<char>::UniquePtr> : ConstString<char>::UniquePtrHasher {};
@@ -223,8 +301,7 @@ using ConstStringA = ConstString<char>;
 using ConstStringW = ConstString<wchar_t>;
 
 
-int main()
-{
+int main() {
 	std::unordered_set<ConstStringA::UniquePtr> texts;
 
 	texts.insert(ConstStringA::New("afefe"));
@@ -235,27 +312,21 @@ int main()
 	}
 
 	{
-		auto cs = ConstStringA::Reference("gufefe");
-		std::unique_ptr<ConstStringA> up(&cs);
+		ConstStringA cs("gufefe");
+		ConstStringA::UniquePtr up(&cs);
 		auto iter = texts.find(up);
 		if (iter != texts.end()) {
 			std::cout << *iter << std::endl;
 		}
 	}
-	{
-		auto cs = ConstStringA::Reference("gufefe");
-		std::unique_ptr<ConstStringA> up(&cs);
-		auto sp = std::shared_ptr<ConstStringA>(std::move(up));
-	}
 
-	std::shared_ptr<ConstStringA> spsave;
+	ConstStringA::SharedPtr spsave;
 	{
 		auto sp = ConstStringA::NewShared("afefe");
 		spsave = sp;
 	}
+	std::cout << spsave << std::endl;
+	spsave = nullptr;
 
-
-
-    return 0;
+	return 0;
 }
-
