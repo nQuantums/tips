@@ -57,14 +57,14 @@ public:
 		using argument_type = UniquePtr;
 		using result_type = size_t;
 		size_t operator()(const argument_type& _Keyval) const {
-			return HashFromNullTerminatedArray(_Keyval->String());
+			return _Keyval->Hash();
 		}
 	};
 	struct SharedPtrHasher {
 		using argument_type = SharedPtr;
 		using result_type = size_t;
 		size_t operator()(const argument_type& _Keyval) const {
-			return HashFromNullTerminatedArray(_Keyval->String());
+			return _Keyval->Hash();
 		}
 	};
 
