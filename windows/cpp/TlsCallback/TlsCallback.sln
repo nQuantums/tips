@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27428.2037
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TlsCallback", "TlsCallback.vcxproj", "{159913EF-A657-4D6B-BC7A-5AFF43A35CDA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{159913EF-A657-4D6B-BC7A-5AFF43A35CDA}.Debug|x64.ActiveCfg = Debug|x64
+		{159913EF-A657-4D6B-BC7A-5AFF43A35CDA}.Debug|x64.Build.0 = Debug|x64
+		{159913EF-A657-4D6B-BC7A-5AFF43A35CDA}.Debug|x86.ActiveCfg = Debug|Win32
+		{159913EF-A657-4D6B-BC7A-5AFF43A35CDA}.Debug|x86.Build.0 = Debug|Win32
+		{159913EF-A657-4D6B-BC7A-5AFF43A35CDA}.Release|x64.ActiveCfg = Release|x64
+		{159913EF-A657-4D6B-BC7A-5AFF43A35CDA}.Release|x64.Build.0 = Release|x64
+		{159913EF-A657-4D6B-BC7A-5AFF43A35CDA}.Release|x86.ActiveCfg = Release|Win32
+		{159913EF-A657-4D6B-BC7A-5AFF43A35CDA}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E518530C-8A85-42AE-84DA-DE24F1F35F45}
+	EndGlobalSection
+EndGlobal
