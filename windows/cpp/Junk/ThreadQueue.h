@@ -14,7 +14,7 @@ public:
 		return queue_.size();
 	}
 
-	const T& operator[](int index) {
+	const T& operator[](intptr_t index) {
 		return queue_[index];
 	}
 
@@ -22,7 +22,7 @@ public:
 	bool Push(const T& value) {
 		{
 			LockGuard<CriticalSection> lock(&critical_section_);
-			if(queue_.size() == 0x3fffffff)
+			if (queue_.size() == 0x3fffffff)
 				return false;
 			queue_.push_back(value);
 		}
@@ -36,7 +36,7 @@ public:
 		semaphore_.Lock(); // アイテムを１つ消費するのでロック
 
 		LockGuard<CriticalSection> lock(&critical_section_);
-		if(queue_.empty())
+		if (queue_.empty())
 			return false;
 
 		value = queue_.front();
@@ -44,15 +44,18 @@ public:
 		return true;
 	}
 
-	// キューをクリアする
-	void Clear() {
+	// キューをクリアする、必要があればキュー内容を退避する
+	void Clear(std::deque<T>* queue_evacuate = NULL) {
 		LockGuard<CriticalSection> lock(&critical_section_);
+		if (queue_evacuate) {
+			*queue_evacuate = queue_;
+		}
 		queue_.clear();
 	}
 
 	// 終了のため全ての Pop() でのブロックを解除する
 	void Quit() {
-		semaphore_.Unlock(0x3fffffff); // アイテムを１つ追加したのでアンロック
+		semaphore_.Unlock(0x3fffffff); // 全アンロック
 	}
 
 	// キューへの排他処理開始
