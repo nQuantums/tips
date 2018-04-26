@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Query\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="ColumnsBase.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>ColumnsBase.cs</LastGenOutput>
+    </None>
+    <None Update="DbEnvironment.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>DbEnvironment.cs</LastGenOutput>
+    </None>
+    <None Update="Variable.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Variable.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="ColumnsBase.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>ColumnsBase.tt</DependentUpon>
+    </Compile>
+    <Compile Update="DbEnvironment.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>DbEnvironment.tt</DependentUpon>
+    </Compile>
+    <Compile Update="Variable.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Variable.tt</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+</Project>
