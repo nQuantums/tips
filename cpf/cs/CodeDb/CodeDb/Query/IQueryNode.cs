@@ -6,7 +6,7 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// クエリツリーのノード
 	/// </summary>
-	public interface IQueryNode {
+	public interface IQueryNode : ISqlBuildable {
 		/// <summary>
 		/// 根ノード
 		/// </summary>

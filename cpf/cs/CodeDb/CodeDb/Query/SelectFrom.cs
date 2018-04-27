@@ -7,10 +7,10 @@ using CodeDb.Internal;
 
 namespace CodeDb.Query {
 	/// <summary>
-	/// FROM句を含まないSELECT
+	/// FROM句を含むSELECT
 	/// </summary>
 	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
-	public class Select<TColumns> : ISelect<TColumns> {
+	public class SelectFrom<TColumns> : ISelect<TColumns> {
 		#region プロパティ
 		/// <summary>
 		/// DB接続環境
@@ -18,9 +18,9 @@ namespace CodeDb.Query {
 		public DbEnvironment Environment { get; private set; }
 
 		/// <summary>
-		/// WHERE句の式
+		/// 生成元のFROM
 		/// </summary>
-		public ElementCode WhereExpression { get; private set; }
+		public IFrom From { get; private set; }
 
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
@@ -40,7 +40,7 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// このテーブルを構成するのに必要な全ての列定義を取得する
 		/// </summary>
-		public ColumnMap SourceColumnMap => this.ColumnMap;
+		public ColumnMap SourceColumnMap => this.From.SourceColumnMap;
 
 		/// <summary>
 		/// <see cref="ICodeDbDataReader"/>から<see cref="TColumns"/>を列挙するファンクション
@@ -53,8 +53,10 @@ namespace CodeDb.Query {
 		/// コンストラクタ
 		/// </summary>
 		/// <param name="environment">DB接続環境</param>
-		public Select(DbEnvironment environment) {
+		/// <param name="from">生成元の<see cref="IFrom"/></param>
+		public SelectFrom(DbEnvironment environment, IFrom from) {
 			this.Environment = environment;
+			this.From = from;
 			this.ColumnMap = new ColumnMap();
 			this.Columns = TypeWiseCache<TColumns>.Creator();
 		}
@@ -82,8 +84,8 @@ namespace CodeDb.Query {
 		/// エイリアス用にクローンを作成する
 		/// </summary>
 		/// <returns>クローン</returns>
-		public Select<TColumns> AliasedClone() {
-			var c = this.MemberwiseClone() as Select<TColumns>;
+		public SelectFrom<TColumns> AliasedClone() {
+			var c = this.MemberwiseClone() as SelectFrom<TColumns>;
 			ColumnMap map;
 			TColumns columns;
 			c.ColumnMap = map = new ColumnMap();
@@ -104,32 +106,21 @@ namespace CodeDb.Query {
 		}
 
 		/// <summary>
-		/// WHERE句の式を登録する
-		/// </summary>
-		/// <param name="expression">式</param>
-		public void Where(Expression<Func<bool>> expression) {
-			var context = new ElementCode();
-			context.Add(expression, this.SourceColumnMap);
-			this.WhereExpression = context;
-		}
-
-		/// <summary>
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
 		public void BuildSql(ElementCode context) {
-			int i = 0;
 			context.Add(SqlKeyword.Select);
-			context.AddColumns(this.ColumnMap, column => {
-				context.Add(column.Source);
+			var columns = this.ColumnMap;
+			for (int i = 0, n = columns.Count; i < n; i++) {
+				if (i != 0) {
+					context.AddComma();
+				}
+				context.Add(columns[i].Source);
 				context.Add(SqlKeyword.As);
-				context.Concat("c" + (i++));
-			});
-
-			if (this.WhereExpression != null) {
-				context.Add(SqlKeyword.Where);
-				context.Add(this.WhereExpression);
+				context.Concat("c" + i);
 			}
+			this.From.BuildSql(context);
 		}
 		#endregion
 	}

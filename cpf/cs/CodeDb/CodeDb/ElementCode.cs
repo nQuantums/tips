@@ -65,7 +65,7 @@ namespace CodeDb {
 			ElementCode _ExprInProgress;
 			ColumnMap _ColDefDic;
 
-			public Visitor(ElementCode exprInProgress, ColumnMap colDefDic) {
+			public Visitor(ElementCode exprInProgress, ColumnMap colDefDic = null) {
 				_ExprInProgress = exprInProgress;
 				_ColDefDic = colDefDic;
 			}
@@ -159,11 +159,6 @@ namespace CodeDb {
 			}
 
 			protected override Expression VisitMethodCall(MethodCallExpression node) {
-				// ToString() は文字列への変換として扱う
-				if (node.Method.Name == "ToString") {
-					return this.Visit(node.Object);
-				}
-
 				// 登録されたメソッド毎に処理を行う
 				MethodNodeHandler handler;
 				if (MethodProc.TryGetValue(node.Method, out handler)) {
@@ -603,7 +598,7 @@ namespace CodeDb {
 			_Core.ItemCount++;
 		}
 
-		public void AddColumns(IEnumerable<IColumnDef> columns) {
+		public void AddColumnDefs(IEnumerable<IColumnDef> columns) {
 			BeginParenthesize();
 			var first = true;
 			foreach (var column in columns) {
@@ -617,7 +612,7 @@ namespace CodeDb {
 			EndParenthesize();
 		}
 
-		public void AddColumns(IEnumerable<IColumnDef> columns, Action<IColumnDef> before, Action<IColumnDef> after) {
+		public void AddColumnDefs(IEnumerable<IColumnDef> columns, Action<IColumnDef> before, Action<IColumnDef> after) {
 			BeginParenthesize();
 			var first = true;
 			foreach (var column in columns) {
@@ -637,9 +632,7 @@ namespace CodeDb {
 			EndParenthesize();
 		}
 
-
-		public void AddColumns(IEnumerable<Column> columns) {
-			BeginParenthesize();
+		public void AddColumns(IEnumerable<Column> columns, Action<Column> columnWise = null) {
 			var first = true;
 			foreach (var column in columns) {
 				if (first) {
@@ -647,29 +640,12 @@ namespace CodeDb {
 				} else {
 					AddComma();
 				}
-				Add(column);
-			}
-			EndParenthesize();
-		}
-
-		public void AddColumns(IEnumerable<Column> columns, Action<Column> before, Action<Column> after) {
-			BeginParenthesize();
-			var first = true;
-			foreach (var column in columns) {
-				if (first) {
-					first = false;
+				if (columnWise != null) {
+					columnWise(column);
 				} else {
-					AddComma();
-				}
-				if (before != null) {
-					before(column);
-				}
-				Add(column);
-				if (after != null) {
-					after(column);
+					Add(column);
 				}
 			}
-			EndParenthesize();
 		}
 
 		public void AddComma() {

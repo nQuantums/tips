@@ -211,9 +211,9 @@ namespace CodeDb.Query {
 		/// 列選択部を生成する
 		/// </summary>
 		/// <typeparam name="TColumns1">列をプロパティとして持つクラス</typeparam>
-		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する new { t1.A, t1.B } の様な式</param>
+		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { t1.A, t1.B } の様な式</param>
 		/// <returns>SELECT句</returns>
-		public Select<TColumns1> Select<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
+		public SelectFrom<TColumns1> Select<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
 			// new 演算子でクラスを生成するもの以外はエラーとする
 			var body = columnsExpression.Body;
 			if (body.NodeType != ExpressionType.New) {
@@ -231,7 +231,7 @@ namespace CodeDb.Query {
 			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
 			var environment = this.Table.Environment;
 			var sourceColumnMap = this.SourceColumnMap;
-			var select = new Select<TColumns1>(environment, this);
+			var select = new SelectFrom<TColumns1>(environment, this);
 			for (int i = 0; i < properties.Length; i++) {
 				var pi = properties[i];
 				if (pi.PropertyType != args[i].Type) {

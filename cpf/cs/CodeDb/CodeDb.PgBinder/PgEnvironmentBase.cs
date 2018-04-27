@@ -187,7 +187,7 @@ namespace CodeDb.PgBinder {
 			context.Add(SqlKeyword.AddConstraint);
 			context.Concat(primaryKey.Name);
 			context.Add(SqlKeyword.PrimaryKey);
-			context.AddColumns(primaryKey.Columns);
+			context.AddColumnDefs(primaryKey.Columns);
 			context.Go();
 		}
 
@@ -203,7 +203,7 @@ namespace CodeDb.PgBinder {
 				context.Add(SqlKeyword.Using);
 				context.Concat("gin");
 			}
-			context.AddColumns(index.Columns);
+			context.AddColumnDefs(index.Columns);
 			context.Go();
 		}
 
@@ -268,7 +268,7 @@ namespace CodeDb.PgBinder {
 				// テーブル本体
 				context.Add(SqlKeyword.CreateTable, SqlKeyword.IfNotExists);
 				context.Concat(tableName);
-				context.AddColumns(table.ColumnDefs, null, columnOption);
+				context.AddColumnDefs(table.ColumnDefs, null, columnOption);
 				context.Go();
 
 				// プライマリキー

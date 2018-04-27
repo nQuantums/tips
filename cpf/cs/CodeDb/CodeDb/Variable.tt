@@ -45,9 +45,6 @@ namespace CodeDb {
 	/// SQL内変数、@variable などの変数に置き換わる
 	/// </summary>
 	public class Variable {
-		public static readonly MethodInfo IsNullMethodInfo = typeof(Variable).GetMethod("IsNull");
-		public static readonly MethodInfo IsNotNullMethodInfo = typeof(Variable).GetMethod("IsNotNull");
-
 		public readonly object Value;
 
 		public Variable(object value) {
@@ -75,6 +72,22 @@ namespace CodeDb {
 		// 明示的キャスト
 		public static bool operator true(Variable variable) => !(variable is null);
 		public static bool operator false(Variable variable) => variable is null;
+
+		// 暗黙的キャスト
+<#
+foreach(var typeAndName in types) {
+	var fields = typeAndName.Split(',');
+	var type = fields[0].Trim();
+	var name = fields[1].Trim();
+	var dbtype = fields[2].Trim();
+	var isValue = fields[3].Trim() == "value";
+#>
+		public static implicit operator <#=type#>(Variable variable) => (<#=type#>)variable.Value;
+<#	if (isValue) {#>
+		public static implicit operator <#=type#>?(Variable variable) => (<#=type#>?)variable.Value;
+<#	}
+}
+#>
 
 		// 配列としてアクセス
 		public Variable this[int index] {

@@ -114,6 +114,19 @@ namespace MyJVNApiTest {
 				cmd.ExecuteNonQuery();
 			}
 
+			// 挿入のテスト
+			{
+				var v = new Variable("http");
+				var ins = Sql.InsertInto(Db.Url, t => new { t.UrlID, t.Url });
+				ins.Select(() => new { UrlID = 1, Url = (string)v });
+
+				var context = new ElementCode();
+				ins.BuildSql(context);
+				var p = context.Build();
+				Console.WriteLine(p.CommandText);
+				return;
+			}
+
 
 
 			CollectUrls("https://helpx.adobe.com/jp/security/products/acrobat/apsb18-02.html");

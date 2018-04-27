@@ -20,7 +20,7 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 挿入する値
 		/// </summary>
-		ISelect Select { get; }
+		ISelect Values { get; }
 	}
 
 	/// <summary>

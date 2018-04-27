@@ -26,7 +26,12 @@ namespace CodeDb.PgBinder {
 			var prms = _Core.Parameters;
 			prms.Clear();
 			foreach (var p in program.ParameterNameAndValues) {
-				prms.AddWithValue(p.Name, p.Value);
+				var variable = p.Value as Variable;
+				if (variable is null) {
+					prms.AddWithValue(p.Name, p.Value);
+				} else {
+					prms.AddWithValue(p.Name, variable.Value);
+				}
 			}
 		}
 		public void Cancel() {

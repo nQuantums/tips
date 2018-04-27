@@ -5,6 +5,11 @@ using System.Reflection;
 using CodeDb.Internal;
 
 namespace CodeDb.Query {
+	/// <summary>
+	/// INSERT INTO句
+	/// </summary>
+	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	/// <typeparam name="TColumnsOrder">列の並びを指定する t => new { t.A, t.B } の様な式で生成される匿名クラス</typeparam>
 	public class InsertInto<TColumns, TColumnsOrder> : IInsertInto<TColumns> {
 		#region プロパティ
 		/// <summary>
@@ -20,12 +25,17 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 挿入する値
 		/// </summary>
-		public ISelect<TColumnsOrder> Select { get; private set; }
+		public ISelect<TColumnsOrder> Values { get; private set; }
 
 		ITableDef IInsertInto.Table => this.Table;
-		ISelect IInsertInto.Select => this.Select;
+		ISelect IInsertInto.Values => this.Values;
 		#endregion
 
+		/// <summary>
+		/// コンストラクタ、挿入先テーブルと列の並びを指定して初期化する
+		/// </summary>
+		/// <param name="table">挿入先テーブル</param>
+		/// <param name="columnsExpression">列の並びを指定する t => new { t.A, t.B } の様な式</param>
 		public InsertInto(TableDef<TColumns> table, Expression<Func<TColumns, TColumnsOrder>> columnsExpression) {
 			// new 演算子で匿名クラスを生成するもの以外はエラーとする
 			var body = columnsExpression.Body;
@@ -61,8 +71,47 @@ namespace CodeDb.Query {
 			this.ColumnMap = columnsOrder;
 		}
 
-		public void Values(ISelect<TColumnsOrder> select) {
-			this.Select = select;
+		//public void Values(ISelect<TColumnsOrder> select) {
+		//	this.Values = select;
+		//}
+
+		/// <summary>
+		/// 列選択部を生成する
+		/// </summary>
+		/// <typeparam name="TColumns1">列をプロパティとして持つクラス</typeparam>
+		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { t1.A, t1.B } の様な式</param>
+		/// <returns>SELECT句</returns>
+		public Select<TColumnsOrder> Select(Expression<Func<TColumnsOrder>> columnsExpression) {
+			// new 演算子でクラスを生成するもの以外はエラーとする
+			var body = columnsExpression.Body;
+			if (body.NodeType != ExpressionType.New) {
+				throw new ApplicationException();
+			}
+
+			// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
+			var newexpr = body as NewExpression;
+			var args = newexpr.Arguments;
+			var properties = typeof(TColumnsOrder).GetProperties();
+			if (args.Count != properties.Length) {
+				throw new ApplicationException();
+			}
+
+			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
+			var environment = this.Table.Environment;
+			var select = new Select<TColumnsOrder>(environment);
+			for (int i = 0; i < properties.Length; i++) {
+				var pi = properties[i];
+				if (pi.PropertyType != args[i].Type) {
+					throw new ApplicationException();
+				}
+				var context = new ElementCode();
+				context.Add(args[i], null);
+				select.BindColumn(pi.Name, "c" + i, environment.CreateDbTypeFromType(pi.PropertyType), 0, context);
+			}
+
+			this.Values = select;
+
+			return select;
 		}
 
 		public void BuildSql(ElementCode context) {
@@ -79,7 +128,7 @@ namespace CodeDb.Query {
 			}
 			context.EndParenthesize();
 
-			var sel = this.Select;
+			var sel = this.Values;
 			if (sel != null) {
 				sel.BuildSql(context);
 				return;

@@ -10,9 +10,6 @@ namespace CodeDb {
 	/// SQL内変数、@variable などの変数に置き換わる
 	/// </summary>
 	public class Variable {
-		public static readonly MethodInfo IsNullMethodInfo = typeof(Variable).GetMethod("IsNull");
-		public static readonly MethodInfo IsNotNullMethodInfo = typeof(Variable).GetMethod("IsNotNull");
-
 		public readonly object Value;
 
 		public Variable(object value) {
@@ -40,6 +37,23 @@ namespace CodeDb {
 		// 明示的キャスト
 		public static bool operator true(Variable variable) => !(variable is null);
 		public static bool operator false(Variable variable) => variable is null;
+
+		// 暗黙的キャスト
+		public static implicit operator bool(Variable variable) => (bool)variable.Value;
+		public static implicit operator bool?(Variable variable) => (bool?)variable.Value;
+		public static implicit operator char(Variable variable) => (char)variable.Value;
+		public static implicit operator char?(Variable variable) => (char?)variable.Value;
+		public static implicit operator int(Variable variable) => (int)variable.Value;
+		public static implicit operator int?(Variable variable) => (int?)variable.Value;
+		public static implicit operator long(Variable variable) => (long)variable.Value;
+		public static implicit operator long?(Variable variable) => (long?)variable.Value;
+		public static implicit operator double(Variable variable) => (double)variable.Value;
+		public static implicit operator double?(Variable variable) => (double?)variable.Value;
+		public static implicit operator string(Variable variable) => (string)variable.Value;
+		public static implicit operator Guid(Variable variable) => (Guid)variable.Value;
+		public static implicit operator Guid?(Variable variable) => (Guid?)variable.Value;
+		public static implicit operator DateTime(Variable variable) => (DateTime)variable.Value;
+		public static implicit operator DateTime?(Variable variable) => (DateTime?)variable.Value;
 
 		// 配列としてアクセス
 		public Variable this[int index] {
