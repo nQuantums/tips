@@ -95,7 +95,7 @@ namespace CodeDb {
 		/// </summary>
 		/// <param name="context">コマンド生成先のバッファ</param>
 		/// <param name="databaseDelta">データベース変化分</param>
-		public abstract void ApplyDatabaseDelta(ExpressionInProgress context, IDatabaseDelta databaseDelta);
+		public abstract void ApplyDatabaseDelta(ElementCode context, IDatabaseDelta databaseDelta);
 <#
 foreach(var typeAndName in types) {
 	var fields = typeAndName.Split(',');

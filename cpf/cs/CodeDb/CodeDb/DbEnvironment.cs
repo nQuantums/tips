@@ -74,7 +74,7 @@ namespace CodeDb {
 		/// </summary>
 		/// <param name="context">コマンド生成先のバッファ</param>
 		/// <param name="databaseDelta">データベース変化分</param>
-		public abstract void ApplyDatabaseDelta(ExpressionInProgress context, IDatabaseDelta databaseDelta);
+		public abstract void ApplyDatabaseDelta(ElementCode context, IDatabaseDelta databaseDelta);
 
 		/// <summary>
 		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される

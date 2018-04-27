@@ -54,7 +54,7 @@ namespace CodeDb.PgBinder {
 
 		public override void CreateRole(ICodeDbConnection connection, string roleName, string password) {
 			using (var cmd = connection.CreateCommand()) {
-				var context = new ExpressionInProgress();
+				var context = new ElementCode();
 				context.Add(SqlKeyword.CreateRole);
 				context.Concat(Quote(roleName));
 				context.Add(SqlKeyword.Password);
@@ -68,7 +68,7 @@ namespace CodeDb.PgBinder {
 
 		public override void CreateDatabase(ICodeDbConnection connection, string databaseName, string owner) {
 			using (var cmd = connection.CreateCommand()) {
-				var context = new ExpressionInProgress();
+				var context = new ElementCode();
 				context.Add(SqlKeyword.CreateDatabase);
 				context.Concat(Quote(databaseName));
 				context.Add(SqlKeyword.Owner);
@@ -164,7 +164,7 @@ namespace CodeDb.PgBinder {
 			return string.Concat("\"", name, "\"");
 		}
 
-		static void Add(ExpressionInProgress context, string tableName, IColumnDef column, Action<IColumnDef> columnOption) {
+		static void Add(ElementCode context, string tableName, IColumnDef column, Action<IColumnDef> columnOption) {
 			if (column == null) {
 				return;
 			}
@@ -178,7 +178,7 @@ namespace CodeDb.PgBinder {
 			context.Go();
 		}
 
-		static void Add(ExpressionInProgress context, string tableName, IPrimaryKeyDef primaryKey) {
+		static void Add(ElementCode context, string tableName, IPrimaryKeyDef primaryKey) {
 			if (primaryKey == null) {
 				return;
 			}
@@ -191,7 +191,7 @@ namespace CodeDb.PgBinder {
 			context.Go();
 		}
 
-		static void Add(ExpressionInProgress context, string tableName, IIndexDef index) {
+		static void Add(ElementCode context, string tableName, IIndexDef index) {
 			if (index == null) {
 				return;
 			}
@@ -207,7 +207,7 @@ namespace CodeDb.PgBinder {
 			context.Go();
 		}
 
-		static void Drop(ExpressionInProgress context, string tableName, IPrimaryKeyDef primaryKey) {
+		static void Drop(ElementCode context, string tableName, IPrimaryKeyDef primaryKey) {
 			if (primaryKey == null) {
 				return;
 			}
@@ -218,7 +218,7 @@ namespace CodeDb.PgBinder {
 			context.Go();
 		}
 
-		static void Drop(ExpressionInProgress context, string tableName, IIndexDef index) {
+		static void Drop(ElementCode context, string tableName, IIndexDef index) {
 			if (index == null) {
 				return;
 			}
@@ -229,7 +229,7 @@ namespace CodeDb.PgBinder {
 			context.Go();
 		}
 
-		static void Drop(ExpressionInProgress context, string tableName, IColumnDef column) {
+		static void Drop(ElementCode context, string tableName, IColumnDef column) {
 			if (column == null) {
 				return;
 			}
@@ -240,7 +240,7 @@ namespace CodeDb.PgBinder {
 			context.Go();
 		}
 
-		public override void ApplyDatabaseDelta(ExpressionInProgress context, IDatabaseDelta databaseDelta) {
+		public override void ApplyDatabaseDelta(ElementCode context, IDatabaseDelta databaseDelta) {
 			// 列の型など付与するデリゲート
 			Action<IColumnDef> columnOption = (column) => {
 				context.Concat(column.DbType.ToDbTypeString((column.Flags & ColumnFlags.Serial) != 0 ? DbTypeStringFlags.Serial : 0));

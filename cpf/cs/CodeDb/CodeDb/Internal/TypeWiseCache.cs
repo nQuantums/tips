@@ -13,7 +13,7 @@ namespace CodeDb.Internal {
 		static Func<T> _Creator;
 		static Func<T, T> _Cloner;
 		static Func<ICodeDbDataReader, IEnumerable<T>> _Reader;
-		static Action<ExpressionInProgress, T> _AddValues;
+		static Action<ElementCode, T> _AddValues;
 
 		/// <summary>
 		/// <see cref="T"/>型のオブジェクトを生成するファンクション、デフォルトコンストラクタがあればそれを優先し無ければメンバを引数として渡すものを探しデフォルト値を渡す
@@ -96,29 +96,29 @@ namespace CodeDb.Internal {
 		}
 
 		/// <summary>
-		/// <see cref="ExpressionInProgress"/>にカンマ区切りでプロパティを列挙するファンクション
+		/// <see cref="ElementCode"/>にカンマ区切りでプロパティを列挙するファンクション
 		/// </summary>
-		public static Action<ExpressionInProgress, T> AddValues {
+		public static Action<ElementCode, T> AddValues {
 			get {
 				if (_AddValues == null) {
 					var type = typeof(T);
-					var context = typeof(ExpressionInProgress);
-					var param1 = Expression.Parameter(typeof(ExpressionInProgress));
+					var context = typeof(ElementCode);
+					var param1 = Expression.Parameter(typeof(ElementCode));
 					var param2 = Expression.Parameter(type);
 					var properties = type.GetProperties();
 					var expressions = new Expression[properties.Length * 2 - 1];
-					var addComma = context.GetMethod(nameof(ExpressionInProgress.AddComma));
+					var addComma = context.GetMethod(nameof(ElementCode.AddComma));
 
 					for (int i = 0, j = 0; i < properties.Length; i++) {
 						var pi = properties[i];
 						if (i != 0) {
 							expressions[j++] = Expression.Call(param1, addComma);
 						}
-						expressions[j++] = Expression.Call(param1, context.GetMethod(nameof(ExpressionInProgress.Add), new[] { pi.PropertyType }), Expression.Property(param2, pi));
+						expressions[j++] = Expression.Call(param1, context.GetMethod(nameof(ElementCode.Add), new[] { pi.PropertyType }), Expression.Property(param2, pi));
 					}
 
-					var expr = Expression.Lambda<Action<ExpressionInProgress, T>>(Expression.Block(expressions), param1, param2);
-					_AddValues = (Action<ExpressionInProgress, T>)expr.Compile();
+					var expr = Expression.Lambda<Action<ElementCode, T>>(Expression.Block(expressions), param1, param2);
+					_AddValues = (Action<ElementCode, T>)expr.Compile();
 				}
 				return _AddValues;
 			}

@@ -7,13 +7,13 @@ using System.Reflection;
 using CodeDb.Query;
 using CodeDb.Internal;
 
-using MethodNodeHandler = System.Action<CodeDb.ExpressionInProgress.Visitor, CodeDb.ExpressionInProgress, System.Linq.Expressions.MethodCallExpression>;
+using MethodNodeHandler = System.Action<CodeDb.ElementCode.Visitor, CodeDb.ElementCode, System.Linq.Expressions.MethodCallExpression>;
 
 namespace CodeDb {
 	/// <summary>
-	/// <see cref="Concat"/>、<see cref="Add(int)"/>などで追加する形で式を構成する
+	/// <see cref="Concat"/>、<see cref="Add(int)"/>などで要素を追加する形で式を構成する
 	/// </summary>
-	public class ExpressionInProgress {
+	public class ElementCode {
 		#region 内部クラス
 		/// <summary>
 		/// 核となるバッファ
@@ -34,8 +34,8 @@ namespace CodeDb {
 		/// 型毎のアイテム追加処理を行う
 		/// </summary>
 		class TypeWise : ITypeWise {
-			ExpressionInProgress _EditableExpr;
-			public TypeWise(ExpressionInProgress editableExpr) => _EditableExpr = editableExpr;
+			ElementCode _EditableExpr;
+			public TypeWise(ElementCode editableExpr) => _EditableExpr = editableExpr;
 			public void DoNull() => _EditableExpr.Add(SqlKeyword.Null);
 			public bool Prepare(object value) => false;
 			public void Do(char value) => _EditableExpr.Add(value);
@@ -59,13 +59,13 @@ namespace CodeDb {
 		}
 
 		/// <summary>
-		/// <see cref="Expression"/>のツリーを<see cref="ExpressionInProgress"/>へ展開するためのVisitor
+		/// <see cref="Expression"/>のツリーを<see cref="ElementCode"/>へ展開するためのVisitor
 		/// </summary>
 		public class Visitor : ExpressionVisitor {
-			ExpressionInProgress _ExprInProgress;
+			ElementCode _ExprInProgress;
 			ColumnMap _ColDefDic;
 
-			public Visitor(ExpressionInProgress exprInProgress, ColumnMap colDefDic) {
+			public Visitor(ElementCode exprInProgress, ColumnMap colDefDic) {
 				_ExprInProgress = exprInProgress;
 				_ColDefDic = colDefDic;
 			}
@@ -421,7 +421,7 @@ namespace CodeDb {
 		/// <summary>
 		/// コンストラクタ
 		/// </summary>
-		public ExpressionInProgress() {
+		public ElementCode() {
 			_Core = new Core();
 			_CoreStack = new Stack<Core>();
 			_TypeWise = new TypeWise(this);
@@ -564,7 +564,7 @@ namespace CodeDb {
 			_Core.Items.Add(value);
 			_Core.ItemCount++;
 		}
-		public void Add(ExpressionInProgress value) {
+		public void Add(ElementCode value) {
 			_Core.Items.Add(value);
 			_Core.ItemCount++;
 		}
@@ -637,6 +637,41 @@ namespace CodeDb {
 			EndParenthesize();
 		}
 
+
+		public void AddColumns(IEnumerable<Column> columns) {
+			BeginParenthesize();
+			var first = true;
+			foreach (var column in columns) {
+				if (first) {
+					first = false;
+				} else {
+					AddComma();
+				}
+				Add(column);
+			}
+			EndParenthesize();
+		}
+
+		public void AddColumns(IEnumerable<Column> columns, Action<Column> before, Action<Column> after) {
+			BeginParenthesize();
+			var first = true;
+			foreach (var column in columns) {
+				if (first) {
+					first = false;
+				} else {
+					AddComma();
+				}
+				if (before != null) {
+					before(column);
+				}
+				Add(column);
+				if (after != null) {
+					after(column);
+				}
+			}
+			EndParenthesize();
+		}
+
 		public void AddComma() {
 			this.Concat(",");
 			_Core.ItemCount++;
@@ -673,20 +708,20 @@ namespace CodeDb {
 		public void Build(WorkingBuffer work) {
 			foreach (var item in this.Items) {
 				StringBuilder buffer;
-				ExpressionInProgress eip;
+				ElementCode eip;
 				ITableDef tableDef;
 				ITable table;
 				Column column;
 
 				if ((buffer = item as StringBuilder) != null) {
 					work.Concat(buffer.ToString());
-				} else if ((eip = item as ExpressionInProgress) != null) {
+				} else if ((eip = item as ElementCode) != null) {
 					eip.Build(work);
 				} else if ((tableDef = item as ITableDef) != null) {
 					work.Concat(tableDef.Name);
 					work.Concat(work.GetTableAlias(tableDef));
 				} else if ((table = item as ITable) != null) {
-					var context = new ExpressionInProgress();
+					var context = new ElementCode();
 					context.Push();
 					table.BuildSql(context);
 					context.Pop();

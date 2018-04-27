@@ -17,7 +17,7 @@ namespace CodeDb {
 		/// <param name="flags">列に対するオプションフラグ</param>
 		/// <param name="source">列を生成する基となった式</param>
 		/// <returns>列定義</returns>
-		Column BindColumn(string propertyName, string name, IDbType dbType, ColumnFlags flags = 0, ExpressionInProgress source = null);
+		Column BindColumn(string propertyName, string name, IDbType dbType, ColumnFlags flags = 0, ElementCode source = null);
 
 		/// <summary>
 		/// テーブルが直接保持する列定義の取得
@@ -34,22 +34,22 @@ namespace CodeDb {
 	/// <summary>
 	/// 列をプロパティにバインドする機能を提供し、<see cref="Columns"/>のプロパティにより列へのアクセスも提供する
 	/// </summary>
-	/// <typeparam name="TypeOfColumns">プロパティを列として扱うクラス</typeparam>
-	public interface ITable<TypeOfColumns> : ITable {
+	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	public interface ITable<TColumns> : ITable {
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
 		/// </summary>
-		TypeOfColumns Columns { get; }
+		TColumns Columns { get; }
 
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
 		/// </summary>
-		TypeOfColumns _ { get; }
+		TColumns _ { get; }
 
 		/// <summary>
 		/// エイリアス用にクローンを作成する
 		/// </summary>
 		/// <returns>クローン</returns>
-		new ITable<TypeOfColumns> AliasedClone();
+		new ITable<TColumns> AliasedClone();
 	}
 }

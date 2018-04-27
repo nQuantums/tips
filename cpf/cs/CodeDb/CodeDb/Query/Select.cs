@@ -6,9 +6,9 @@ using System.Linq.Expressions;
 using CodeDb.Internal;
 
 namespace CodeDb.Query {
-	public class Select<TypeOfColumns> : ISelect<TypeOfColumns> {
+	public class Select<TColumns> : ISelect<TColumns> {
 		#region スタティック要素
-		static Func<ICodeDbDataReader, IEnumerable<TypeOfColumns>> _Reader;
+		static Func<ICodeDbDataReader, IEnumerable<TColumns>> _Reader;
 		#endregion
 
 		#region プロパティ
@@ -25,12 +25,12 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
 		/// </summary>
-		public TypeOfColumns Columns { get; private set; }
+		public TColumns Columns { get; private set; }
 
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
 		/// </summary>
-		public TypeOfColumns _ => this.Columns;
+		public TColumns _ => this.Columns;
 
 		/// <summary>
 		/// テーブルが直接保持する列定義の取得
@@ -43,12 +43,12 @@ namespace CodeDb.Query {
 		public ColumnMap SourceColumnMap => this.From.SourceColumnMap;
 
 		/// <summary>
-		/// <see cref="ICodeDbDataReader"/>から<see cref="TypeOfColumns"/>を列挙するファンクション
+		/// <see cref="ICodeDbDataReader"/>から<see cref="TColumns"/>を列挙するファンクション
 		/// </summary>
-		public Func<ICodeDbDataReader, IEnumerable<TypeOfColumns>> Reader {
+		public Func<ICodeDbDataReader, IEnumerable<TColumns>> Reader {
 			get {
 				if (_Reader == null) {
-					_Reader = dr => dr.Enumerate<TypeOfColumns>();
+					_Reader = dr => dr.Enumerate<TColumns>();
 				}
 				return _Reader;
 			}
@@ -65,7 +65,7 @@ namespace CodeDb.Query {
 			this.Environment = environment;
 			this.From = from;
 			this.ColumnMap = new ColumnMap();
-			this.Columns = TypeWiseCache<TypeOfColumns>.Creator();
+			this.Columns = TypeWiseCache<TColumns>.Creator();
 		}
 		#endregion
 
@@ -79,10 +79,10 @@ namespace CodeDb.Query {
 		/// <param name="flags">列に対するオプションフラグ</param>
 		/// <param name="source">列を生成する基となった式</param>
 		/// <returns>列定義</returns>
-		public Column BindColumn(string propertyName, string name, IDbType dbType, ColumnFlags flags = 0, ExpressionInProgress source = null) {
+		public Column BindColumn(string propertyName, string name, IDbType dbType, ColumnFlags flags = 0, ElementCode source = null) {
 			var column = this.ColumnMap.TryGetByPropertyName(propertyName);
 			if (column == null) {
-				this.ColumnMap.Add(column = new Column(this.Environment, this.Columns, typeof(TypeOfColumns).GetProperty(propertyName), this, name, dbType, flags, source));
+				this.ColumnMap.Add(column = new Column(this.Environment, this.Columns, typeof(TColumns).GetProperty(propertyName), this, name, dbType, flags, source));
 			}
 			return column;
 		}
@@ -91,12 +91,12 @@ namespace CodeDb.Query {
 		/// エイリアス用にクローンを作成する
 		/// </summary>
 		/// <returns>クローン</returns>
-		public Select<TypeOfColumns> AliasedClone() {
-			var c = this.MemberwiseClone() as Select<TypeOfColumns>;
+		public Select<TColumns> AliasedClone() {
+			var c = this.MemberwiseClone() as Select<TColumns>;
 			ColumnMap map;
-			TypeOfColumns columns;
+			TColumns columns;
 			c.ColumnMap = map = new ColumnMap();
-			c.Columns = columns = TypeWiseCache<TypeOfColumns>.Cloner(this.Columns);
+			c.Columns = columns = TypeWiseCache<TColumns>.Cloner(this.Columns);
 			foreach (var column in this.ColumnMap) {
 				map.Add(column.AliasedClone(columns, c));
 			}
@@ -104,7 +104,7 @@ namespace CodeDb.Query {
 			return c;
 		}
 
-		ITable<TypeOfColumns> ITable<TypeOfColumns>.AliasedClone() {
+		ITable<TColumns> ITable<TColumns>.AliasedClone() {
 			return this.AliasedClone();
 		}
 
@@ -116,7 +116,7 @@ namespace CodeDb.Query {
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
-		public void BuildSql(ExpressionInProgress context) {
+		public void BuildSql(ElementCode context) {
 			context.Add(SqlKeyword.Select);
 			var columns = this.ColumnMap;
 			for (int i = 0, n = columns.Count; i < n; i++) {

@@ -5,10 +5,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Query\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <None Update="ColumnsBase.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
       <LastGenOutput>ColumnsBase.cs</LastGenOutput>

@@ -30,17 +30,17 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// WHERE句の式
 		/// </summary>
-		ExpressionInProgress WhereExpression { get; }
+		ElementCode WhereExpression { get; }
 
 		/// <summary>
 		/// GROUP BY句の列一覧
 		/// </summary>
-		Column[] GroupByColumns { get; }
+		IEnumerable<Column> GroupByColumns { get; }
 
 		/// <summary>
 		/// ORDER BY句の列一覧
 		/// </summary>
-		Column[] OrderByColumns { get; }
+		IEnumerable<Column> OrderByColumns { get; }
 
 		/// <summary>
 		/// LIMIT句の値
@@ -51,16 +51,16 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// FROM句の機能を提供する
 	/// </summary>
-	/// <typeparam name="TypeOfColumns">プロパティを列として扱うクラス</typeparam>
-	public interface IFrom<TypeOfColumns> : IFrom {
+	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	public interface IFrom<TColumns> : IFrom {
 		/// <summary>
 		/// 列プロパティを持つオブジェクト
 		/// </summary>
-		TypeOfColumns Columns { get; }
+		TColumns Columns { get; }
 
 		/// <summary>
 		/// 列プロパティを持つオブジェクト
 		/// </summary>
-		TypeOfColumns _ { get; }
+		TColumns _ { get; }
 	}
 }

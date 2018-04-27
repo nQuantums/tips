@@ -261,7 +261,7 @@ namespace CodeDbTest {
 				var current = E.ReadDatabaseDef(con);
 				var target = E.GenerateDatabaseDef(typeof(TestDb), "test_db");
 				var delta = E.GetDatabaseDelta(current, target);
-				var context = new ExpressionInProgress();
+				var context = new ElementCode();
 				E.ApplyDatabaseDelta(context, delta);
 
 				var cmd = con.CreateCommand();

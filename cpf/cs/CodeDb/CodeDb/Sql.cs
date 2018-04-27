@@ -7,16 +7,16 @@ using CodeDb.Query;
 
 namespace CodeDb {
 	public static class Sql {
-		public static From<TypeOfColumns> From<TypeOfColumns>(TableDef<TypeOfColumns> table) {
-			return new From<TypeOfColumns>(table);
+		public static From<TColumns> From<TColumns>(TableDef<TColumns> table) {
+			return new From<TColumns>(table);
 		}
 
-		public static From<TypeOfColumns> From<TypeOfColumns>(ISelect<TypeOfColumns> select) {
-			return new From<TypeOfColumns>(select);
+		public static From<TColumns> From<TColumns>(ISelect<TColumns> select) {
+			return new From<TColumns>(select);
 		}
 
-		public static InsertInto<TypeOfColumns, TypeOfColumnsOrder> InsertInto<TypeOfColumns, TypeOfColumnsOrder>(TableDef<TypeOfColumns> table, Expression<Func<TypeOfColumns, TypeOfColumnsOrder>> columnsExpression) {
-			return new InsertInto<TypeOfColumns, TypeOfColumnsOrder>(table, columnsExpression);
+		public static InsertInto<TColumns, TColumnsOrder> InsertInto<TColumns, TColumnsOrder>(TableDef<TColumns> table, Expression<Func<TColumns, TColumnsOrder>> columnsExpression) {
+			return new InsertInto<TColumns, TColumnsOrder>(table, columnsExpression);
 		}
 
 		public static bool Like(this string text, string pattern) {

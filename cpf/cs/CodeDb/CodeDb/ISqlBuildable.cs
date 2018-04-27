@@ -11,6 +11,6 @@ namespace CodeDb {
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
-		void BuildSql(ExpressionInProgress context);
+		void BuildSql(ElementCode context);
 	}
 }

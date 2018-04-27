@@ -5,12 +5,12 @@ using System.Reflection;
 using CodeDb.Internal;
 
 namespace CodeDb.Query {
-	public class InsertInto<TypeOfColumns, TypeOfColumnsOrder> : IInsertInto<TypeOfColumns> {
+	public class InsertInto<TColumns, TColumnsOrder> : IInsertInto<TColumns> {
 		#region プロパティ
 		/// <summary>
 		/// 挿入先のテーブル
 		/// </summary>
-		public TableDef<TypeOfColumns> Table { get; private set; }
+		public TableDef<TColumns> Table { get; private set; }
 
 		/// <summary>
 		/// 挿入列の指定
@@ -20,13 +20,13 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 挿入する値
 		/// </summary>
-		public ISelect<TypeOfColumnsOrder> Select { get; private set; }
+		public ISelect<TColumnsOrder> Select { get; private set; }
 
 		ITableDef IInsertInto.Table => this.Table;
 		ISelect IInsertInto.Select => this.Select;
 		#endregion
 
-		public InsertInto(TableDef<TypeOfColumns> table, Expression<Func<TypeOfColumns, TypeOfColumnsOrder>> columnsExpression) {
+		public InsertInto(TableDef<TColumns> table, Expression<Func<TColumns, TColumnsOrder>> columnsExpression) {
 			// new 演算子で匿名クラスを生成するもの以外はエラーとする
 			var body = columnsExpression.Body;
 			if (body.NodeType != ExpressionType.New) {
@@ -44,7 +44,7 @@ namespace CodeDb.Query {
 			var columnsOrder = new ColumnMap();
 
 			for (int i = 0; i < args.Count; i++) {
-				var context = new ExpressionInProgress();
+				var context = new ElementCode();
 				context.Add(ParameterReplacer.Replace(args[i], map), availableColumns);
 				if (context.Items.Count != 1) {
 					throw new ApplicationException();
@@ -61,11 +61,11 @@ namespace CodeDb.Query {
 			this.ColumnMap = columnsOrder;
 		}
 
-		public void Values(ISelect<TypeOfColumnsOrder> select) {
+		public void Values(ISelect<TColumnsOrder> select) {
 			this.Select = select;
 		}
 
-		public void BuildSql(ExpressionInProgress context) {
+		public void BuildSql(ElementCode context) {
 			var environment = this.Table.Environment;
 			context.Add(SqlKeyword.InsertInto);
 			context.Concat(this.Table.Name);

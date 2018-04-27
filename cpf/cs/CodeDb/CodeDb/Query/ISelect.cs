@@ -6,7 +6,7 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// SELECT式
 	/// </summary>
-	public interface ISelect : IInDbEnvironment, ITable, ISqlBuildable {
+	public interface ISelect : ITable, IInDbEnvironment, ISqlBuildable {
 		/// <summary>
 		/// このテーブルを構成するのに必要な全ての列定義を取得する
 		/// </summary>
@@ -16,7 +16,7 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// 列クラス型指定のSELECT式
 	/// </summary>
-	/// <typeparam name="TypeOfColumns">プロパティを列として扱うクラス</typeparam>
-	public interface ISelect<TypeOfColumns> : ISelect, ITable<TypeOfColumns> {
+	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	public interface ISelect<TColumns> : ISelect, ITable<TColumns> {
 	}
 }

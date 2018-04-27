@@ -9,8 +9,8 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// FROM句
 	/// </summary>
-	/// <typeparam name="TypeOfColumns">プロパティを列として扱うクラス</typeparam>
-	public class From<TypeOfColumns> : IFrom<TypeOfColumns> {
+	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	public class From<TColumns> : IFrom<TColumns> {
 		#region プロパティ
 		/// <summary>
 		/// FROMに直接指定された取得元の<see cref="ITable"/>
@@ -20,12 +20,12 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 列プロパティを持つオブジェクト
 		/// </summary>
-		public TypeOfColumns Columns { get; private set; }
+		public TColumns Columns { get; private set; }
 
 		/// <summary>
 		/// 列プロパティを持つオブジェクト
 		/// </summary>
-		public TypeOfColumns _ => this.Columns;
+		public TColumns _ => this.Columns;
 
 		/// <summary>
 		/// SELECT句までの間に使用された全ての列
@@ -45,17 +45,17 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// WHERE句の式
 		/// </summary>
-		public ExpressionInProgress WhereExpression { get; private set; }
+		public ElementCode WhereExpression { get; private set; }
 
 		/// <summary>
 		/// GROUP BY句の列一覧
 		/// </summary>
-		public Column[] GroupByColumns { get; private set; }
+		public IEnumerable<Column> GroupByColumns { get; private set; }
 
 		/// <summary>
 		/// ORDER BY句の列一覧
 		/// </summary>
-		public Column[] OrderByColumns { get; private set; }
+		public IEnumerable<Column> OrderByColumns { get; private set; }
 
 		/// <summary>
 		/// LIMIT句の値
@@ -68,7 +68,7 @@ namespace CodeDb.Query {
 		/// コンストラクタ、取得元のテーブル定義を指定して初期化する
 		/// </summary>
 		/// <param name="table">テーブル定義</param>
-		public From(TableDef<TypeOfColumns> table) {
+		public From(TableDef<TColumns> table) {
 			var clone = table.AliasedClone();
 			this.Table = clone;
 			this.Columns = clone.Columns;
@@ -80,7 +80,7 @@ namespace CodeDb.Query {
 		/// コンストラクタ、取得元のSELECT句を指定して初期化する
 		/// </summary>
 		/// <param name="select">SELECT句</param>
-		public From(ISelect<TypeOfColumns> select) {
+		public From(ISelect<TColumns> select) {
 			var clone = select.AliasedClone();
 			this.Table = clone;
 			this.Columns = clone.Columns;
@@ -91,38 +91,38 @@ namespace CodeDb.Query {
 
 		#region 公開メソッド
 		/// <summary>
-		/// 内部結合の<see cref="Join{TypeOfColumns}"/>を生成し登録する
+		/// 内部結合の<see cref="Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TypeOfColumns1">結合するテーブルの<see cref="ITable{TypeOfColumns}.Columnsの型"/></typeparam>
+		/// <typeparam name="TColumns1">結合するテーブルの<see cref="ITable{TColumns}.Columnsの型"/></typeparam>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
-		/// <returns>内部結合の<see cref="Join{TypeOfColumns}</returns>
-		public IJoin<TypeOfColumns1> InnerJoin<TypeOfColumns1>(ITable<TypeOfColumns1> table, Expression<Func<TypeOfColumns1, bool>> on) => JoinByType(JoinType.Inner, table, on);
+		/// <returns>内部結合の<see cref="Join{TColumns}</returns>
+		public IJoin<TColumns1> InnerJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Inner, table, on);
 
 		/// <summary>
-		/// 左外部結合の<see cref="Join{TypeOfColumns}"/>を生成し登録する
+		/// 左外部結合の<see cref="Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TypeOfColumns1">結合するテーブルの<see cref="ITable{TypeOfColumns}.Columnsの型"/></typeparam>
+		/// <typeparam name="TColumns1">結合するテーブルの<see cref="ITable{TColumns}.Columnsの型"/></typeparam>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
-		/// <returns>左外部結合の<see cref="Join{TypeOfColumns}</returns>
-		public IJoin<TypeOfColumns1> LeftJoin<TypeOfColumns1>(ITable<TypeOfColumns1> table, Expression<Func<TypeOfColumns1, bool>> on) => JoinByType(JoinType.Left, table, on);
+		/// <returns>左外部結合の<see cref="Join{TColumns}</returns>
+		public IJoin<TColumns1> LeftJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Left, table, on);
 
 		/// <summary>
-		/// 右外部結合の<see cref="Join{TypeOfColumns}"/>を生成し登録する
+		/// 右外部結合の<see cref="Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TypeOfColumns1">結合するテーブルの<see cref="ITable{TypeOfColumns}.Columnsの型"/></typeparam>
+		/// <typeparam name="TColumns1">結合するテーブルの<see cref="ITable{TColumns}.Columnsの型"/></typeparam>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
-		/// <returns>右外部結合の<see cref="Join{TypeOfColumns}</returns>
-		public IJoin<TypeOfColumns1> RightJoin<TypeOfColumns1>(ITable<TypeOfColumns1> table, Expression<Func<TypeOfColumns1, bool>> on) => JoinByType(JoinType.Right, table, on);
+		/// <returns>右外部結合の<see cref="Join{TColumns}</returns>
+		public IJoin<TColumns1> RightJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Right, table, on);
 
 		/// <summary>
 		/// WHERE句の式を登録する
 		/// </summary>
 		/// <param name="expression">式</param>
 		public void Where(Expression<Func<bool>> expression) {
-			var context = new ExpressionInProgress();
+			var context = new ElementCode();
 			context.Add(expression, this.SourceColumnMap);
 			this.WhereExpression = context;
 		}
@@ -130,9 +130,9 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// GROUP BYの列を登録する
 		/// </summary>
-		/// <typeparam name="TypeOfColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
+		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
-		public void GroupBy<TypeOfColumns1>(Expression<Func<TypeOfColumns1>> columnsExpression) {
+		public void GroupBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
 			// new 演算子で匿名クラスを生成するもの以外はエラーとする
 			var body = columnsExpression.Body;
 			if (body.NodeType != ExpressionType.New) {
@@ -147,7 +147,7 @@ namespace CodeDb.Query {
 			var args = newexpr.Arguments;
 			var columns = new Column[args.Count];
 			for (int i = 0; i < columns.Length; i++) {
-				var context = new ExpressionInProgress();
+				var context = new ElementCode();
 				context.Add(args[i], this.SourceColumnMap);
 				if (context.Items.Count != 1) {
 					throw new ApplicationException();
@@ -166,9 +166,9 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// ORDER BYの列を登録する
 		/// </summary>
-		/// <typeparam name="TypeOfColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
+		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
-		public void OrderBy<TypeOfColumns1>(Expression<Func<TypeOfColumns1>> columnsExpression) {
+		public void OrderBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
 			// new 演算子で匿名クラスを生成するもの以外はエラーとする
 			var body = columnsExpression.Body;
 			if (body.NodeType != ExpressionType.New) {
@@ -183,7 +183,7 @@ namespace CodeDb.Query {
 			var args = newexpr.Arguments;
 			var columns = new Column[args.Count];
 			for (int i = 0; i < columns.Length; i++) {
-				var context = new ExpressionInProgress();
+				var context = new ElementCode();
 				context.Add(args[i], this.SourceColumnMap);
 				if (context.Items.Count != 1) {
 					throw new ApplicationException();
@@ -210,10 +210,10 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 列選択部を生成する
 		/// </summary>
-		/// <typeparam name="TypeOfColumns1">列をプロパティとして持つ匿名クラス</typeparam>
-		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
+		/// <typeparam name="TColumns1">列をプロパティとして持つクラス</typeparam>
+		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する new { t1.A, t1.B } の様な式</param>
 		/// <returns>SELECT句</returns>
-		public Select<TypeOfColumns1> Select<TypeOfColumns1>(Expression<Func<TypeOfColumns1>> columnsExpression) {
+		public Select<TColumns1> Select<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
 			// new 演算子でクラスを生成するもの以外はエラーとする
 			var body = columnsExpression.Body;
 			if (body.NodeType != ExpressionType.New) {
@@ -223,7 +223,7 @@ namespace CodeDb.Query {
 			// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
 			var newexpr = body as NewExpression;
 			var args = newexpr.Arguments;
-			var properties = typeof(TypeOfColumns1).GetProperties();
+			var properties = typeof(TColumns1).GetProperties();
 			if (args.Count != properties.Length) {
 				throw new ApplicationException();
 			}
@@ -231,13 +231,13 @@ namespace CodeDb.Query {
 			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
 			var environment = this.Table.Environment;
 			var sourceColumnMap = this.SourceColumnMap;
-			var select = new Select<TypeOfColumns1>(environment, this);
+			var select = new Select<TColumns1>(environment, this);
 			for (int i = 0; i < properties.Length; i++) {
 				var pi = properties[i];
 				if (pi.PropertyType != args[i].Type) {
 					throw new ApplicationException();
 				}
-				var context = new ExpressionInProgress();
+				var context = new ElementCode();
 				context.Add(args[i], sourceColumnMap);
 				select.BindColumn(pi.Name, "c" + i, environment.CreateDbTypeFromType(pi.PropertyType), 0, context);
 			}
@@ -249,7 +249,7 @@ namespace CodeDb.Query {
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
-		public void BuildSql(ExpressionInProgress context) {
+		public void BuildSql(ElementCode context) {
 			if (this.Table != null) {
 				context.Add(SqlKeyword.From);
 				context.Add(this.Table);
@@ -279,24 +279,14 @@ namespace CodeDb.Query {
 				context.Add(this.WhereExpression);
 			}
 
-			if (this.GroupByColumns != null && this.GroupByColumns.Length != 0) {
+			if (this.GroupByColumns != null && this.GroupByColumns.Any()) {
 				context.Add(SqlKeyword.GroupBy);
-				for (int i = 0; i < this.GroupByColumns.Length; i++) {
-					if (i != 0) {
-						context.AddComma();
-					}
-					context.Add(this.GroupByColumns[i]);
-				}
+				context.AddColumns(this.GroupByColumns);
 			}
 
-			if (this.OrderByColumns != null && this.OrderByColumns.Length != 0) {
+			if (this.OrderByColumns != null && this.OrderByColumns.Any()) {
 				context.Add(SqlKeyword.OrderBy);
-				for (int i = 0; i < this.OrderByColumns.Length; i++) {
-					if (i != 0) {
-						context.AddComma();
-					}
-					context.Add(this.OrderByColumns[i]);
-				}
+				context.AddColumns(this.GroupByColumns);
 			}
 
 			if (this.LimitValue != null) {
@@ -308,14 +298,14 @@ namespace CodeDb.Query {
 
 		#region 非公開メソッド
 		/// <summary>
-		/// 指定された結合種類の<see cref="Join{TypeOfColumns}"/>を生成し登録する
+		/// 指定された結合種類の<see cref="Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TypeOfColumns1">結合するテーブルの<see cref="ITable{TypeOfColumns}.Columnsの型"/></typeparam>
+		/// <typeparam name="TColumns1">結合するテーブルの<see cref="ITable{TColumns}.Columnsの型"/></typeparam>
 		/// <param name="joinType">結合種類</param>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
-		/// <returns><see cref="Join{TypeOfColumns}</returns>
-		IJoin<TypeOfColumns1> JoinByType<TypeOfColumns1>(JoinType joinType, ITable<TypeOfColumns1> table, Expression<Func<TypeOfColumns1, bool>> on) {
+		/// <returns><see cref="Join{TColumns}</returns>
+		IJoin<TColumns1> JoinByType<TColumns1>(JoinType joinType, ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) {
 			var clone = table.AliasedClone();
 
 			if (this.Joins == null) {
@@ -326,9 +316,9 @@ namespace CodeDb.Query {
 				this.SourceColumnMap.Include(clone.ColumnMap);
 			}
 
-			var context = new ExpressionInProgress();
+			var context = new ElementCode();
 			context.Add(ParameterReplacer.Replace(on.Body, new Dictionary<Expression, object> { { on.Parameters[0], clone.Columns } }), this.SourceColumnMap);
-			var join = new Join<TypeOfColumns1>(joinType, clone, context);
+			var join = new Join<TColumns1>(joinType, clone, context);
 			this.Joins.Add(join);
 			return join;
 		}

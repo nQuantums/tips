@@ -48,7 +48,7 @@ namespace CodeDb {
 		/// <summary>
 		/// この列を生成するための式
 		/// </summary>
-		public ExpressionInProgress Source { get; private set; }
+		public ElementCode Source { get; private set; }
 		#endregion
 
 		#region 公開メソッド
@@ -63,7 +63,7 @@ namespace CodeDb {
 		/// <param name="dbType">DB上の型</param>
 		/// <param name="flags">列定義オプションフラグ</param>
 		/// <param name="source">列を生成する元となった式</param>
-		public Column(DbEnvironment environment, object instance, PropertyInfo property, ITable table, string name, IDbType dbType, ColumnFlags flags = 0, ExpressionInProgress source = null) {
+		public Column(DbEnvironment environment, object instance, PropertyInfo property, ITable table, string name, IDbType dbType, ColumnFlags flags = 0, ElementCode source = null) {
 			this.Environment = environment;
 			this.Instance = instance;
 			this.Property = property;

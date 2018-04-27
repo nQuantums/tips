@@ -10,26 +10,26 @@ namespace CodeDb {
 	/// <summary>
 	/// テーブル定義基本クラス
 	/// </summary>
-	/// <typeparam name="TypeOfColumns"><see cref="ColumnsBase"/>を継承しプロパティを列として扱うクラス</typeparam>
-	public class TableDef<TypeOfColumns> : ITable<TypeOfColumns>, ITableDef {
+	/// <typeparam name="TColumns"><see cref="ColumnsBase"/>を継承しプロパティを列として扱うクラス</typeparam>
+	public class TableDef<TColumns> : ITable<TColumns>, ITableDef {
 		#region スタティック要素
-		static Action<TypeOfColumns> _AllColumnsBinder;
+		static Action<TColumns> _AllColumnsBinder;
 
 		/// <summary>
-		/// <see cref="TypeOfColumns"/>の全プロパティを取得することで<see cref="ITable.BindColumn"/>を呼び出し<see cref="Column"/>を結びつけるアクション
+		/// <see cref="TColumns"/>の全プロパティを取得することで<see cref="ITable.BindColumn"/>を呼び出し<see cref="Column"/>を結びつけるアクション
 		/// </summary>
-		protected static Action<TypeOfColumns> AllColumnsBinder {
+		protected static Action<TColumns> AllColumnsBinder {
 			get {
 				if (_AllColumnsBinder == null) {
-					var type = typeof(TypeOfColumns);
+					var type = typeof(TColumns);
 					var param = Expression.Parameter(type);
 					var properties = type.GetProperties();
 					var expressions = new Expression[properties.Length];
 					for (int i = 0; i < properties.Length; i++) {
 						expressions[i] = Expression.Property(param, properties[i]);
 					}
-					var expr = Expression.Lambda<Action<TypeOfColumns>>(Expression.Block(expressions), param);
-					_AllColumnsBinder = (Action<TypeOfColumns>)expr.Compile();
+					var expr = Expression.Lambda<Action<TColumns>>(Expression.Block(expressions), param);
+					_AllColumnsBinder = (Action<TColumns>)expr.Compile();
 				}
 				return _AllColumnsBinder;
 			}
@@ -100,12 +100,12 @@ namespace CodeDb {
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
 		/// </summary>
-		public TypeOfColumns Columns { get; private set; }
+		public TColumns Columns { get; private set; }
 
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
 		/// </summary>
-		public TypeOfColumns _ => this.Columns;
+		public TColumns _ => this.Columns;
 
 		/// <summary>
 		/// テーブルが直接保持する列定義の取得
@@ -132,7 +132,7 @@ namespace CodeDb {
 			// プロパティと列をバインドする
 			Mediator.Table = this;
 			try {
-				this.Columns = TypeWiseCache<TypeOfColumns>.Creator();
+				this.Columns = TypeWiseCache<TColumns>.Creator();
 
 				// 全プロパティを一度呼び出す事でバインドされる
 				AllColumnsBinder(this.Columns);
@@ -152,10 +152,10 @@ namespace CodeDb {
 		/// <param name="flags">列に対するオプションフラグ</param>
 		/// <param name="source">列を生成する基となった式</param>
 		/// <returns>列定義</returns>
-		public Column BindColumn(string propertyName, string name, IDbType dbType, ColumnFlags flags = 0, ExpressionInProgress source = null) {
+		public Column BindColumn(string propertyName, string name, IDbType dbType, ColumnFlags flags = 0, ElementCode source = null) {
 			var column = this.ColumnMap.TryGetByPropertyName(propertyName);
 			if (column == null) {
-				this.ColumnMap.Add(column = new Column(this.Environment, this.Columns, typeof(TypeOfColumns).GetProperty(propertyName), this, name, dbType, flags, source));
+				this.ColumnMap.Add(column = new Column(this.Environment, this.Columns, typeof(TColumns).GetProperty(propertyName), this, name, dbType, flags, source));
 			}
 			return column;
 		}
@@ -180,12 +180,12 @@ namespace CodeDb {
 		/// エイリアス用にクローンを作成する
 		/// </summary>
 		/// <returns>クローン</returns>
-		public TableDef<TypeOfColumns> AliasedClone() {
-			var c = this.MemberwiseClone() as TableDef<TypeOfColumns>;
+		public TableDef<TColumns> AliasedClone() {
+			var c = this.MemberwiseClone() as TableDef<TColumns>;
 			ColumnMap map;
-			TypeOfColumns columns;
+			TColumns columns;
 			c.ColumnMap = map = new ColumnMap();
-			c.Columns = columns = TypeWiseCache<TypeOfColumns>.Creator();
+			c.Columns = columns = TypeWiseCache<TColumns>.Creator();
 			foreach (var column in this.ColumnMap) {
 				map.Add(column.AliasedClone(columns, c));
 			}
@@ -196,11 +196,11 @@ namespace CodeDb {
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
-		public void BuildSql(ExpressionInProgress context) {
+		public void BuildSql(ElementCode context) {
 			context.Concat(this.Name);
 		}
 
-		ITable<TypeOfColumns> ITable<TypeOfColumns>.AliasedClone() {
+		ITable<TColumns> ITable<TColumns>.AliasedClone() {
 			return this.AliasedClone();
 		}
 

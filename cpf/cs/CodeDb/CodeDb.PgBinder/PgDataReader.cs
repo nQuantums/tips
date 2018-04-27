@@ -103,11 +103,11 @@ namespace CodeDb.PgBinder {
 			return Cache<TypeOfCols>.DataGetter(_Core);
 		}
 
-		public IEnumerable<TypeOfColumns> Enumerate<TypeOfColumns>() {
-			var getter = Cache<TypeOfColumns>.DataGetter;
+		public IEnumerable<TColumns> Enumerate<TColumns>() {
+			var getter = Cache<TColumns>.DataGetter;
 			var core = _Core;
 			while (this.Read()) {
-				TypeOfColumns result;
+				TColumns result;
 				try {
 					result = getter(core);
 				} catch (PostgresException ex) {

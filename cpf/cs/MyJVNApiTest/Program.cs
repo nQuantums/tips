@@ -10,16 +10,112 @@ using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using HtmlAgilityPack;
+using CodeDb;
+using CodeDb.PgBinder;
 
 namespace MyJVNApiTest {
+	public static class Db {
+		public static PgEnvironment E { get; } = new PgEnvironment();
+
+		public static class C {
+			public static int KeywordID => E.Int32("keyword_id");
+			public static int[] KeywordIDs => E.Int32Array("keyword_ids");
+			public static string Keyword => E.String("keyword");
+			public static int UrlID => E.Int32("url_id");
+			public static string Url => E.String("url");
+		}
+
+		public class TbKeyword : TableDef<TbKeyword.Cols> {
+			public TbKeyword() : base(E, "tb_keyword") { }
+			public class Cols : ColumnsBase {
+				public int KeywordID => As(() => C.KeywordID, ColumnFlags.Serial);
+				public string Keyword => As(() => C.Keyword);
+			}
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.KeywordID, () => _.Keyword);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, () => _.Keyword));
+		}
+		public static TbKeyword Keyword { get; } = new TbKeyword();
+
+		public class TbUrl : TableDef<TbUrl.Cols> {
+			public TbUrl() : base(E, "tb_url") { }
+			public class Cols : ColumnsBase {
+				public int UrlID => As(() => C.UrlID, ColumnFlags.Serial);
+				public string Url => As(() => C.Url);
+			}
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID, () => _.Url);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, () => _.Url));
+		}
+		public static TbUrl Url { get; } = new TbUrl();
+
+		public class TbUrlKeyword : TableDef<TbUrlKeyword.Cols> {
+			public TbUrlKeyword() : base(E, "tb_url_keyword") { }
+			public class Cols : ColumnsBase {
+				public int UrlID => As(() => C.UrlID);
+				public int[] KeywordIDs => As(() => C.KeywordIDs);
+			}
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(IndexFlags.Gin, () => _.KeywordIDs));
+		}
+		public static TbUrlKeyword UrlKeyword { get; } = new TbUrlKeyword();
+	}
+
 	class Program {
 		[DllImport("User32.dll")]
 		private static extern short GetAsyncKeyState(int vKey);
 
 		static HashSet<string> AllUrls = new HashSet<string>();
 		static SemaphoreSlim Sem = new SemaphoreSlim(1, 1);
+		const string RoleName = "my_jvn_api_test";
+		const string DbName = "my_jvn_api_test";
+		const string Password = "Passw0rd!";
+
+		static ICodeDbCommand Command;
+		static SqlProgram RegisterUrl;
 
 		static void Main(string[] args) {
+			var E = Db.E;
+
+			// とりあえずロールとデータベース作成
+			using (var con = E.CreateConnection("User ID=sa;Password=Password;Host=localhost;Port=5432;Database=postgres;")) {
+				con.Open();
+				try {
+					E.CreateRole(con, RoleName, "Passw0rd!");
+				} catch (CodeDbEnvironmentException ex) {
+					if (ex.ErrorType != DbEnvironmentErrorType.DuplicateObject) {
+						throw;
+					}
+				}
+				try {
+					E.CreateDatabase(con, DbName, RoleName);
+				} catch (CodeDbEnvironmentException ex) {
+					if (ex.ErrorType != DbEnvironmentErrorType.DuplicateDatabase) {
+						throw;
+					}
+				}
+			}
+
+			// データベースの構造をソース上での定義に合わせる
+			using (var con = E.CreateConnection($"User ID={RoleName};Password='Passw0rd!';Host=localhost;Port=5432;Database={DbName};")) {
+				con.Open();
+				Console.WriteLine("Hello World!");
+
+				// データベースの状態を取得
+				var current = E.ReadDatabaseDef(con);
+				// クラスからデータベース定義を生成する
+				var target = E.GenerateDatabaseDef(typeof(Db), "test_db");
+				// 差分を生成
+				var delta = E.GetDatabaseDelta(current, target);
+
+				// 差分を適用する
+				var context = new ElementCode();
+				E.ApplyDatabaseDelta(context, delta);
+				var cmd = con.CreateCommand();
+				cmd.Apply(context.Build());
+				cmd.ExecuteNonQuery();
+			}
+
+
+
 			CollectUrls("https://helpx.adobe.com/jp/security/products/acrobat/apsb18-02.html");
 			while (GetAsyncKeyState(0x0D) == 0) {
 				lock (AllUrls) {

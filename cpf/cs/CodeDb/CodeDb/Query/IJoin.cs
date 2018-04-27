@@ -20,28 +20,28 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 結合式
 		/// </summary>
-		ExpressionInProgress On { get; }
+		ElementCode On { get; }
 	}
 
 	/// <summary>
 	/// INNER JOIN、LEFT JOIN、RIGHT JOIN句の基本機能を提供し、<see cref="Columns"/>のプロパティにより列へのアクセスも提供する
 	/// </summary>
-	/// <typeparam name="TypeOfColumns">プロパティを列として扱うクラス</typeparam>
-	public interface IJoin<TypeOfColumns> : IJoin {
+	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	public interface IJoin<TColumns> : IJoin {
 		/// <summary>
 		/// 結合するテーブル
 		/// </summary>
-		new ITable<TypeOfColumns> Table { get; }
+		new ITable<TColumns> Table { get; }
 
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
 		/// </summary>
-		TypeOfColumns Columns { get; }
+		TColumns Columns { get; }
 
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
 		/// </summary>
-		TypeOfColumns _ { get; }
+		TColumns _ { get; }
 	}
 
 	/// <summary>

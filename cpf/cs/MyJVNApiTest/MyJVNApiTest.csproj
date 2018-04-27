@@ -3,12 +3,25 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp2.0</TargetFramework>
+	<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.8.1" />
     <PackageReference Include="System.Xml.XPath" Version="4.3.0" />
     <PackageReference Include="System.Xml.XPath.XDocument" Version="4.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="CodeDb">
+      <HintPath>..\CodeDb\CodeDb.PgBinder\bin\Debug\netcoreapp2.0\CodeDb.dll</HintPath>
+    </Reference>
+    <Reference Include="CodeDb.PgBinder">
+      <HintPath>..\CodeDb\CodeDb.PgBinder\bin\Debug\netcoreapp2.0\CodeDb.PgBinder.dll</HintPath>
+    </Reference>
+    <Reference Include="Npgsql">
+      <HintPath>..\CodeDb\CodeDb.PgBinder\bin\Debug\netcoreapp2.0\Npgsql.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>
