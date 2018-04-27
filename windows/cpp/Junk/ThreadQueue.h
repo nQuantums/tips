@@ -55,7 +55,7 @@ public:
 
 	// 終了のため全ての Pop() でのブロックを解除する
 	void Quit() {
-		semaphore_.Unlock(0x3fffffff); // 全アンロック
+		semaphore_.Unlock(0x3fffffff); // 全てアンロック
 	}
 
 	// キューへの排他処理開始

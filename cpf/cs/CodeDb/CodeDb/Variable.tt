@@ -1,0 +1,115 @@
+﻿<#@ template  debug="true" hostSpecific="true" language="C#" #>
+<#@ output extension=".cs" #>
+<#@ Assembly Name="System.Core" #>
+<#@ Assembly Name="System.Windows.Forms" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Diagnostics" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Collections" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#
+var types = new [] {
+	"bool, Bool, Boolean, value",
+	"char, Char, Char, value",
+	"int, Int32, Integer, value",
+	"long, Int64, Bigint, value",
+	"double, Real64, Double, value",
+	"string, String, Text, object",
+	"Guid, Uuid, Uuid, value",
+	"DateTime, DateTime, Timestamp, value",
+};
+var ops = new [] {
+	"+, value, Addition, Add",
+	"-, value, Subtraction, Subtract",
+	"*, value, Multiply, Multiply",
+	"/, value, Division, Divide",
+	"<, bool, LessThan, LessThan",
+	">, bool, GreaterThan, GreaterThan",
+	"<=, bool, LessThanOrEqual, LessThanOrEqual",
+	">=, bool, GreaterThanOrEqual, GreaterThanOrEqual",
+	"==, bool, Equality, Equal",
+	"!=, bool, Inequal, NotEqual",
+	"|, value, BitwiseOr, Or",
+	"&, value,  BitwiseAnd, And",
+};#>
+using System;
+using System.Collections.Generic;
+using System.Dynamic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
+
+namespace CodeDb {
+	/// <summary>
+	/// SQL内変数、@variable などの変数に置き換わる
+	/// </summary>
+	public class Variable {
+		public static readonly MethodInfo IsNullMethodInfo = typeof(Variable).GetMethod("IsNull");
+		public static readonly MethodInfo IsNotNullMethodInfo = typeof(Variable).GetMethod("IsNotNull");
+
+		public readonly object Value;
+
+		public Variable(object value) {
+			this.Value = value;
+		}
+
+		public override string ToString() {
+			var value = this.Value;
+			if (value == null) {
+				return "null";
+			} else {
+				return value.ToString();
+			}
+		}
+
+		public override bool Equals(object obj) {
+			return object.ReferenceEquals(this.Value, obj);
+		}
+
+		public override int GetHashCode() {
+			var value = this.Value;
+			return value != null ? value.GetHashCode() : 0;
+		}
+
+		// 明示的キャスト
+		public static bool operator true(Variable variable) => !(variable is null);
+		public static bool operator false(Variable variable) => variable is null;
+
+		// 配列としてアクセス
+		public Variable this[int index] {
+			get {
+				return default(Variable);
+			}
+		}
+
+		// 以下演算子オーバーロード
+<#
+foreach(var opAndExprType in ops) {
+	var opexpr = opAndExprType.Split(',');
+	var op = opexpr[0].Trim();
+	var retTypeIsBool = opexpr[1].Trim() == "bool";
+	var exprNodeType = opexpr[3].Trim();
+	foreach(var typeAndName in types) {
+		var fields = typeAndName.Split(',');
+		var type = fields[0].Trim();
+		var rettype = retTypeIsBool ? "bool" : type;
+		var rettypeNullable = retTypeIsBool ? "bool" : type + "?";
+		var name = fields[1].Trim();
+		var dbtype = fields[2].Trim();
+		var isValue = fields[3].Trim() == "value";
+#>
+		public static <#=rettype#> operator <#=op#>(<#=type#> l, Variable r) => default(<#=rettype#>);
+		public static <#=rettype#> operator <#=op#>(Variable l, <#=type#> r) => default(<#=rettype#>);
+<#		if (isValue) {#>
+		public static <#=rettypeNullable#> operator <#=op#>(<#=type#>? l, Variable r) => default(<#=rettypeNullable#>);
+		public static <#=rettypeNullable#> operator <#=op#>(Variable l, <#=type#>? r) => default(<#=rettypeNullable#>);
+<#		}
+	}#>
+		public static <#=retTypeIsBool ? "bool" : "Variable"#> operator <#=op#>(Variable l, Variable r) => default(<#=retTypeIsBool ? "bool" : "Variable"#>);
+<#
+}
+#>
+		public static bool operator !(Variable op) => op is null;
+	}
+}
