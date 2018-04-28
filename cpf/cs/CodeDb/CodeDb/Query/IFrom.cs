@@ -6,46 +6,36 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// FROM句の機能を提供する
 	/// </summary>
-	public interface IFrom : ISqlBuildable {
+	public interface IFrom : IQueryNode {
 		/// <summary>
 		/// FROMに直接指定された取得元の<see cref="ITable"/>
 		/// </summary>
 		ITable Table { get; }
 
 		/// <summary>
-		/// SELECT句までの間に使用された全ての列
+		/// INNER JOIN、LEFT JOIN、RIGHT JOIN句のノード列
 		/// </summary>
-		ColumnMap SourceColumnMap { get; }
+		IEnumerable<IJoin> JoinNodes { get; }
 
 		/// <summary>
-		/// SELECT句までの間に使用された全ての<see cref="ITable"/>
+		/// WHERE句のノード
 		/// </summary>
-		HashSet<ITable> SourceTables { get; }
+		IWhere WhereNode { get; }
 
 		/// <summary>
-		/// INNER JOIN、LEFT JOIN、RIGHT JOIN句のリスト
+		/// GROUP BY句のノード
 		/// </summary>
-		List<IJoin> Joins { get; }
+		IGroupBy GroupByNode { get; }
 
 		/// <summary>
-		/// WHERE句の式
+		/// ORDER BY句のノード
 		/// </summary>
-		ElementCode WhereExpression { get; }
+		IOrderBy OrderByNode { get; }
 
 		/// <summary>
-		/// GROUP BY句の列一覧
+		/// LIMIT句のノード
 		/// </summary>
-		IEnumerable<Column> GroupByColumns { get; }
-
-		/// <summary>
-		/// ORDER BY句の列一覧
-		/// </summary>
-		IEnumerable<Column> OrderByColumns { get; }
-
-		/// <summary>
-		/// LIMIT句の値
-		/// </summary>
-		object LimitValue { get; }
+		ILimit LimitNode { get; }
 	}
 
 	/// <summary>

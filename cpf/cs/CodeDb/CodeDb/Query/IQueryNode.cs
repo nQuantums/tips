@@ -8,18 +8,18 @@ namespace CodeDb.Query {
 	/// </summary>
 	public interface IQueryNode : ISqlBuildable {
 		/// <summary>
-		/// 根ノード
+		/// 所有者
 		/// </summary>
-		IQueryNode RootNode { get; }
+		Sql Owner { get; }
 
 		/// <summary>
 		/// 親ノード
 		/// </summary>
-		IQueryNode ParentNode { get; }
+		IQueryNode Parent { get; }
 
 		/// <summary>
 		/// 子ノード一覧
 		/// </summary>
-		IEnumerable<IQueryNode> ChildrenNodes { get; }
+		IEnumerable<IQueryNode> Children { get; }
 	}
 }

@@ -8,7 +8,7 @@ namespace CodeDb {
 	/// <summary>
 	/// 列定義、プロパティと列を結びつける情報を持つ
 	/// </summary>
-	public class Column : IInDbEnvironment, IColumnDef {
+	public class Column : IColumnDef {
 		#region プロパティ
 		/// <summary>
 		/// DB接続環境

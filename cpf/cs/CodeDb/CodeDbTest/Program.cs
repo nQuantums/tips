@@ -256,21 +256,28 @@ namespace CodeDbTest {
 
 			using (var con = E.CreateConnection($"User ID={RoleName};Password='Passw0rd!';Host=localhost;Port=5432;Database={DbName};")) {
 				con.Open();
-				Console.WriteLine("Hello World!");
 
+				// データベースの状態を取得
 				var current = E.ReadDatabaseDef(con);
+				// クラスからデータベース定義を生成する
 				var target = E.GenerateDatabaseDef(typeof(TestDb), "test_db");
+				// 差分を生成
 				var delta = E.GetDatabaseDelta(current, target);
+
+				// 差分を適用する
 				var context = new ElementCode();
 				E.ApplyDatabaseDelta(context, delta);
-
 				var cmd = con.CreateCommand();
 				cmd.Apply(context.Build());
 				cmd.ExecuteNonQuery();
-
-				GetData();
-				Console.ReadKey();
 			}
+
+			var sql = new Sql(TestDb.E);
+			sql.InsertInto(TestDb.EntityConst, t => new { t.UserID }).SelectIfNotExists(() => new { UserID = 1 }, t => t.UserID == 1);
+
+			var ec = new ElementCode();
+			sql.BuildSql(ec);
+			var p = ec.Build();
 		}
 
 		static async void GetData() {

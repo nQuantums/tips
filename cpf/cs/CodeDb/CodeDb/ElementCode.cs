@@ -412,7 +412,7 @@ namespace CodeDb {
 		public List<object> Items => _Core.Items;
 		#endregion
 
-		#region 公開メソッド
+		#region コンストラクタ
 		/// <summary>
 		/// コンストラクタ
 		/// </summary>
@@ -422,6 +422,40 @@ namespace CodeDb {
 			_TypeWise = new TypeWise(this);
 		}
 
+		/// <summary>
+		/// コンストラクタ、式木と列プロパティマップを指定して初期化する
+		/// </summary>
+		/// <param name="expression">式木</param>
+		/// <param name="allAvailableColumns">使用可能な全ての列のプロパティマップ</param>
+		public ElementCode(Expression expression, ColumnMap allAvailableColumns) {
+			_Core = new Core();
+			_CoreStack = new Stack<Core>();
+			_TypeWise = new TypeWise(this);
+
+			Add(expression, allAvailableColumns);
+		}
+
+		/// <summary>
+		/// コンストラクタ、式木と列プロパティマップを指定して初期化する、パラメータ０を置き換えたものを登録する
+		/// </summary>
+		/// <param name="lambdaExpression">式木</param>
+		/// <param name="allAvailableColumns">使用可能な全ての列のプロパティマップ</param>
+		/// <param name="param0"><see cref="lambdaExpression"/>のパラメータ０がこれに置き換わる</param>
+		public ElementCode(LambdaExpression lambdaExpression, ColumnMap allAvailableColumns, object param0) {
+			_Core = new Core();
+			_CoreStack = new Stack<Core>();
+			_TypeWise = new TypeWise(this);
+
+			var replacedExpression = ParameterReplacer.Replace(
+				lambdaExpression.Body,
+				new Dictionary<Expression, object> { { lambdaExpression.Parameters[0], param0 } }
+			);
+
+			Add(replacedExpression, allAvailableColumns);
+		}
+		#endregion
+
+		#region 公開メソッド
 		/// <summary>
 		/// 式を括弧で括り始める
 		/// </summary>
@@ -684,15 +718,15 @@ namespace CodeDb {
 		public void Build(WorkingBuffer work) {
 			foreach (var item in this.Items) {
 				StringBuilder buffer;
-				ElementCode eip;
+				ElementCode ec;
 				ITableDef tableDef;
 				ITable table;
 				Column column;
 
 				if ((buffer = item as StringBuilder) != null) {
 					work.Concat(buffer.ToString());
-				} else if ((eip = item as ElementCode) != null) {
-					eip.Build(work);
+				} else if ((ec = item as ElementCode) != null) {
+					ec.Build(work);
 				} else if ((tableDef = item as ITableDef) != null) {
 					work.Concat(tableDef.Name);
 					work.Concat(work.GetTableAlias(tableDef));
@@ -709,6 +743,49 @@ namespace CodeDb {
 					work.Concat(column.Name);
 				} else {
 					work.Concat(work.GetParameterName(item));
+				}
+			}
+		}
+
+		/// <summary>
+		/// 全<see cref="Column"/>を列挙する
+		/// </summary>
+		public IEnumerable<Column> FindColumns() {
+			foreach (var item in _Core.Items) {
+				var column = item as Column;
+				if (column != null) {
+					yield return column;
+				} else {
+					var ec = item as ElementCode;
+					if (ec != null) {
+						foreach (var c in ec.FindColumns()) {
+							yield return c;
+						}
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// 全<see cref="ITable"/>を列挙する
+		/// </summary>
+		public IEnumerable<ITable> FindTables() {
+			foreach (var item in _Core.Items) {
+				var table = item as ITable;
+				if (table != null) {
+					yield return table;
+				} else {
+					var column = item as Column;
+					if (column != null) {
+						yield return column.Table;
+					} else {
+						var ec = item as ElementCode;
+						if (ec != null) {
+							foreach (var t in ec.FindTables()) {
+								yield return t;
+							}
+						}
+					}
 				}
 			}
 		}
@@ -801,6 +878,8 @@ namespace CodeDb {
 			switch (keyword) {
 			case SqlKeyword.Null:
 				return "NULL";
+			case SqlKeyword.Asterisk:
+				return "*";
 			case SqlKeyword.Not:
 				return "NOT";
 			case SqlKeyword.NotNull:

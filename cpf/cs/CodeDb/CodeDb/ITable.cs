@@ -7,7 +7,7 @@ namespace CodeDb {
 	/// 列をプロパティにバインドする機能を提供する
 	/// </summary>
 	/// <remarks>プロパティは自オブジェクトのもので無くて良い</remarks>
-	public interface ITable : IInDbEnvironment, ISqlBuildable {
+	public interface ITable : ISqlBuildable {
 		/// <summary>
 		/// プロパティに列定義をバインドして取得する、バインド済みなら取得のみ行われる
 		/// </summary>

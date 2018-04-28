@@ -13,14 +13,30 @@ namespace CodeDb.Query {
 	public class Select<TColumns> : ISelect<TColumns> {
 		#region プロパティ
 		/// <summary>
-		/// DB接続環境
+		/// ノードが属するSQLオブジェクト
 		/// </summary>
-		public DbEnvironment Environment { get; private set; }
+		public Sql Owner => this.Parent.Owner;
 
 		/// <summary>
-		/// WHERE句の式
+		/// 親ノード
 		/// </summary>
-		public ElementCode WhereExpression { get; private set; }
+		public IQueryNode Parent { get; private set; }
+
+		/// <summary>
+		/// 子ノード一覧
+		/// </summary>
+		public IEnumerable<IQueryNode> Children {
+			get {
+				if (this.WhereNode != null) {
+					yield return this.WhereNode;
+				}
+			}
+		}
+
+		/// <summary>
+		/// WHERE句のノード
+		/// </summary>
+		public IWhere WhereNode { get; private set; }
 
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
@@ -38,11 +54,6 @@ namespace CodeDb.Query {
 		public ColumnMap ColumnMap { get; private set; }
 
 		/// <summary>
-		/// このテーブルを構成するのに必要な全ての列定義を取得する
-		/// </summary>
-		public ColumnMap SourceColumnMap => this.ColumnMap;
-
-		/// <summary>
 		/// <see cref="ICodeDbDataReader"/>から<see cref="TColumns"/>を列挙するファンクション
 		/// </summary>
 		public Func<ICodeDbDataReader, IEnumerable<TColumns>> Reader => TypeWiseCache<TColumns>.Reader;
@@ -50,13 +61,39 @@ namespace CodeDb.Query {
 
 		#region コンストラクタ
 		/// <summary>
-		/// コンストラクタ
+		/// コンストラクタ、親ノードと列指定式を指定して初期化する
 		/// </summary>
-		/// <param name="environment">DB接続環境</param>
-		public Select(DbEnvironment environment) {
-			this.Environment = environment;
+		/// <param name="parent">親ノード</param>
+		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { t1.A, t1.B } の様な式</param>
+		public Select(IQueryNode parent, Expression<Func<TColumns>> columnsExpression) {
+			this.Parent = parent;
+
 			this.ColumnMap = new ColumnMap();
 			this.Columns = TypeWiseCache<TColumns>.Creator();
+
+			// new 演算子でクラスを生成するもの以外はエラーとする
+			var body = columnsExpression.Body;
+			if (body.NodeType != ExpressionType.New) {
+				throw new ApplicationException();
+			}
+
+			// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
+			var newexpr = body as NewExpression;
+			var args = newexpr.Arguments;
+			var properties = typeof(TColumns).GetProperties();
+			if (args.Count != properties.Length) {
+				throw new ApplicationException();
+			}
+
+			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
+			var environment = this.Owner.Environment;
+			for (int i = 0; i < properties.Length; i++) {
+				var pi = properties[i];
+				if (pi.PropertyType != args[i].Type) {
+					throw new ApplicationException();
+				}
+				BindColumn(pi.Name, "c" + i, environment.CreateDbTypeFromType(pi.PropertyType), 0, new ElementCode(args[i], null));
+			}
 		}
 		#endregion
 
@@ -73,7 +110,7 @@ namespace CodeDb.Query {
 		public Column BindColumn(string propertyName, string name, IDbType dbType, ColumnFlags flags = 0, ElementCode source = null) {
 			var column = this.ColumnMap.TryGetByPropertyName(propertyName);
 			if (column == null) {
-				this.ColumnMap.Add(column = new Column(this.Environment, this.Columns, typeof(TColumns).GetProperty(propertyName), this, name, dbType, flags, source));
+				this.ColumnMap.Add(column = new Column(this.Owner.Environment, this.Columns, typeof(TColumns).GetProperty(propertyName), this, name, dbType, flags, source));
 			}
 			return column;
 		}
@@ -83,34 +120,36 @@ namespace CodeDb.Query {
 		/// </summary>
 		/// <returns>クローン</returns>
 		public Select<TColumns> AliasedClone() {
-			var c = this.MemberwiseClone() as Select<TColumns>;
-			ColumnMap map;
-			TColumns columns;
-			c.ColumnMap = map = new ColumnMap();
-			c.Columns = columns = TypeWiseCache<TColumns>.Cloner(this.Columns);
-			foreach (var column in this.ColumnMap) {
-				map.Add(column.AliasedClone(columns, c));
-			}
-			// TODO: 生成元は同じなので this.SourceColumnMap はそのまま使えるかもしれない
-			return c;
-		}
-
-		ITable<TColumns> ITable<TColumns>.AliasedClone() {
-			return this.AliasedClone();
-		}
-
-		ITable ITable.AliasedClone() {
-			return this.AliasedClone();
+			return this;
 		}
 
 		/// <summary>
 		/// WHERE句の式を登録する
 		/// </summary>
 		/// <param name="expression">式</param>
-		public void Where(Expression<Func<bool>> expression) {
-			var context = new ElementCode();
-			context.Add(expression, this.SourceColumnMap);
-			this.WhereExpression = context;
+		public Where Where(Expression<Func<bool>> expression) {
+			var where = new Where(this, expression);
+			this.WhereNode = where;
+			return where;
+		}
+
+		/// <summary>
+		/// WHERE句の式を登録する
+		/// </summary>
+		/// <param name="expression">式</param>
+		public Where Where(ElementCode expression) {
+			var where = new Where(this, expression);
+			this.WhereNode = where;
+			return where;
+		}
+
+		/// <summary>
+		/// WHERE句のノードを新規作成する
+		/// </summary>
+		public Where Where() {
+			var where = new Where(this);
+			this.WhereNode = where;
+			return where;
 		}
 
 		/// <summary>
@@ -126,11 +165,15 @@ namespace CodeDb.Query {
 				context.Concat("c" + (i++));
 			});
 
-			if (this.WhereExpression != null) {
-				context.Add(SqlKeyword.Where);
-				context.Add(this.WhereExpression);
+			if (this.WhereNode != null) {
+				this.WhereNode.BuildSql(context);
 			}
 		}
+		#endregion
+
+		#region 非公開メソッド
+		ITable<TColumns> ITable<TColumns>.AliasedClone() => this.AliasedClone();
+		ITable ITable.AliasedClone() => this.AliasedClone();
 		#endregion
 	}
 }

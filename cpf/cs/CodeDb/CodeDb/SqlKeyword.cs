@@ -8,6 +8,7 @@ namespace CodeDb {
 	/// </summary>
 	public enum SqlKeyword {
 		Null,
+		Asterisk,
 		Not,
 		NotNull,
 		CreateTable,

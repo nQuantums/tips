@@ -6,7 +6,7 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// INNER JOIN、LEFT JOIN、RIGHT JOIN句の基本機能を提供する
 	/// </summary>
-	public interface IJoin {
+	public interface IJoin : IQueryNode {
 		/// <summary>
 		/// 結合種類
 		/// </summary>

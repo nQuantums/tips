@@ -6,7 +6,7 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// INSERT INTO句の機能を提供する
 	/// </summary>
-	public interface IInsertInto : ISqlBuildable {
+	public interface IInsertInto : IQueryNode {
 		/// <summary>
 		/// 挿入先のテーブル
 		/// </summary>
@@ -20,7 +20,7 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 挿入する値
 		/// </summary>
-		ISelect Values { get; }
+		ISelect ValueNode { get; }
 	}
 
 	/// <summary>

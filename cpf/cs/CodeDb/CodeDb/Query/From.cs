@@ -13,6 +13,45 @@ namespace CodeDb.Query {
 	public class From<TColumns> : IFrom<TColumns> {
 		#region プロパティ
 		/// <summary>
+		/// 所有者
+		/// </summary>
+		public Sql Owner => this.Parent.Owner;
+
+		/// <summary>
+		/// 親ノード
+		/// </summary>
+		public IQueryNode Parent { get; private set; }
+
+		/// <summary>
+		/// 子ノード一覧
+		/// </summary>
+		public IEnumerable<IQueryNode> Children {
+			get {
+				if (this.JoinNodes != null) {
+					foreach (var join in this.JoinNodes) {
+						yield return join;
+					}
+				}
+
+				if (this.WhereNode != null) {
+					yield return this.WhereNode;
+				}
+
+				if (this.GroupByNode != null) {
+					yield return this.GroupByNode;
+				}
+
+				if (this.OrderByNode != null) {
+					yield return this.OrderByNode;
+				}
+
+				if (this.LimitNode != null) {
+					yield return this.LimitNode;
+				}
+			}
+		}
+
+		/// <summary>
 		/// FROMに直接指定された取得元の<see cref="ITable"/>
 		/// </summary>
 		public ITable Table { get; private set; }
@@ -28,64 +67,46 @@ namespace CodeDb.Query {
 		public TColumns _ => this.Columns;
 
 		/// <summary>
-		/// SELECT句までの間に使用された全ての列
-		/// </summary>
-		public ColumnMap SourceColumnMap { get; private set; } = new ColumnMap();
-
-		/// <summary>
-		/// SELECT句までの間に使用された全ての<see cref="ITable"/>
-		/// </summary>
-		public HashSet<ITable> SourceTables { get; private set; } = new HashSet<ITable>();
-
-		/// <summary>
 		/// INNER JOIN、LEFT JOIN、RIGHT JOIN句のリスト
 		/// </summary>
-		public List<IJoin> Joins { get; private set; }
+		public List<IJoin> JoinNodes { get; private set; }
+		IEnumerable<IJoin> IFrom.JoinNodes => this.JoinNodes;
 
 		/// <summary>
 		/// WHERE句の式
 		/// </summary>
-		public ElementCode WhereExpression { get; private set; }
+		public IWhere WhereNode  { get; private set; }
 
 		/// <summary>
 		/// GROUP BY句の列一覧
 		/// </summary>
-		public IEnumerable<Column> GroupByColumns { get; private set; }
+		public IGroupBy GroupByNode { get; private set; }
 
 		/// <summary>
 		/// ORDER BY句の列一覧
 		/// </summary>
-		public IEnumerable<Column> OrderByColumns { get; private set; }
+		public IOrderBy OrderByNode { get; private set; }
 
 		/// <summary>
-		/// LIMIT句の値
+		/// LIMIT句のノード
 		/// </summary>
-		public object LimitValue { get; private set; }
+		public ILimit LimitNode { get; private set; }
 		#endregion
 
 		#region コンストラクタ
 		/// <summary>
-		/// コンストラクタ、取得元のテーブル定義を指定して初期化する
+		/// コンストラクタ、親ノードと取得元のテーブル定義を指定して初期化する
 		/// </summary>
-		/// <param name="table">テーブル定義</param>
-		public From(TableDef<TColumns> table) {
-			var clone = table.AliasedClone();
+		/// <param name="parent">親ノード</param>
+		/// <param name="tableDef">テーブル定義</param>
+		public From(IQueryNode parent, ITable<TColumns> tableDef) {
+			this.Parent = parent;
+
+			var clone = tableDef.AliasedClone();
 			this.Table = clone;
 			this.Columns = clone.Columns;
 
-			this.SourceColumnMap.Include(clone.ColumnMap);
-		}
-
-		/// <summary>
-		/// コンストラクタ、取得元のSELECT句を指定して初期化する
-		/// </summary>
-		/// <param name="select">SELECT句</param>
-		public From(ISelect<TColumns> select) {
-			var clone = select.AliasedClone();
-			this.Table = clone;
-			this.Columns = clone.Columns;
-
-			this.SourceColumnMap.Include(clone.ColumnMap);
+			parent.Owner.Register(clone);
 		}
 		#endregion
 
@@ -122,9 +143,15 @@ namespace CodeDb.Query {
 		/// </summary>
 		/// <param name="expression">式</param>
 		public void Where(Expression<Func<bool>> expression) {
-			var context = new ElementCode();
-			context.Add(expression, this.SourceColumnMap);
-			this.WhereExpression = context;
+			this.WhereNode = new Where(this, expression);
+		}
+
+		/// <summary>
+		/// WHERE句の式を登録する
+		/// </summary>
+		/// <param name="expression">式</param>
+		public void Where(ElementCode expression) {
+			this.WhereNode = new Where(this, expression);
 		}
 
 		/// <summary>
@@ -133,34 +160,7 @@ namespace CodeDb.Query {
 		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
 		public void GroupBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
-			// new 演算子で匿名クラスを生成するもの以外はエラーとする
-			var body = columnsExpression.Body;
-			if (body.NodeType != ExpressionType.New) {
-				throw new ApplicationException();
-			}
-			if (!TypeSystem.IsAnonymousType(body.Type)) {
-				throw new ApplicationException();
-			}
-
-			// 匿名クラスのプロパティをグルーピング用の列として取得する
-			var newexpr = body as NewExpression;
-			var args = newexpr.Arguments;
-			var columns = new Column[args.Count];
-			for (int i = 0; i < columns.Length; i++) {
-				var context = new ElementCode();
-				context.Add(args[i], this.SourceColumnMap);
-				if (context.Items.Count != 1) {
-					throw new ApplicationException();
-				}
-				var column = context.Items[0] as Column;
-				if (column == null) {
-					throw new ApplicationException();
-				}
-
-				columns[i] = column;
-			}
-
-			this.GroupByColumns = columns;
+			this.GroupByNode = new GroupBy<TColumns1>(this, columnsExpression);
 		}
 
 		/// <summary>
@@ -169,42 +169,15 @@ namespace CodeDb.Query {
 		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
 		public void OrderBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
-			// new 演算子で匿名クラスを生成するもの以外はエラーとする
-			var body = columnsExpression.Body;
-			if (body.NodeType != ExpressionType.New) {
-				throw new ApplicationException();
-			}
-			if (!TypeSystem.IsAnonymousType(body.Type)) {
-				throw new ApplicationException();
-			}
-
-			// 匿名クラスのプロパティをグルーピング用の列として取得する
-			var newexpr = body as NewExpression;
-			var args = newexpr.Arguments;
-			var columns = new Column[args.Count];
-			for (int i = 0; i < columns.Length; i++) {
-				var context = new ElementCode();
-				context.Add(args[i], this.SourceColumnMap);
-				if (context.Items.Count != 1) {
-					throw new ApplicationException();
-				}
-				var column = context.Items[0] as Column;
-				if (column == null) {
-					throw new ApplicationException();
-				}
-
-				columns[i] = column;
-			}
-
-			this.OrderByColumns = columns;
+			this.OrderByNode = new OrderBy<TColumns1>(this, columnsExpression);
 		}
 
 		/// <summary>
 		/// LIMITの値を登録する
 		/// </summary>
 		/// <param name="count">制限値</param>
-		public void Limit(long count) {
-			this.LimitValue = count;
+		public void Limit(object count) {
+			this.LimitNode = new Limit(this, count);
 		}
 
 		/// <summary>
@@ -214,35 +187,7 @@ namespace CodeDb.Query {
 		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { t1.A, t1.B } の様な式</param>
 		/// <returns>SELECT句</returns>
 		public SelectFrom<TColumns1> Select<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
-			// new 演算子でクラスを生成するもの以外はエラーとする
-			var body = columnsExpression.Body;
-			if (body.NodeType != ExpressionType.New) {
-				throw new ApplicationException();
-			}
-
-			// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
-			var newexpr = body as NewExpression;
-			var args = newexpr.Arguments;
-			var properties = typeof(TColumns1).GetProperties();
-			if (args.Count != properties.Length) {
-				throw new ApplicationException();
-			}
-
-			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
-			var environment = this.Table.Environment;
-			var sourceColumnMap = this.SourceColumnMap;
-			var select = new SelectFrom<TColumns1>(environment, this);
-			for (int i = 0; i < properties.Length; i++) {
-				var pi = properties[i];
-				if (pi.PropertyType != args[i].Type) {
-					throw new ApplicationException();
-				}
-				var context = new ElementCode();
-				context.Add(args[i], sourceColumnMap);
-				select.BindColumn(pi.Name, "c" + i, environment.CreateDbTypeFromType(pi.PropertyType), 0, context);
-			}
-
-			return select;
+			return new SelectFrom<TColumns1>(this, columnsExpression);
 		}
 
 		/// <summary>
@@ -255,43 +200,26 @@ namespace CodeDb.Query {
 				context.Add(this.Table);
 			}
 
-			if (this.Joins != null) {
-				foreach (var join in this.Joins) {
-					switch (join.JoinType) {
-					case JoinType.Inner:
-						context.Add(SqlKeyword.InnerJoin);
-						break;
-					case JoinType.Left:
-						context.Add(SqlKeyword.LeftJoin);
-						break;
-					case JoinType.Right:
-						context.Add(SqlKeyword.RightJoin);
-						break;
-					}
-					context.Add(join.Table);
-					context.Add(SqlKeyword.On);
-					context.Add(join.On);
+			if (this.JoinNodes != null) {
+				foreach (var join in this.JoinNodes) {
+					join.BuildSql(context);
 				}
 			}
 
-			if (this.WhereExpression != null) {
-				context.Add(SqlKeyword.Where);
-				context.Add(this.WhereExpression);
+			if (this.WhereNode != null) {
+				this.WhereNode.BuildSql(context);
 			}
 
-			if (this.GroupByColumns != null && this.GroupByColumns.Any()) {
-				context.Add(SqlKeyword.GroupBy);
-				context.AddColumns(this.GroupByColumns);
+			if (this.GroupByNode != null) {
+				this.GroupByNode.BuildSql(context);
 			}
 
-			if (this.OrderByColumns != null && this.OrderByColumns.Any()) {
-				context.Add(SqlKeyword.OrderBy);
-				context.AddColumns(this.GroupByColumns);
+			if (this.OrderByNode != null) {
+				this.OrderByNode.BuildSql(context);
 			}
 
-			if (this.LimitValue != null) {
-				context.Add(SqlKeyword.Limit);
-				context.Add(this.LimitValue);
+			if (this.LimitNode != null) {
+				this.LimitNode.BuildSql(context);
 			}
 		}
 		#endregion
@@ -306,20 +234,12 @@ namespace CodeDb.Query {
 		/// <param name="on">結合式</param>
 		/// <returns><see cref="Join{TColumns}</returns>
 		IJoin<TColumns1> JoinByType<TColumns1>(JoinType joinType, ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) {
-			var clone = table.AliasedClone();
-
-			if (this.Joins == null) {
-				this.Joins = new List<IJoin>();
+			if (this.JoinNodes == null) {
+				this.JoinNodes = new List<IJoin>();
 			}
 
-			if (!this.SourceTables.Contains(clone)) {
-				this.SourceColumnMap.Include(clone.ColumnMap);
-			}
-
-			var context = new ElementCode();
-			context.Add(ParameterReplacer.Replace(on.Body, new Dictionary<Expression, object> { { on.Parameters[0], clone.Columns } }), this.SourceColumnMap);
-			var join = new Join<TColumns1>(joinType, clone, context);
-			this.Joins.Add(join);
+			var join = new Join<TColumns1>(this, joinType, table, on);
+			this.JoinNodes.Add(join);
 			return join;
 		}
 		#endregion

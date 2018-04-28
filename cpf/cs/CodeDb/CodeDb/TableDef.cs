@@ -199,18 +199,14 @@ namespace CodeDb {
 		public void BuildSql(ElementCode context) {
 			context.Concat(this.Name);
 		}
-
-		ITable<TColumns> ITable<TColumns>.AliasedClone() {
-			return this.AliasedClone();
-		}
-
-		ITable ITable.AliasedClone() {
-			return this.AliasedClone();
-		}
-
 		public override string ToString() {
 			return this.Name;
 		}
+		#endregion
+
+		#region 非公開メソッド
+		ITable<TColumns> ITable<TColumns>.AliasedClone() => this.AliasedClone();
+		ITable ITable.AliasedClone() => this.AliasedClone();
 		#endregion
 	}
 }

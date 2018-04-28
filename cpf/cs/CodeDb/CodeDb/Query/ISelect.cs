@@ -6,11 +6,7 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// SELECT式
 	/// </summary>
-	public interface ISelect : ITable, IInDbEnvironment, ISqlBuildable {
-		/// <summary>
-		/// このテーブルを構成するのに必要な全ての列定義を取得する
-		/// </summary>
-		ColumnMap SourceColumnMap { get; }
+	public interface ISelect : ITable, IQueryNode {
 	}
 
 	/// <summary>
@@ -18,5 +14,9 @@ namespace CodeDb.Query {
 	/// </summary>
 	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
 	public interface ISelect<TColumns> : ISelect, ITable<TColumns> {
+		/// <summary>
+		/// <see cref="ICodeDbDataReader"/>から<see cref="TColumns"/>を列挙するファンクション
+		/// </summary>
+		Func<ICodeDbDataReader, IEnumerable<TColumns>> Reader { get; }
 	}
 }
