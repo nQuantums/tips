@@ -31,6 +31,10 @@ namespace CodeDb.PgBinder {
 			return true;
 		}
 
+		public override Sql NewSql() {
+			return new Sql(this);
+		}
+
 		public override IDatabaseDef GenerateDatabaseDef(Type databaseDefType, string databaseName) {
 			var tableDefs = new List<ITableDef>();
 			foreach (var pi in databaseDefType.GetProperties()) {

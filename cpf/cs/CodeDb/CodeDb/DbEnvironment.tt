@@ -31,6 +31,12 @@ namespace CodeDb {
 	/// </summary>
 	public abstract class DbEnvironment {
 		/// <summary>
+		/// 新規SQLオブジェクトを生成する
+		/// </summary>
+		/// <returns>SQLオブジェクト</returns>
+		public abstract Sql NewSql();
+
+		/// <summary>
 		/// DBへのコネクションの作成
 		/// </summary>
 		/// <param name="connectionString">接続文字列</param>

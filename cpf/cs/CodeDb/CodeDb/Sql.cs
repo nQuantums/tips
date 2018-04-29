@@ -67,6 +67,28 @@ namespace CodeDb {
 			}
 		}
 
+		/// <summary>
+		/// コードをそのままノードにする
+		/// </summary>
+		/// <param name="code">コード</param>
+		/// <returns>ノード</returns>
+		public CodeNode Code(ElementCode code) {
+			var node = new CodeNode(this, code);
+			this.Children.Add(node);
+			return node;
+		}
+
+		/// <summary>
+		/// 指定のテーブル定義を破棄する
+		/// </summary>
+		/// <param name="table">テーブル定義</param>
+		/// <returns>DROP TABLE句ノード</returns>
+		public DropTable DropTable(ITableDef table) {
+			var node = new DropTable(this, table);
+			this.Children.Add(node);
+			return node;
+		}
+
 		public From<TColumns> From<TColumns>(ISelect<TColumns> tableOrSelect) {
 			var node = new From<TColumns>(this, tableOrSelect);
 			this.Children.Add(node);

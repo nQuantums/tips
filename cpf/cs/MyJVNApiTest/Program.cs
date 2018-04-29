@@ -97,7 +97,15 @@ namespace MyJVNApiTest {
 			// データベースの構造をソース上での定義に合わせる
 			using (var con = E.CreateConnection($"User ID={RoleName};Password='Passw0rd!';Host=localhost;Port=5432;Database={DbName};")) {
 				con.Open();
-				Console.WriteLine("Hello World!");
+				var cmd = con.CreateCommand();
+				cmd.CommandTimeout = 0;
+
+				{
+					var dropSql = Db.E.NewSql();
+					dropSql.DropTable(Db.Url);
+					cmd.Apply(dropSql.Build());
+					cmd.ExecuteNonQuery();
+				}
 
 				// データベースの状態を取得
 				var current = E.ReadDatabaseDef(con);
@@ -109,7 +117,6 @@ namespace MyJVNApiTest {
 				// 差分を適用する
 				var context = new ElementCode();
 				E.ApplyDatabaseDelta(context, delta);
-				var cmd = con.CreateCommand();
 				cmd.Apply(context.Build());
 				cmd.ExecuteNonQuery();
 
@@ -131,6 +138,10 @@ namespace MyJVNApiTest {
 			}
 		}
 
+		/// <summary>
+		/// 指定URLページ内からのリンクを収集する
+		/// </summary>
+		/// <param name="url">ホームページのURL</param>
 		static async void CollectUrls(string url) {
 			await Sem.WaitAsync();
 			try {
