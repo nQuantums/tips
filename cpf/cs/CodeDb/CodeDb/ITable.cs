@@ -34,7 +34,7 @@ namespace CodeDb {
 	/// <summary>
 	/// 列をプロパティにバインドする機能を提供し、<see cref="Columns"/>のプロパティにより列へのアクセスも提供する
 	/// </summary>
-	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 	public interface ITable<TColumns> : ITable {
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト

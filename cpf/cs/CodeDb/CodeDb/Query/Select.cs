@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Text;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Reflection;
 using CodeDb.Internal;
 
 namespace CodeDb.Query {
 	/// <summary>
 	/// FROM句を含まないSELECT
 	/// </summary>
-	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 	public class Select<TColumns> : ISelect<TColumns> {
 		#region プロパティ
 		/// <summary>
@@ -61,10 +62,54 @@ namespace CodeDb.Query {
 
 		#region コンストラクタ
 		/// <summary>
+		/// コンストラクタ、親ノードと列プロパティと設定する値の式を指定して初期化する
+		/// </summary>
+		/// <param name="parent">親ノード</param>
+		/// <param name="properties">列に対応するプロパティ</param>
+		/// <param name="values">列の値の式</param>
+		public Select(IQueryNode parent, PropertyInfo[] properties, ElementCode[] values) {
+			if (properties.Length != values.Length) {
+				throw new ApplicationException();
+			}
+
+			this.Parent = parent;
+			this.ColumnMap = new ColumnMap();
+			this.Columns = TypeWiseCache<TColumns>.Creator();
+
+			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
+			var environment = this.Owner.Environment;
+			for (int i = 0; i < properties.Length; i++) {
+				BindColumn(properties[i], values[i]);
+			}
+		}
+
+		/// <summary>
+		/// コンストラクタ、親ノードと列プロパティと設定する値の式を指定して初期化する
+		/// </summary>
+		/// <param name="parent">親ノード</param>
+		/// <param name="properties">列に対応するプロパティ</param>
+		/// <param name="values">列の値の式</param>
+		public Select(IQueryNode parent, PropertyInfo[] properties, Expression[] values) {
+			if (properties.Length != values.Length) {
+				throw new ApplicationException();
+			}
+
+			this.Parent = parent;
+			this.ColumnMap = new ColumnMap();
+			this.Columns = TypeWiseCache<TColumns>.Creator();
+
+			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
+			var environment = this.Owner.Environment;
+			for (int i = 0; i < properties.Length; i++) {
+				BindColumn(properties[i], new ElementCode(values[i], null));
+			}
+		}
+
+		/// <summary>
 		/// コンストラクタ、親ノードと列指定式を指定して初期化する
 		/// </summary>
 		/// <param name="parent">親ノード</param>
-		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { t1.A, t1.B } の様な式</param>
+		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { Name = "test", ID = 1 } の様な式</param>
 		public Select(IQueryNode parent, Expression<Func<TColumns>> columnsExpression) {
 			this.Parent = parent;
 
@@ -88,11 +133,7 @@ namespace CodeDb.Query {
 			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
 			var environment = this.Owner.Environment;
 			for (int i = 0; i < properties.Length; i++) {
-				var pi = properties[i];
-				if (pi.PropertyType != args[i].Type) {
-					throw new ApplicationException();
-				}
-				BindColumn(pi.Name, "c" + i, environment.CreateDbTypeFromType(pi.PropertyType), 0, new ElementCode(args[i], null));
+				BindColumn(properties[i], new ElementCode(args[i], null));
 			}
 		}
 		#endregion
@@ -113,6 +154,31 @@ namespace CodeDb.Query {
 				this.ColumnMap.Add(column = new Column(this.Owner.Environment, this.Columns, typeof(TColumns).GetProperty(propertyName), this, name, dbType, flags, source));
 			}
 			return column;
+		}
+
+		/// <summary>
+		/// プロパティに列定義をバインドして取得する、バインド済みなら取得のみ行われる
+		/// </summary>
+		/// <param name="property">プロパティ情報</param>
+		/// <param name="source">列を生成する基となった式</param>
+		/// <returns></returns>
+		Column BindColumn(PropertyInfo property, ElementCode source = null) {
+			var column = this.ColumnMap.TryGetByPropertyName(property.Name);
+			if (column != null) {
+				return column;
+			}
+
+			// もし型が Variable なら内部の値の型を取得する
+			var type = property.PropertyType;
+			if (source != null && typeof(Variable).IsAssignableFrom(type)) {
+				var variable = source.FindVariables().FirstOrDefault();
+				if (!(variable is null) && variable.Value != null) {
+					type = variable.Value.GetType();
+				}
+			}
+
+			// プロパティに列をバインド
+			return BindColumn(property.Name, "c" + this.ColumnMap.Count, this.Owner.Environment.CreateDbTypeFromType(type), 0, source);
 		}
 
 		/// <summary>

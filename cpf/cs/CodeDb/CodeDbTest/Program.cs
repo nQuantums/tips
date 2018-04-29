@@ -161,73 +161,6 @@ namespace CodeDbTest {
 		public static TblTag Tag { get; } = new TblTag();
 	}
 
-	class MyJVN {
-		public struct TimeRange {
-			public static readonly TimeRange Empty = new TimeRange(DateTime.MinValue, DateTime.MinValue);
-
-			public DateTime Start { get; set; }
-			public DateTime End { get; set; }
-
-			public TimeRange(DateTime start, DateTime end) {
-				this.Start = start;
-				this.End = end;
-			}
-
-			public override bool Equals(object obj) {
-				if (obj is TimeRange) {
-					return this == (TimeRange)obj;
-				}
-				return base.Equals(obj);
-			}
-
-			public override int GetHashCode() {
-				return this.Start.GetHashCode() ^ this.Start.GetHashCode();
-			}
-
-			public static bool operator ==(TimeRange l, TimeRange r) {
-				return l.Start == r.Start && l.End == r.End;
-			}
-
-			public static bool operator !=(TimeRange l, TimeRange r) {
-				return l.Start != r.Start || l.End != r.End;
-			}
-		}
-
-		public static async Task<string> getVulnOverviewList(TimeRange pub = new TimeRange(), TimeRange publish = new TimeRange(), TimeRange firstPublish = new TimeRange()) {
-			var sb = new StringBuilder("https://jvndb.jvn.jp/myjvn?method=getVulnOverviewList&feed=hnd");
-			if (pub != TimeRange.Empty) {
-				sb.Append("&datePublicStartY=" + pub.Start.Year);
-				sb.Append("&datePublicStartM=" + pub.Start.Month);
-				sb.Append("&datePublicStartD=" + pub.Start.Day);
-				sb.Append("&datePublicEndY=" + pub.End.Year);
-				sb.Append("&datePublicEndM=" + pub.End.Month);
-				sb.Append("&datePublicEndD=" + pub.End.Day);
-			}
-			if (publish != TimeRange.Empty) {
-				sb.Append("&datePublishedStartY=" + publish.Start.Year);
-				sb.Append("&datePublishedStartM=" + publish.Start.Month);
-				sb.Append("&datePublishedStartD=" + publish.Start.Day);
-				sb.Append("&datePublishedEndY=" + publish.End.Year);
-				sb.Append("&datePublishedEndM=" + publish.End.Month);
-				sb.Append("&datePublishedEndD=" + publish.End.Day);
-			}
-			if (firstPublish != TimeRange.Empty) {
-				sb.Append("&dateFirstPublishedStartY=" + firstPublish.Start.Year);
-				sb.Append("&dateFirstPublishedStartM=" + firstPublish.Start.Month);
-				sb.Append("&dateFirstPublishedStartD=" + firstPublish.Start.Day);
-				sb.Append("&dateFirstPublishedEndY=" + firstPublish.End.Year);
-				sb.Append("&dateFirstPublishedEndM=" + firstPublish.End.Month);
-				sb.Append("&dateFirstPublishedEndD=" + firstPublish.End.Day);
-			}
-
-			using (HttpClient client = new HttpClient())
-			using (var res = await client.GetAsync(sb.ToString()))
-			using (var content = res.Content) {
-				return await content.ReadAsStringAsync();
-			}
-		}
-	}
-
 	class Program {
 		const string RoleName = "role1";
 		const string DbName = "testdb";
@@ -270,18 +203,19 @@ namespace CodeDbTest {
 				var cmd = con.CreateCommand();
 				cmd.Apply(context.Build());
 				cmd.ExecuteNonQuery();
+
+
+				var sql = new Sql(TestDb.E);
+				var v = new Variable(3);
+				sql.InsertIntoIfNotExists(TestDb.EntityConst, t => new { UserID = v });
+
+				var ec = new ElementCode();
+				sql.BuildSql(ec);
+				var p = ec.Build();
+				cmd.Apply(p);
+				cmd.ExecuteNonQuery();
+				Console.WriteLine(p.CommandText);
 			}
-
-			var sql = new Sql(TestDb.E);
-			sql.InsertInto(TestDb.EntityConst, t => new { t.UserID }).SelectIfNotExists(() => new { UserID = 1 }, t => t.UserID == 1);
-
-			var ec = new ElementCode();
-			sql.BuildSql(ec);
-			var p = ec.Build();
-		}
-
-		static async void GetData() {
-			Console.WriteLine(await MyJVN.getVulnOverviewList(new MyJVN.TimeRange(new DateTime(2017, 1, 1), new DateTime(2017, 12, 31))));
 		}
 	}
 }

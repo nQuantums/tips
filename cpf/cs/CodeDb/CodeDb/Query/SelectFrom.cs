@@ -9,7 +9,7 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// FROM句を含むSELECT
 	/// </summary>
-	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 	public class SelectFrom<TColumns> : ISelect<TColumns> {
 		#region プロパティ
 		/// <summary>

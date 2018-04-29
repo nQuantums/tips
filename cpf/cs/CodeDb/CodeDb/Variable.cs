@@ -26,7 +26,7 @@ namespace CodeDb {
 		}
 
 		public override bool Equals(object obj) {
-			return object.ReferenceEquals(this.Value, obj);
+			return object.ReferenceEquals(this, obj);
 		}
 
 		public override int GetHashCode() {

@@ -12,7 +12,7 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// 列クラス型指定のSELECT式
 	/// </summary>
-	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 	public interface ISelect<TColumns> : ISelect, ITable<TColumns> {
 		/// <summary>
 		/// <see cref="ICodeDbDataReader"/>から<see cref="TColumns"/>を列挙するファンクション

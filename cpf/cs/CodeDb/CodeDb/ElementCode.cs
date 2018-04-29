@@ -323,12 +323,14 @@ namespace CodeDb {
 			public List<object> Tables { get; private set; } = new List<object>();
 
 			public string GetParameterName(object value) {
+				// IndexOf などでは Variable のオーバーロードのせいで正しく判定できないので自前で object.ReferenceEquals 呼び出して判定する
 				var parameters = this.Parameters;
-				var index = parameters.IndexOf(value);
-				if (0 <= index) {
-					return "@p" + index;
+				for (int i = 0, n = parameters.Count; i < n; i++) {
+					if (object.ReferenceEquals(value, parameters[i])) {
+						return "@p" + i;
+					}
 				}
-				index = parameters.Count;
+				var index = parameters.Count;
 				parameters.Add(value);
 				return "@p" + index;
 			}
@@ -393,7 +395,7 @@ namespace CodeDb {
 			} },
 		};
 
-		const string Symbols = "(),.+-*/%=<>@#;";
+		const string Symbols = "(),.+-*/%=<>#;";
 
 		Core _Core;
 		Stack<Core> _CoreStack;
@@ -702,13 +704,6 @@ namespace CodeDb {
 			_Core.ItemCount++;
 		}
 
-		//public void Add(ISqlBuildable sqlCompilable, bool alias) {
-		//	sqlCompilable.BuildSql(this);
-		//	if (alias) {
-		//		this.Concat(this._ToAlias[sqlCompilable]);
-		//	}
-		//}
-
 		public SqlProgram Build() {
 			var work = new WorkingBuffer();
 			this.Build(work);
@@ -746,6 +741,26 @@ namespace CodeDb {
 				}
 			}
 		}
+
+		/// <summary>
+		/// 全<see cref="Variable"/>を列挙する
+		/// </summary>
+		public IEnumerable<Variable> FindVariables() {
+			foreach (var item in _Core.Items) {
+				var variable = item as Variable;
+				if (variable is null) {
+					var ec = item as ElementCode;
+					if (ec != null) {
+						foreach (var v in ec.FindVariables()) {
+							yield return v;
+						}
+					}
+				} else {
+					yield return variable;
+				}
+			}
+		}
+
 
 		/// <summary>
 		/// 全<see cref="Column"/>を列挙する

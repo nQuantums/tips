@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using CodeDb.Internal;
@@ -8,7 +9,7 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// INSERT INTO句
 	/// </summary>
-	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 	/// <typeparam name="TColumnsOrder">列の並びを指定する t => new { t.A, t.B } の様な式で生成される匿名クラス</typeparam>
 	public class InsertInto<TColumns, TColumnsOrder> : IInsertInto<TColumns> {
 		#region プロパティ
@@ -77,8 +78,10 @@ namespace CodeDb.Query {
 			// 匿名クラスのプロパティを取得、さらに各プロパティ初期化用の式を取得する
 			var newexpr = body as NewExpression;
 			var args = newexpr.Arguments;
+			var properties = typeof(TColumnsOrder).GetProperties();
 			var map = new Dictionary<Expression, object> { { columnsExpression.Parameters[0], table.Columns } };
 			var availableColumns = owner.AllColumns;
+			var tableColumnMap = table.ColumnMap;
 			var columnsOrder = new ColumnMap();
 
 			for (int i = 0; i < args.Count; i++) {
@@ -87,6 +90,9 @@ namespace CodeDb.Query {
 					throw new ApplicationException();
 				}
 				var column = context.Items[0] as Column;
+				if (column == null) {
+					column = tableColumnMap.TryGetByPropertyName(properties[i].Name);
+				}
 				if (!availableColumns.Contains(column)) {
 					throw new ApplicationException();
 				}
@@ -100,11 +106,6 @@ namespace CodeDb.Query {
 		#endregion
 
 		#region 公開メソッド
-
-		//public void Values(ISelect<TColumnsOrder> select) {
-		//	this.Values = select;
-		//}
-
 		/// <summary>
 		/// 列選択部を生成する
 		/// </summary>
@@ -120,15 +121,55 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 列選択部を生成する
 		/// </summary>
-		/// <typeparam name="TColumns1">列をプロパティとして持つクラス</typeparam>
-		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { t1.A, t1.B } の様な式</param>
-		/// <param name="selectWhereExpression">既存レコードに一致判定の t => t.Column1 == 3 の様な式</param>
+		/// <param name="columnsAssignExpression">列への値代入を示す t => new { Name = "test", ID = 1 } の様な式、入力の t は列名参考用に使うのみ</param>
+		/// <param name="columnCountToWhere">NOT EXISTS (SELECT * FROM t WHERE t.Name = "test") の部分で判定に使用する列数、0が指定されたら全て使用する</param>
 		/// <returns>SELECT句</returns>
-		public Select<TColumnsOrder> SelectIfNotExists(Expression<Func<TColumnsOrder>> columnsExpression, Expression<Func<TColumns, bool>> selectWhereExpression) {
-			var select = new Select<TColumnsOrder>(this, columnsExpression);
+		public Select<TColumnsOrder> SelectIfNotExists(Expression<Func<TColumns, TColumnsOrder>> columnsAssignExpression, int columnCountToWhere = 0) {
+			// new 演算子でクラスを生成するもの以外はエラーとする
+			var body = columnsAssignExpression.Body;
+			if (body.NodeType != ExpressionType.New) {
+				throw new ApplicationException();
+			}
+
+			// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
+			var newexpr = body as NewExpression;
+			var args = newexpr.Arguments;
+			var properties = typeof(TColumnsOrder).GetProperties();
+			if (args.Count != properties.Length) {
+				throw new ApplicationException();
+			}
+			if (columnCountToWhere <= 0) {
+				columnCountToWhere = properties.Length;
+			}
+
+			// SELECT value1, value2... 部作成
+			var select = new Select<TColumnsOrder>(this, properties, args.ToArray());
 			this.ValueNode = select;
-			var where = select.Where();
-			where.NotExistsSelect(this.Table.Columns, selectWhereExpression);
+
+			// WHERE NOT EXISTS部作成
+			var notExistsSelectFrom = new ElementCode();
+			var columnMap = this.Table.ColumnMap;
+			var allColumns = this.Owner.AllColumns;
+			notExistsSelectFrom.Add(SqlKeyword.NotExists);
+			notExistsSelectFrom.BeginParenthesize();
+			notExistsSelectFrom.Add(SqlKeyword.Select, SqlKeyword.Asterisk, SqlKeyword.From);
+			notExistsSelectFrom.Add(this.Table);
+			notExistsSelectFrom.Add(SqlKeyword.Where);
+			for (int i = 0; i < columnCountToWhere; i++) {
+				if (i != 0) {
+					notExistsSelectFrom.AddComma();
+				}
+				var column = columnMap.TryGetByPropertyName(properties[i].Name);
+				if (column == null) {
+					throw new ApplicationException();
+				}
+				notExistsSelectFrom.Add(column);
+				notExistsSelectFrom.Concat("=");
+				notExistsSelectFrom.Add(args[i], allColumns);
+			}
+			notExistsSelectFrom.EndParenthesize();
+			select.Where(notExistsSelectFrom);
+
 			return select;
 		}
 

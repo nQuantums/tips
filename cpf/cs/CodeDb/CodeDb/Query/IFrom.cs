@@ -41,7 +41,7 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// FROM句の機能を提供する
 	/// </summary>
-	/// <typeparam name="TColumns">プロパティを列として扱うクラス</typeparam>
+	/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 	public interface IFrom<TColumns> : IFrom {
 		/// <summary>
 		/// 列プロパティを持つオブジェクト
