@@ -14,6 +14,7 @@ namespace CodeDb {
 		CreateTable,
 		DropTable,
 		CreateIndex,
+		DropIndex,
 		Exists,
 		NotExists,
 		IfExists,
@@ -50,5 +51,6 @@ namespace CodeDb {
 		Password,
 		CreateDatabase,
 		Owner,
+		Unique,
 	}
 }

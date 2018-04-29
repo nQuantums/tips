@@ -122,6 +122,33 @@ namespace CodeDb.Query {
 		/// 列選択部を生成する
 		/// </summary>
 		/// <param name="columnsAssignExpression">列への値代入を示す t => new { Name = "test", ID = 1 } の様な式、入力の t は列名参考用に使うのみ</param>
+		/// <returns>SELECT句</returns>
+		public Select<TColumnsOrder> Select(Expression<Func<TColumns, TColumnsOrder>> columnsAssignExpression) {
+			// new 演算子でクラスを生成するもの以外はエラーとする
+			var body = columnsAssignExpression.Body;
+			if (body.NodeType != ExpressionType.New) {
+				throw new ApplicationException();
+			}
+
+			// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
+			var newexpr = body as NewExpression;
+			var args = newexpr.Arguments;
+			var properties = typeof(TColumnsOrder).GetProperties();
+			if (args.Count != properties.Length) {
+				throw new ApplicationException();
+			}
+
+			// SELECT value1, value2... 部作成
+			var select = new Select<TColumnsOrder>(this, properties, args.ToArray());
+			this.ValueNode = select;
+
+			return select;
+		}
+
+		/// <summary>
+		/// 列選択部を生成する
+		/// </summary>
+		/// <param name="columnsAssignExpression">列への値代入を示す t => new { Name = "test", ID = 1 } の様な式、入力の t は列名参考用に使うのみ</param>
 		/// <param name="columnCountToWhere">NOT EXISTS (SELECT * FROM t WHERE t.Name = "test") の部分で判定に使用する列数、0が指定されたら全て使用する</param>
 		/// <returns>SELECT句</returns>
 		public Select<TColumnsOrder> SelectIfNotExists(Expression<Func<TColumns, TColumnsOrder>> columnsAssignExpression, int columnCountToWhere = 0) {
@@ -141,6 +168,9 @@ namespace CodeDb.Query {
 			if (columnCountToWhere <= 0) {
 				columnCountToWhere = properties.Length;
 			}
+			if (properties.Length < columnCountToWhere) {
+				columnCountToWhere = properties.Length;
+			}
 
 			// SELECT value1, value2... 部作成
 			var select = new Select<TColumnsOrder>(this, properties, args.ToArray());
@@ -157,7 +187,7 @@ namespace CodeDb.Query {
 			notExistsSelectFrom.Add(SqlKeyword.Where);
 			for (int i = 0; i < columnCountToWhere; i++) {
 				if (i != 0) {
-					notExistsSelectFrom.AddComma();
+					notExistsSelectFrom.Add(SqlKeyword.And);
 				}
 				var column = columnMap.TryGetByPropertyName(properties[i].Name);
 				if (column == null) {

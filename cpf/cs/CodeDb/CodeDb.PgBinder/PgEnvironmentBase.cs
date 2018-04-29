@@ -149,7 +149,33 @@ namespace CodeDb.PgBinder {
 					tableDelta.IndicesToDrop = indicesToDrop;
 					tableDelta.IndicesToAdd = indicesToAdd;
 
-					tablesToModify.Add(tableDelta);
+					// ユニーク制約毎の比較
+					var uniquesa = ta.GetUniques();
+					var uniquest = tt.GetUniques();
+					var uniquesToDrop = new List<IUniqueDef>(from a in uniquesa where !(from t in uniquest where a.Name == t.Name select t).Any() select a);
+					var uniquesToAdd = new List<IUniqueDef>();
+					foreach (var ut in uniquest) {
+						var uniqueName = ut.Name;
+						var ua = (from u in uniquesa where u.Name == uniqueName select u).FirstOrDefault();
+						if (ua == null) {
+							uniquesToAdd.Add(ut);
+						} else {
+							if (ua.Name != ut.Name || !EqualColumnDefs(ua.Columns, ut.Columns)) {
+								uniquesToDrop.Add(ua);
+								uniquesToAdd.Add(ut);
+							}
+						}
+					}
+					tableDelta.UniquesToDrop = uniquesToDrop;
+					tableDelta.UniquesToAdd = uniquesToAdd;
+
+
+					if (tableDelta.ColumnsToDrop.Any() || tableDelta.ColumnsToAdd.Any()
+						|| tableDelta.PrimaryKeyToDrop != null || tableDelta.PrimaryKeyToAdd != null
+						|| tableDelta.IndicesToDrop.Any() || tableDelta.IndicesToAdd.Any()
+						|| tableDelta.UniquesToDrop.Any() || tableDelta.UniquesToAdd.Any()) {
+						tablesToModify.Add(tableDelta);
+					}
 				}
 			}
 
@@ -207,6 +233,19 @@ namespace CodeDb.PgBinder {
 			context.Go();
 		}
 
+		static void Add(ElementCode context, string tableName, IUniqueDef unique) {
+			if (unique == null) {
+				return;
+			}
+			context.Add(SqlKeyword.AlterTable, SqlKeyword.IfExists);
+			context.Concat(tableName);
+			context.Add(SqlKeyword.AddConstraint);
+			context.Concat(unique.Name);
+			context.Add(SqlKeyword.Unique);
+			context.AddColumnDefs(unique.Columns);
+			context.Go();
+		}
+
 		static void Drop(ElementCode context, string tableName, IPrimaryKeyDef primaryKey) {
 			if (primaryKey == null) {
 				return;
@@ -222,10 +261,19 @@ namespace CodeDb.PgBinder {
 			if (index == null) {
 				return;
 			}
+			context.Add(SqlKeyword.DropIndex, SqlKeyword.IfExists);
+			context.Concat(index.Name);
+			context.Go();
+		}
+
+		static void Drop(ElementCode context, string tableName, IUniqueDef unique) {
+			if (unique == null) {
+				return;
+			}
 			context.Add(SqlKeyword.AlterTable, SqlKeyword.IfExists);
 			context.Concat(tableName);
 			context.Add(SqlKeyword.DropConstraint, SqlKeyword.IfExists);
-			context.Concat(index.Name);
+			context.Concat(unique.Name);
 			context.Go();
 		}
 
@@ -278,6 +326,11 @@ namespace CodeDb.PgBinder {
 				foreach (var index in table.GetIndices()) {
 					Add(context, tableName, index);
 				}
+
+				// ユニークキー
+				foreach (var unique in table.GetUniques()) {
+					Add(context, tableName, unique);
+				}
 			}
 
 			// 変化するテーブルに対応する
@@ -288,6 +341,9 @@ namespace CodeDb.PgBinder {
 				Drop(context, tableName, table.PrimaryKeyToDrop);
 				foreach (var index in table.IndicesToDrop) {
 					Drop(context, tableName, index);
+				}
+				foreach (var unique in table.UniquesToDrop) {
+					Drop(context, tableName, unique);
 				}
 
 				// 列を捨てる
@@ -306,6 +362,11 @@ namespace CodeDb.PgBinder {
 				// インデックス追加
 				foreach (var index in table.IndicesToAdd) {
 					Add(context, tableName, index);
+				}
+
+				// ユニークキー追加
+				foreach (var unique in table.UniquesToAdd) {
+					Add(context, tableName, unique);
 				}
 			}
 		}

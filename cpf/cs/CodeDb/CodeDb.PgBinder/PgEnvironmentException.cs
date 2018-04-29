@@ -16,6 +16,8 @@ namespace CodeDb.PgBinder {
 					return DbEnvironmentErrorType.DuplicateDatabase;
 				case "42710":
 					return DbEnvironmentErrorType.DuplicateObject;
+				case "23505":
+					return DbEnvironmentErrorType.DuplicateKey;
 				default:
 					return DbEnvironmentErrorType.Unknown;
 				}

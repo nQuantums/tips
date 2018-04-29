@@ -32,7 +32,7 @@ namespace MyJVNApiTest {
 				public string Keyword => As(() => C.Keyword);
 			}
 			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.KeywordID, () => _.Keyword);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, () => _.Keyword));
+			public override IEnumerable<IUniqueDef> GetUniques() => MakeUniques(MakeUnique(() => _.Keyword));
 		}
 		public static TbKeyword Keyword { get; } = new TbKeyword();
 
@@ -43,7 +43,7 @@ namespace MyJVNApiTest {
 				public string Url => As(() => C.Url);
 			}
 			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID, () => _.Url);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, () => _.Url));
+			public override IEnumerable<IUniqueDef> GetUniques() => MakeUniques(MakeUnique(() => _.Url));
 		}
 		public static TbUrl Url { get; } = new TbUrl();
 
@@ -63,14 +63,14 @@ namespace MyJVNApiTest {
 		[DllImport("User32.dll")]
 		private static extern short GetAsyncKeyState(int vKey);
 
-		static HashSet<string> AllUrls = new HashSet<string>();
-		static SemaphoreSlim Sem = new SemaphoreSlim(1, 1);
+		static SemaphoreSlim Sem = new SemaphoreSlim(10, 10);
 		const string RoleName = "my_jvn_api_test";
 		const string DbName = "my_jvn_api_test";
 		const string Password = "Passw0rd!";
 
 		static ICodeDbCommand Command;
-		static SqlProgram RegisterUrl;
+		static SqlProgram RegisterUrlProgram;
+		static Variable UrlToRegister;
 
 		static void Main(string[] args) {
 			var E = Db.E;
@@ -112,34 +112,22 @@ namespace MyJVNApiTest {
 				var cmd = con.CreateCommand();
 				cmd.Apply(context.Build());
 				cmd.ExecuteNonQuery();
-			}
 
-			// 挿入のテスト
-			{
-				var v = new Variable("http");
-				var ins = Sql.InsertInto(Db.Url, t => new { t.UrlID, t.Url });
-				ins.Select(() => new { UrlID = 1, Url = (string)v });
+				// 挿入のテスト
+				UrlToRegister = new Variable("http");
 
-				var context = new ElementCode();
-				ins.BuildSql(context);
-				var p = context.Build();
-				Console.WriteLine(p.CommandText);
+				var sql = new Sql(Db.E);
+				sql.InsertInto(Db.Url, t => new { Url = UrlToRegister });
+				RegisterUrlProgram = sql.Build();
+				Command = cmd;
+
+				CollectUrls("https://helpx.adobe.com/jp/security/products/acrobat/apsb18-02.html");
+				while (GetAsyncKeyState(0x0D) == 0) {
+					Thread.Sleep(1000);
+				}
+
+				Console.ReadKey();
 				return;
-			}
-
-
-
-			CollectUrls("https://helpx.adobe.com/jp/security/products/acrobat/apsb18-02.html");
-			while (GetAsyncKeyState(0x0D) == 0) {
-				lock (AllUrls) {
-					Console.WriteLine(AllUrls.Count);
-				}
-				Thread.Sleep(1000);
-			}
-			lock (AllUrls) {
-				foreach (var url in AllUrls) {
-					Console.WriteLine(url);
-				}
 			}
 		}
 
@@ -167,11 +155,16 @@ namespace MyJVNApiTest {
 								detectedUrl = root + value;
 							}
 							if (detectedUrl != null) {
-								lock (AllUrls) {
-									if (AllUrls.Contains(detectedUrl)) {
+								lock (Command) {
+									try {
+										UrlToRegister.Value = detectedUrl;
+										Command.Apply(RegisterUrlProgram);
+										Command.ExecuteNonQuery();
+									} catch (CodeDbEnvironmentException ex) {
+										if (ex.ErrorType != DbEnvironmentErrorType.DuplicateKey) {
+											throw;
+										}
 										detectedUrl = null;
-									} else {
-										AllUrls.Add(detectedUrl);
 									}
 								}
 								if (detectedUrl != null) {
@@ -207,9 +200,9 @@ namespace MyJVNApiTest {
 						url = root + value;
 					}
 					if (url != null) {
-						lock (AllUrls) {
-							AllUrls.Add(url);
-						}
+						//lock (AllUrls) {
+						//	AllUrls.Add(url);
+						//}
 					}
 				}
 			}

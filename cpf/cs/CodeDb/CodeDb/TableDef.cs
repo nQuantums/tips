@@ -34,56 +34,6 @@ namespace CodeDb {
 				return _AllColumnsBinder;
 			}
 		}
-
-		/// <summary>
-		/// プライマリキー定義を生成する、<see cref="GetPrimaryKey"/>内で呼び出す
-		/// </summary>
-		/// <param name="getters"><see cref="Columns"/>のプロパティを呼び出す処理を指定する</param>
-		/// <returns>プライマリキー定義</returns>
-		protected virtual IPrimaryKeyDef MakePrimaryKey(params Func<object>[] getters) {
-			Mediator.Table = this;
-			Mediator.TableName = this.Name;
-			try {
-				var colDefs = new IColumnDef[getters.Length];
-				for (int i = 0; i < getters.Length; i++) {
-					colDefs[i] = Mediator.GetFrom(getters[i]);
-				}
-				return new PrimaryKeyDef(colDefs);
-			} finally {
-				Mediator.Table = null;
-				Mediator.TableName = null;
-			}
-		}
-
-		/// <summary>
-		/// インデックス定義を生成する
-		/// </summary>
-		/// <param name="flags">インデックスに設定するフラグ</param>
-		/// <param name="getters"><see cref="Columns"/>のプロパティを呼び出す処理を指定する</param>
-		/// <returns>インデックス定義</returns>
-		protected virtual IIndexDef MakeIndex(IndexFlags flags, params Func<object>[] getters) {
-			Mediator.Table = this;
-			Mediator.TableName = this.Name;
-			try {
-				var colDefs = new IColumnDef[getters.Length];
-				for (int i = 0; i < getters.Length; i++) {
-					colDefs[i] = Mediator.GetFrom(getters[i]);
-				}
-				return new IndexDef(flags, colDefs);
-			} finally {
-				Mediator.Table = null;
-				Mediator.TableName = null;
-			}
-		}
-
-		/// <summary>
-		/// インデックス定義列を生成する、<see cref="GetIndices"/>内で呼び出す
-		/// </summary>
-		/// <param name="idxs">インデックス定義列</param>
-		/// <returns>インデックス定義列</returns>
-		protected static IIndexDef[] MakeIndices(params IIndexDef[] idxs) {
-			return idxs;
-		}
 		#endregion
 
 		#region プロパティ
@@ -177,6 +127,14 @@ namespace CodeDb {
 		}
 
 		/// <summary>
+		/// ユニーク制約定義を取得する、派生先クラスでオーバーライドする必要がある
+		/// </summary>
+		/// <returns>ユニーク制約定義列</returns>
+		public virtual IEnumerable<IUniqueDef> GetUniques() {
+			return new IUniqueDef[0];
+		}
+
+		/// <summary>
 		/// エイリアス用にクローンを作成する
 		/// </summary>
 		/// <returns>クローン</returns>
@@ -205,6 +163,86 @@ namespace CodeDb {
 		#endregion
 
 		#region 非公開メソッド
+
+		/// <summary>
+		/// プライマリキー定義を生成する、<see cref="GetPrimaryKey"/>内で呼び出す
+		/// </summary>
+		/// <param name="getters"><see cref="Columns"/>のプロパティを呼び出す処理を指定する</param>
+		/// <returns>プライマリキー定義</returns>
+		protected virtual IPrimaryKeyDef MakePrimaryKey(params Func<object>[] getters) {
+			Mediator.Table = this;
+			Mediator.TableName = this.Name;
+			try {
+				var colDefs = new IColumnDef[getters.Length];
+				for (int i = 0; i < getters.Length; i++) {
+					colDefs[i] = Mediator.GetFrom(getters[i]);
+				}
+				return new PrimaryKeyDef(colDefs);
+			} finally {
+				Mediator.Table = null;
+				Mediator.TableName = null;
+			}
+		}
+
+		/// <summary>
+		/// インデックス定義を生成する
+		/// </summary>
+		/// <param name="flags">インデックスに設定するフラグ</param>
+		/// <param name="getters"><see cref="Columns"/>のプロパティを呼び出す処理を指定する</param>
+		/// <returns>インデックス定義</returns>
+		protected virtual IIndexDef MakeIndex(IndexFlags flags, params Func<object>[] getters) {
+			Mediator.Table = this;
+			Mediator.TableName = this.Name;
+			try {
+				var colDefs = new IColumnDef[getters.Length];
+				for (int i = 0; i < getters.Length; i++) {
+					colDefs[i] = Mediator.GetFrom(getters[i]);
+				}
+				return new IndexDef(flags, colDefs);
+			} finally {
+				Mediator.Table = null;
+				Mediator.TableName = null;
+			}
+		}
+
+		/// <summary>
+		/// インデックス定義列を生成する、<see cref="GetIndices"/>内で呼び出す
+		/// </summary>
+		/// <param name="idxs">インデックス定義列</param>
+		/// <returns>インデックス定義列</returns>
+		protected virtual IIndexDef[] MakeIndices(params IIndexDef[] idxs) {
+			return idxs;
+		}
+
+		/// <summary>
+		/// ユニーク制約定義を生成する
+		/// </summary>
+		/// <param name="getters"><see cref="Columns"/>のプロパティを呼び出す処理を指定する</param>
+		/// <returns>インデックス定義</returns>
+		protected virtual IUniqueDef MakeUnique(params Func<object>[] getters) {
+			Mediator.Table = this;
+			Mediator.TableName = this.Name;
+			try {
+				var colDefs = new IColumnDef[getters.Length];
+				for (int i = 0; i < getters.Length; i++) {
+					colDefs[i] = Mediator.GetFrom(getters[i]);
+				}
+				return new UniqueDef(colDefs);
+			} finally {
+				Mediator.Table = null;
+				Mediator.TableName = null;
+			}
+		}
+
+		/// <summary>
+		/// ユニーク制約定義列を生成する、<see cref="GetUniques"/>内で呼び出す
+		/// </summary>
+		/// <param name="uniques">ユニーク定義列列</param>
+		/// <returns>ユニーク定義列</returns>
+		protected virtual IUniqueDef[] MakeUniques(params IUniqueDef[] uniques) {
+			return uniques;
+		}
+
 		ITable<TColumns> ITable<TColumns>.AliasedClone() => this.AliasedClone();
 		ITable ITable.AliasedClone() => this.AliasedClone();
 		#endregion

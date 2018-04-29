@@ -41,5 +41,15 @@ namespace CodeDb {
 		/// 新たに追加すべきインデックス定義の配列
 		/// </summary>
 		IEnumerable<IIndexDef> IndicesToAdd { get; }
+
+		/// <summary>
+		/// ドロップすべきユニーク制約定義の配列
+		/// </summary>
+		IEnumerable<IUniqueDef> UniquesToDrop { get; }
+
+		/// <summary>
+		/// 新たに追加すべきユニーク制約定義の配列
+		/// </summary>
+		IEnumerable<IUniqueDef> UniquesToAdd { get; }
 	}
 }

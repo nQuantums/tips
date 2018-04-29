@@ -10,7 +10,7 @@ namespace CodeDb {
 	/// SQL内変数、@variable などの変数に置き換わる
 	/// </summary>
 	public class Variable {
-		public readonly object Value;
+		public object Value { get; set; }
 
 		public Variable(object value) {
 			this.Value = value;

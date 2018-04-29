@@ -26,5 +26,6 @@ namespace CodeDb {
 		Unknown,
 		DuplicateDatabase,
 		DuplicateObject,
+		DuplicateKey,
 	}
 }

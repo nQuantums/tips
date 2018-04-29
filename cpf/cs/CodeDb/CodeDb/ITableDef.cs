@@ -28,5 +28,11 @@ namespace CodeDb {
 		/// </summary>
 		/// <returns>インデックス定義列</returns>
 		IEnumerable<IIndexDef> GetIndices();
+
+		/// <summary>
+		/// ユニーク制約定義を取得する、派生先クラスでオーバーライドする必要がある
+		/// </summary>
+		/// <returns>ユニーク制約定義列</returns>
+		IEnumerable<IUniqueDef> GetUniques();
 	}
 }

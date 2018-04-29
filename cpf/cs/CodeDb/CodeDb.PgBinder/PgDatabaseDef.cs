@@ -8,6 +8,24 @@ using Npgsql.PostgresTypes;
 
 namespace CodeDb.PgBinder {
 	public class PgDatabaseDef : IDatabaseDef {
+		class ConstraintInfo {
+			public string Name { get; set; }
+			public bool IsPrimaryKey { get; set; }
+			public bool IsUniqueKey { get; set; }
+			public short[] Combination { get; set; }
+			public string IndexType { get; set; }
+			public Dictionary<int, PgColumnDef> Columns { get; set; }
+
+			public ConstraintInfo(string name, bool isPrimaryKey, bool isUniqueKey, short[] combination, string indexType) {
+				this.Name = name;
+				this.IsPrimaryKey = isPrimaryKey;
+				this.IsUniqueKey = isUniqueKey;
+				this.Combination = combination;
+				this.IndexType = indexType;
+				this.Columns = new Dictionary<int, PgColumnDef>();
+			}
+		}
+
 		public string Name { get; private set; }
 		public IEnumerable<ITableDef> Tables { get; private set; }
 
@@ -71,12 +89,13 @@ ORDER BY
 						}
 					}
 
-					// プライマリキーとインデックスの取得
+					// プライマリキーとインデックス、ユニークキーの取得
 					cmd.CommandText = @"
 SELECT
 --	t.relname,
 	i.relname AS index_name,
 	ix.indisprimary AS is_primary_key,
+	ix.indisunique AS is_unique_key,
 	ix.indkey AS combination,
 	att.attname AS column_name,
 	att.attnum AS attnum,
@@ -91,37 +110,42 @@ WHERE
 	t.relname=@0 AND t.relkind='r';
 ";
 					foreach (var table in tables.Values) {
-						var indicesDic = new Dictionary<string, Tuple<bool, short[], string, Dictionary<int, PgColumnDef>>>();
+						var indicesDic = new Dictionary<string, ConstraintInfo>();
 						cmd.Parameters.Clear();
 						cmd.Parameters.AddWithValue("@0", table.Name);
 						using (var dr = cmd.ExecuteReader()) {
 							while (dr.Read()) {
 								var index_name = dr[0] as string;
 								var is_primary_key = (bool)dr[1];
-								var combination = dr[2] as short[];
-								var column_name = dr[3] as string;
-								var attnum = Convert.ToInt32(dr[4]);
-								var index_type = dr[5] as string;
+								var is_unique_key = (bool)dr[2];
+								var combination = dr[3] as short[];
+								var column_name = dr[4] as string;
+								var attnum = Convert.ToInt32(dr[5]);
+								var index_type = dr[6] as string;
 
-								Tuple<bool, short[], string, Dictionary<int, PgColumnDef>> info;
+								ConstraintInfo info;
 								if (!indicesDic.TryGetValue(index_name, out info)) {
-									indicesDic[index_name] = info = new Tuple<bool, short[], string, Dictionary<int, PgColumnDef>>(is_primary_key, combination, index_type, new Dictionary<int, PgColumnDef>());
+									indicesDic[index_name] = info = new ConstraintInfo(index_name, is_primary_key, is_unique_key, combination, index_type);
 								}
 								var column = (from c in table.ColumnDefs where c.Name == column_name select c).FirstOrDefault();
-								info.Item4[attnum] = column ?? throw new ApplicationException();
+								info.Columns[attnum] = column ?? throw new ApplicationException();
 							}
 						}
 						var indices = new List<Tuple<string, string, PgColumnDef[]>>();
+						var uniques = new List<Tuple<string, PgColumnDef[]>>();
 						foreach (var kvp in indicesDic) {
 							var info = kvp.Value;
-							var columns = (from i in info.Item2 select info.Item4[i]).ToArray();
-							if (info.Item1) {
+							var columns = (from i in info.Combination select info.Columns[i]).ToArray();
+							if (info.IsPrimaryKey) {
 								table.PrimaryKey = new PrimaryKeyDef(kvp.Key, columns);
+							} else if (info.IsUniqueKey) {
+								uniques.Add(new Tuple<string, PgColumnDef[]>(kvp.Key, columns));
 							} else {
-								indices.Add(new Tuple<string, string, PgColumnDef[]>(kvp.Key, info.Item3, columns));
+								indices.Add(new Tuple<string, string, PgColumnDef[]>(kvp.Key, info.IndexType, columns));
 							}
 						}
 						table.Indices = (from i in indices select new IndexDef(i.Item1, i.Item2 == "gin" ? IndexFlags.Gin : 0, i.Item3)).ToArray();
+						table.Uniques = (from u in uniques select new UniqueDef(u.Item1, u.Item2)).ToArray();
 					}
 
 					this.Tables = (from t in tables.Values select t).ToArray();

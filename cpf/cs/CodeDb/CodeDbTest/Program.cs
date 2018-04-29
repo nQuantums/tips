@@ -21,8 +21,6 @@ namespace CodeDbTest {
 		/// 列定義一覧
 		/// </summary>
 		public static class C {
-
-
 			public static int UserID => E.Int32("user_id");
 			public static string UserName => E.String("user_name");
 			public static int EntityID => E.Int32("entity_id");
@@ -54,6 +52,9 @@ namespace CodeDbTest {
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
 				MakeIndex(0, () => Columns.UserID),
 				MakeIndex(0, () => Columns.CreateDateTime)
+			);
+			public override IEnumerable<IUniqueDef> GetUniques() => MakeUniques(
+				MakeUnique(() => _.UserName)
 			);
 		}
 
@@ -206,14 +207,24 @@ namespace CodeDbTest {
 
 
 				var sql = new Sql(TestDb.E);
-				var v = new Variable(3);
-				sql.InsertIntoIfNotExists(TestDb.EntityConst, t => new { UserID = v });
-
-				var ec = new ElementCode();
-				sql.BuildSql(ec);
-				var p = ec.Build();
+				var id = new Variable(4);
+				var now = new Variable(DateTime.Now);
+				sql.InsertInto(TestDb.User, t => new { UserName = "afe" });
+				var p = sql.Build();
 				cmd.Apply(p);
-				cmd.ExecuteNonQuery();
+				try {
+					cmd.ExecuteNonQuery();
+				} catch (CodeDbEnvironmentException ex) {
+					if (ex.ErrorType != DbEnvironmentErrorType.DuplicateKey) {
+						throw;
+					}
+				}
+
+				//for (int i = 0; i < 1000; i++) {
+				//	id.Value = i;
+				//	cmd.Apply(p);
+				//	cmd.ExecuteNonQuery();
+				//}
 				Console.WriteLine(p.CommandText);
 			}
 		}

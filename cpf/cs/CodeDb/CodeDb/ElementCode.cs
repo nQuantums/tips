@@ -905,6 +905,8 @@ namespace CodeDb {
 				return "DROP TABLE";
 			case SqlKeyword.CreateIndex:
 				return "CREATE INDEX";
+			case SqlKeyword.DropIndex:
+				return "DROP INDEX";
 			case SqlKeyword.Exists:
 				return "EXISTS";
 			case SqlKeyword.NotExists:
@@ -977,6 +979,8 @@ namespace CodeDb {
 				return "CREATE DATABASE";
 			case SqlKeyword.Owner:
 				return "OWNER";
+			case SqlKeyword.Unique:
+				return "UNIQUE";
 			default:
 				return "";
 			}

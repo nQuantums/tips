@@ -73,14 +73,24 @@ namespace CodeDb {
 			return node;
 		}
 
-		public InsertInto<TColumns, TColumnsOrder> InsertInto<TColumns, TColumnsOrder>(TableDef<TColumns> table, Expression<Func<TColumns, TColumnsOrder>> columnsExpression) {
-			var node = new InsertInto<TColumns, TColumnsOrder>(this, table, columnsExpression);
+		/// <summary>
+		/// 値をテーブルへ挿入する
+		/// </summary>
+		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
+		/// <typeparam name="TColumnsOrder">列の順番を指定する匿名クラス</typeparam>
+		/// <param name="table">挿入先テーブル</param>
+		/// <param name="columnsAssignExpression">列への値代入を示す t => new { Name = "test", ID = 1 } の様な式、入力の t は列名参考用に使うのみ</param>
+		/// <param name="columnCountToWhere">NOT EXISTS (SELECT * FROM t WHERE t.Name = "test") の部分で判定に使用する列数、0が指定されたら全て使用する</param>
+		/// <returns>INSERT INTO句ノード</returns>
+		public InsertInto<TColumns, TColumnsOrder> InsertInto<TColumns, TColumnsOrder>(TableDef<TColumns> table, Expression<Func<TColumns, TColumnsOrder>> columnsAssignExpression) {
+			var node = new InsertInto<TColumns, TColumnsOrder>(this, table, columnsAssignExpression);
 			this.Children.Add(node);
+			node.Select(columnsAssignExpression);
 			return node;
 		}
 
 		/// <summary>
-		/// 同一の値が無い場合のみ挿入する
+		/// 同一の値が無い場合のみテーブルへ挿入する
 		/// </summary>
 		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 		/// <typeparam name="TColumnsOrder">列の順番を指定する匿名クラス</typeparam>
@@ -95,6 +105,30 @@ namespace CodeDb {
 			return node;
 		}
 
+		/// <summary>
+		/// SQL文を生成する
+		/// </summary>
+		/// <param name="context">生成先のコンテキスト</param>
+		public void BuildSql(ElementCode context) {
+			foreach (var node in this.Children) {
+				node.BuildSql(context);
+				context.Go();
+			}
+		}
+
+		/// <summary>
+		/// SQL文を生成する
+		/// </summary>
+		/// <returns>SQLプログラム</returns>
+		public SqlProgram Build() {
+			var context = new ElementCode();
+			foreach (var node in this.Children) {
+				node.BuildSql(context);
+				context.Go();
+			}
+			return context.Build();
+		}
+
 		public static bool Like(string text, string pattern) {
 			return default(bool);
 		}
@@ -105,13 +139,6 @@ namespace CodeDb {
 
 		public static bool NotExists(ISelect select) {
 			return default(bool);
-		}
-
-		public void BuildSql(ElementCode context) {
-			foreach (var node in this.Children) {
-				node.BuildSql(context);
-				context.Go();
-			}
 		}
 		#endregion
 	}

@@ -41,5 +41,15 @@ namespace CodeDb.PgBinder {
 		/// 新たに追加すべきインデックス定義の配列
 		/// </summary>
 		public IEnumerable<IIndexDef> IndicesToAdd { get; set; }
+
+		/// <summary>
+		/// ドロップすべきユニーク制約定義の配列
+		/// </summary>
+		public IEnumerable<IUniqueDef> UniquesToDrop { get; set; }
+
+		/// <summary>
+		/// 新たに追加すべきユニーク制約定義の配列
+		/// </summary>
+		public IEnumerable<IUniqueDef> UniquesToAdd { get; set; }
 	}
 }
