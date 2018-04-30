@@ -10,7 +10,7 @@ namespace CodeDb {
 	/// <summary>
 	/// クエリの土台
 	/// </summary>
-	public class Sql : IQueryNode {
+	public partial class Sql : IQueryNode {
 		#region プロパティ
 		/// <summary>
 		/// ノードが属するSQLオブジェクト
@@ -149,15 +149,6 @@ namespace CodeDb {
 				context.Go();
 			}
 			return context.Build();
-		}
-
-		/// <summary>
-		/// <see cref="ICodeDbCommand"/>に渡して実行可能な形式にビルドする、<see cref="FuncCmd{T}.Execute(ICodeDbCommand)"/>を呼び出す事で指定型のレコードを列挙可能
-		/// </summary>
-		/// <typeparam name="T">列挙するレコードの型</typeparam>
-		/// <returns>実行可能SQL</returns>
-		public FuncCmd<T> Build<T>() {
-			return new FuncCmd<T>(this.Build());
 		}
 
 

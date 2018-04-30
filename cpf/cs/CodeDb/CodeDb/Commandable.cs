@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Linq;
 
 namespace CodeDb {
@@ -29,6 +28,21 @@ namespace CodeDb {
 		}
 
 		/// <summary>
+		/// 指定された引数オブジェクトの<see cref="Parameters"/>内でのインデックスを取得する
+		/// </summary>
+		/// <param name="arg">引数オブジェクト</param>
+		/// <returns>見つかったらインデックスが返る</returns>
+		public int IndexOfArgument(Argument arg) {
+			var prms = this.Parameters;
+			for (int i = 0; i < prms.Length; i++) {
+				if (object.ReferenceEquals(prms[i].Value, arg)) {
+					return i;
+				}
+			}
+			throw new ApplicationException();
+		}
+
+		/// <summary>
 		/// 指定の<see cref="ICodeDbCommand"/>を使用してコマンドを実行する
 		/// </summary>
 		/// <param name="command">コマンド</param>
@@ -41,55 +55,5 @@ namespace CodeDb {
 		/// <param name="command">コマンド</param>
 		/// <returns>読み取り用オブジェクト</returns>
 		public ICodeDbDataReader ExecuteReader(ICodeDbCommand command) => command.ExecuteReader(this);
-	}
-
-	/// <summary>
-	/// SQLのコマンドに設定するテキストとパラメータ、指定型の値を列挙する機能も提供する
-	/// 指定型の値を列挙するコマンド
-	/// </summary>
-	/// <typeparam name="T">列挙する型</typeparam>
-	public class ActionCmd<T> {
-		/// <summary>
-		/// コマンドテキストとパラメータ
-		/// </summary>
-		public Commandable Commandable { get; private set; }
-
-		/// <summary>
-		/// コンストラクタ、実体となる<see cref="CodeDb.Commandable"/>を指定して初期化する
-		/// </summary>
-		/// <param name="core">実体</param>
-		public ActionCmd(Commandable core) => this.Commandable = core;
-
-		/// <summary>
-		/// 指定の<see cref="ICodeDbCommand"/>を使用してコマンドを実行しレコード読み取りオブジェクトを取得する
-		/// </summary>
-		/// <param name="command">コマンド</param>
-		/// <returns>影響を受けた行の数</returns>
-		public int Execute(ICodeDbCommand command) => this.Commandable.Execute(command);
-	}
-
-	/// <summary>
-	/// SQLのコマンドに設定するテキストとパラメータ、指定型の値を列挙する機能も提供する
-	/// 指定型の値を列挙するコマンド
-	/// </summary>
-	/// <typeparam name="TResult">列挙する型</typeparam>
-	public class FuncCmd<TResult> {
-		/// <summary>
-		/// コマンドテキストとパラメータ
-		/// </summary>
-		public Commandable Commandable { get; private set; }
-
-		/// <summary>
-		/// コンストラクタ、実体となる<see cref="CodeDb.Commandable"/>を指定して初期化する
-		/// </summary>
-		/// <param name="core">実体</param>
-		public FuncCmd(Commandable core) => this.Commandable = core;
-
-		/// <summary>
-		/// 指定の<see cref="ICodeDbCommand"/>を使用してコマンドを実行しレコード読み取りオブジェクトを取得する
-		/// </summary>
-		/// <param name="command">コマンド</param>
-		/// <returns>レコード読み取りオブジェクト</returns>
-		public RecordReader<TResult> Execute(ICodeDbCommand command) => new RecordReader<TResult>(this.Commandable.ExecuteReader(command));
 	}
 }

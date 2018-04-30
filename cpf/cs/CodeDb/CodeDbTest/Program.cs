@@ -222,21 +222,23 @@ namespace CodeDbTest {
 
 				{
 					var code = new ElementCode();
-					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
-					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
-					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
-					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
-					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
-					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
+					var arg1 = new Argument(0);
+					var arg2 = new Argument(0);
+					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now(),");
+					code.Add(arg1);
+					code.Go();
+					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now(),");
+					code.Add(arg2);
+					code.Go();
 					var s = TestDb.E.NewSql();
 					s.Code(code);
-					var commandable = s.Build<Tuple<Guid, DateTime>>();
-					using (var r = commandable.Execute(cmd)) {
+					var commandable = s.BuildFunc<int, int, Tuple<Guid, DateTime, int>>(arg1, arg2);
+					using (var reader = commandable.Execute(cmd, 16, 32)) {
 						do {
-							foreach (var record in r.Records) {
+							foreach (var record in reader.Records) {
 								Console.WriteLine(record);
 							}
-						} while (r.DataReader.NextResult());
+						} while (reader.DataReader.NextResult());
 					}
 				}
 			}

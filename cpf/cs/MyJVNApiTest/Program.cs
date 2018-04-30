@@ -92,13 +92,9 @@ namespace MyJVNApiTest {
 		const string Password = "Passw0rd!";
 
 		static ICodeDbCommand Command;
-		static FuncCmd<int> RegisterUrlCommand;
-		static Commandable RegisterContent;
-		static Commandable RegisterUrlLinkCommand;
-		static Argument UrlToRegister;
-		static Argument SrcUrlID;
-		static Argument ContentText;
-		static Argument DstUrlID;
+		static FuncCmd<string, int> RegisterUrlCommand;
+		static ActionCmd<int, string> RegisterContent;
+		static ActionCmd<int, int> RegisterUrlLinkCommand;
 
 		const string AddUrl = "add_url";
 
@@ -170,36 +166,34 @@ $$ LANGUAGE plpgsql;
 
 				// URL追加プログラム作成
 				{
-					UrlToRegister = new Argument("");
-
+					var url = new Argument("");
 					var code = new ElementCode();
 					code.Add(SqlKeyword.Select);
 					code.Concat(AddUrl);
 					code.BeginParenthesize();
-					code.Add(UrlToRegister);
+					code.Add(url);
 					code.EndParenthesize();
 					var s = Db.E.NewSql();
 					s.Code(code);
-					RegisterUrlCommand = s.Build<int>();
+					RegisterUrlCommand = s.BuildFunc<string, int>(url);
 				}
 
 				// 内容追加プログラム作成
 				{
-					SrcUrlID = new Argument(0);
-					ContentText = new Argument("");
-
+					var srcUrlID = new Argument(0);
+					var contentText = new Argument("");
 					var sql = Db.E.NewSql();
-					sql.InsertIntoIfNotExists(Db.Content, t => new { UrlID = SrcUrlID, Content = ContentText });
-					RegisterContent = sql.Build();
+					sql.InsertIntoIfNotExists(Db.Content, t => new { UrlID = srcUrlID, Content = contentText });
+					RegisterContent = sql.BuildAction<int, string>(srcUrlID, contentText);
 				}
 
 				// URLリンク追加プログラム作成
 				{
-					DstUrlID = new Argument("");
-
+					var srcUrlID = new Argument(0);
+					var dstUrlID = new Argument(0);
 					var sql = Db.E.NewSql();
-					sql.InsertIntoIfNotExists(Db.Link, t => new { UrlID = SrcUrlID, LinkUrlID = DstUrlID });
-					RegisterUrlLinkCommand = sql.Build();
+					sql.InsertIntoIfNotExists(Db.Link, t => new { UrlID = srcUrlID, LinkUrlID = dstUrlID });
+					RegisterUrlLinkCommand = sql.BuildAction<int, int>(srcUrlID, dstUrlID);
 				}
 
 				// 挿入のテスト
@@ -262,18 +256,14 @@ $$ LANGUAGE plpgsql;
 		static int RegisterUrl(int sourceUrlID, string sourceUrlContent, string url) {
 			int id = 0;
 			lock (Command) {
-				UrlToRegister.Value = url;
-				using (var reader = RegisterUrlCommand.Execute(Command)) {
+				using (var reader = RegisterUrlCommand.Execute(Command, url)) {
 					foreach (var urlID in reader.Records) {
 						id = urlID;
 					}
 				}
 				if (id != 0) {
-					SrcUrlID.Value = sourceUrlID;
-					ContentText.Value = sourceUrlContent;
-					RegisterContent.Execute(Command);
-					DstUrlID.Value = id;
-					RegisterUrlLinkCommand.Execute(Command);
+					RegisterContent.Execute(Command, sourceUrlID, sourceUrlContent);
+					RegisterUrlLinkCommand.Execute(Command, sourceUrlID, id);
 				}
 			}
 			return id;
