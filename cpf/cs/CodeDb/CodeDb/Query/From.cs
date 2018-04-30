@@ -194,7 +194,7 @@ namespace CodeDb.Query {
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
-		public void BuildSql(ElementCode context) {
+		public void ToElementCode(ElementCode context) {
 			if (this.Table != null) {
 				context.Add(SqlKeyword.From);
 				context.Add(this.Table);
@@ -202,24 +202,24 @@ namespace CodeDb.Query {
 
 			if (this.JoinNodes != null) {
 				foreach (var join in this.JoinNodes) {
-					join.BuildSql(context);
+					join.ToElementCode(context);
 				}
 			}
 
 			if (this.WhereNode != null) {
-				this.WhereNode.BuildSql(context);
+				this.WhereNode.ToElementCode(context);
 			}
 
 			if (this.GroupByNode != null) {
-				this.GroupByNode.BuildSql(context);
+				this.GroupByNode.ToElementCode(context);
 			}
 
 			if (this.OrderByNode != null) {
-				this.OrderByNode.BuildSql(context);
+				this.OrderByNode.ToElementCode(context);
 			}
 
 			if (this.LimitNode != null) {
-				this.LimitNode.BuildSql(context);
+				this.LimitNode.ToElementCode(context);
 			}
 		}
 		#endregion

@@ -131,9 +131,9 @@ namespace CodeDb {
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
-		public void BuildSql(ElementCode context) {
+		public void ToElementCode(ElementCode context) {
 			foreach (var node in this.Children) {
-				node.BuildSql(context);
+				node.ToElementCode(context);
 				context.Go();
 			}
 		}
@@ -145,7 +145,7 @@ namespace CodeDb {
 		public SqlProgram Build() {
 			var context = new ElementCode();
 			foreach (var node in this.Children) {
-				node.BuildSql(context);
+				node.ToElementCode(context);
 				context.Go();
 			}
 			return context.Build();

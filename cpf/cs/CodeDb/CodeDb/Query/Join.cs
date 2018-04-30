@@ -87,7 +87,7 @@ namespace CodeDb.Query {
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
-		public void BuildSql(ElementCode context) {
+		public void ToElementCode(ElementCode context) {
 			switch (this.JoinType) {
 			case JoinType.Inner:
 				context.Add(SqlKeyword.InnerJoin);

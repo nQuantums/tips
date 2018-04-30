@@ -207,7 +207,7 @@ namespace CodeDb.Query {
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
-		public void BuildSql(ElementCode context) {
+		public void ToElementCode(ElementCode context) {
 			var environment = this.Table.Environment;
 			context.Add(SqlKeyword.InsertInto);
 			context.Concat(this.Table.Name);
@@ -215,7 +215,7 @@ namespace CodeDb.Query {
 
 			var valueNode = this.ValueNode;
 			if (valueNode != null) {
-				valueNode.BuildSql(context);
+				valueNode.ToElementCode(context);
 				return;
 			}
 

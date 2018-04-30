@@ -587,7 +587,7 @@ namespace CodeDb {
 			_Core.Items.Add(value);
 			_Core.ItemCount++;
 		}
-		public void Add(ISqlBuildable value) {
+		public void Add(IElementizable value) {
 			_Core.Items.Add(value);
 			_Core.ItemCount++;
 		}
@@ -728,7 +728,7 @@ namespace CodeDb {
 				} else if ((table = item as ITable) != null) {
 					var context = new ElementCode();
 					context.Push();
-					table.BuildSql(context);
+					table.ToElementCode(context);
 					context.Pop();
 					context.Concat(work.GetTableAlias(table));
 					context.Build(work);

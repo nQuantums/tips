@@ -129,7 +129,7 @@ namespace CodeDb.Query {
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
-		public void BuildSql(ElementCode context) {
+		public void ToElementCode(ElementCode context) {
 			int i = 0;
 			context.Add(SqlKeyword.Select);
 			context.AddColumns(this.ColumnMap, column => {
@@ -138,7 +138,7 @@ namespace CodeDb.Query {
 				context.Concat("c" + (i++));
 			});
 
-			this.From.BuildSql(context);
+			this.From.ToElementCode(context);
 		}
 		#endregion
 

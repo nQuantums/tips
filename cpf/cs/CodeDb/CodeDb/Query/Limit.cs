@@ -47,7 +47,7 @@ namespace CodeDb.Query {
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
-		public void BuildSql(ElementCode context) {
+		public void ToElementCode(ElementCode context) {
 			context.Add(SqlKeyword.Limit);
 			context.Add(this.Value);
 		}

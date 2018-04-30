@@ -222,7 +222,7 @@ namespace CodeDb.Query {
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
-		public void BuildSql(ElementCode context) {
+		public void ToElementCode(ElementCode context) {
 			int i = 0;
 			context.Add(SqlKeyword.Select);
 			context.AddColumns(this.ColumnMap, column => {
@@ -232,7 +232,7 @@ namespace CodeDb.Query {
 			});
 
 			if (this.WhereNode != null) {
-				this.WhereNode.BuildSql(context);
+				this.WhereNode.ToElementCode(context);
 			}
 		}
 		#endregion
