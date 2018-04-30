@@ -21,7 +21,7 @@ namespace CodeDb.PgBinder {
 			_Connection = connection;
 		}
 
-		public void Apply(SqlProgram program) {
+		public void Apply(Commandable program) {
 			_Core.CommandText = program.CommandText;
 			var prms = _Core.Parameters;
 			prms.Clear();

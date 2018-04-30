@@ -4,7 +4,7 @@ using System.Text;
 
 namespace CodeDb {
 	/// <summary>
-	/// SQL文にコンパイル可能なオブジェクトに付与するインターフェース
+	/// ElementCode にコード化可能なオブジェクトに付与するインターフェース
 	/// </summary>
 	public interface IElementizable {
 		/// <summary>

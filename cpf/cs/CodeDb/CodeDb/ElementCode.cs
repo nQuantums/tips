@@ -506,102 +506,38 @@ namespace CodeDb {
 				}
 			}
 
-			// 記号系以外が連続してしまうならスペースを挟む
+			// 記号系以外が連続すると意味が変わってしまうためスペースを挟む
 			if (sb.Length != 0 && Symbols.IndexOf(sb[sb.Length - 1]) < 0 && Symbols.IndexOf(value[0]) < 0) {
 				sb.Append(' ');
 			}
 
 			// 連結
 			sb.Append(value);
+			_Core.ItemCount++;
 		}
 
-		public void Add(char value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(char[] value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(bool value) {
-			this.Concat(value.ToString());
-			_Core.ItemCount++;
-		}
-		public void Add(bool[] value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(int value) {
-			this.Concat(value.ToString());
-			_Core.ItemCount++;
-		}
-		public void Add(int[] value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(long value) {
-			this.Concat(value.ToString());
-			_Core.ItemCount++;
-		}
-		public void Add(long[] value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(double value) {
-			this.Concat(value.ToString());
-			_Core.ItemCount++;
-		}
-		public void Add(double[] value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(string value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(string[] value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(Guid value) {
-			this.Concat(string.Concat("'", value, "'"));
-			_Core.ItemCount++;
-		}
-		public void Add(Guid[] value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(DateTime value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(DateTime[] value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(Column value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(Variable value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(IElementizable value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(ITable value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(ElementCode value) {
-			_Core.Items.Add(value);
-			_Core.ItemCount++;
-		}
-		public void Add(Expression value, ColumnMap map) {
-			new Visitor(this, map).Visit(value);
-		}
+		public void Add(char value) => _Core.Items.Add(value);
+		public void Add(char[] value) => _Core.Items.Add(value);
+		public void Add(bool value) => this.Concat(value.ToString());
+		public void Add(bool[] value) => _Core.Items.Add(value);
+		public void Add(int value) => this.Concat(value.ToString());
+		public void Add(int[] value) => _Core.Items.Add(value);
+		public void Add(long value) => this.Concat(value.ToString());
+		public void Add(long[] value) => _Core.Items.Add(value);
+		public void Add(double value) => this.Concat(value.ToString());
+		public void Add(double[] value) => _Core.Items.Add(value);
+		public void Add(string value) => _Core.Items.Add(value);
+		public void Add(string[] value) => _Core.Items.Add(value);
+		public void Add(Guid value) => this.Concat(string.Concat("'", value, "'"));
+		public void Add(Guid[] value) => _Core.Items.Add(value);
+		public void Add(DateTime value) => _Core.Items.Add(value);
+		public void Add(DateTime[] value) => _Core.Items.Add(value);
+		public void Add(Column value) => _Core.Items.Add(value);
+		public void Add(Variable value) => _Core.Items.Add(value);
+		public void Add(IElementizable value) => _Core.Items.Add(value);
+		public void Add(ITable value) => _Core.Items.Add(value);
+		public void Add(ElementCode value) => _Core.Items.Add(value);
+		public void Add(Expression value, ColumnMap map) =>new Visitor(this, map).Visit(value);
 		public void Add(object value) {
 			if (!TypeWiseExecutor.Do(_TypeWise, value)) {
 				throw new ApplicationException($"The type '{value.GetType().FullName}' can not be included in an expression.");
@@ -613,25 +549,21 @@ namespace CodeDb {
 
 		public void Add(SqlKeyword keyword) {
 			this.Concat(KeywordToString(keyword));
-			_Core.ItemCount++;
 		}
 
 		public void Add(SqlKeyword keyword1, SqlKeyword keyword2) {
 			this.Concat(KeywordToString(keyword1));
 			this.Concat(KeywordToString(keyword2));
-			_Core.ItemCount += 2;
 		}
 
 		public void Add(SqlKeyword keyword1, SqlKeyword keyword2, SqlKeyword keyword3) {
 			this.Concat(KeywordToString(keyword1));
 			this.Concat(KeywordToString(keyword2));
 			this.Concat(KeywordToString(keyword3));
-			_Core.ItemCount += 3;
 		}
 
 		public void Add(ExpressionType nodeType) {
 			this.Concat(NodeTypeToString(nodeType));
-			_Core.ItemCount++;
 		}
 
 		public void AddColumnDefs(IEnumerable<IColumnDef> columns) {
@@ -686,31 +618,35 @@ namespace CodeDb {
 
 		public void AddComma() {
 			this.Concat(",");
-			_Core.ItemCount++;
 		}
 
 		public void BeginParenthesize() {
 			this.Concat("(");
-			_Core.ItemCount++;
 		}
 
 		public void EndParenthesize() {
 			this.Concat(")");
-			_Core.ItemCount++;
 		}
 
 		public void Go() {
 			this.Concat(";");
-			_Core.ItemCount++;
 		}
 
-		public SqlProgram Build() {
+		/// <summary>
+		/// <see cref="ICodeDbCommand"/>に渡して実行可能な形式にビルドする
+		/// </summary>
+		/// <returns>実行可能SQL</returns>
+		public Commandable Build() {
 			var work = new WorkingBuffer();
 			this.Build(work);
-			return new SqlProgram(work.Buffer.ToString(), work.Parameters);
+			return new Commandable(work.Buffer.ToString(), work.Parameters);
 		}
 
-		public void Build(WorkingBuffer work) {
+		/// <summary>
+		/// 再帰的に指定のバッファへ展開する
+		/// </summary>
+		/// <param name="work">展開先バッファ</param>
+		void Build(WorkingBuffer work) {
 			foreach (var item in this.Items) {
 				StringBuilder buffer;
 				ElementCode ec;
@@ -760,7 +696,6 @@ namespace CodeDb {
 				}
 			}
 		}
-
 
 		/// <summary>
 		/// 全<see cref="Column"/>を列挙する

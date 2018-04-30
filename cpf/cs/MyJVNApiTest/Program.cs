@@ -143,6 +143,21 @@ $$ LANGUAGE plpgsql;
 					cmd.ExecuteNonQuery();
 				}
 
+				// URL挿入プログラム作成
+				{
+					UrlToRegister = new Variable("http");
+
+					var code = new ElementCode();
+					code.Add(SqlKeyword.Select);
+					code.Concat(AddUrl);
+					code.BeginParenthesize();
+					code.Add(UrlToRegister);
+					code.EndParenthesize();
+					var s = Db.E.NewSql();
+					s.Code(code);
+					RegisterUrlProgram = s.Build();
+				}
+
 				// 挿入のテスト
 				UrlToRegister = new Variable("http");
 

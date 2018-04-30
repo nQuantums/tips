@@ -139,10 +139,10 @@ namespace CodeDb {
 		}
 
 		/// <summary>
-		/// SQL文を生成する
+		/// <see cref="ICodeDbCommand"/>に渡して実行可能な形式にビルドする
 		/// </summary>
-		/// <returns>SQLプログラム</returns>
-		public SqlProgram Build() {
+		/// <returns>実行可能SQL</returns>
+		public Commandable Build() {
 			var context = new ElementCode();
 			foreach (var node in this.Children) {
 				node.ToElementCode(context);
@@ -150,6 +150,16 @@ namespace CodeDb {
 			}
 			return context.Build();
 		}
+
+		/// <summary>
+		/// <see cref="ICodeDbCommand"/>に渡して実行可能な形式にビルドする、<see cref="Commandable{T}.Execute(ICodeDbCommand)"/>を呼び出す事で指定型のレコードを列挙可能
+		/// </summary>
+		/// <typeparam name="T">列挙するレコードの型</typeparam>
+		/// <returns>実行可能SQL</returns>
+		public Commandable<T> Build<T>() {
+			return new Commandable<T>(this.Build());
+		}
+
 
 		public static bool Like(string text, string pattern) {
 			return default(bool);

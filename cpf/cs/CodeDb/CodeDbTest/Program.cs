@@ -192,6 +192,8 @@ namespace CodeDbTest {
 
 			using (var con = E.CreateConnection($"User ID={RoleName};Password='Passw0rd!';Host=localhost;Port=5432;Database={DbName};")) {
 				con.Open();
+				var cmd = con.CreateCommand();
+				cmd.CommandTimeout = 0;
 
 				// データベースの状態を取得
 				var current = E.ReadDatabaseDef(con);
@@ -203,7 +205,6 @@ namespace CodeDbTest {
 				// 差分を適用する
 				var context = new ElementCode();
 				E.ApplyDatabaseDelta(context, delta);
-				var cmd = con.CreateCommand();
 				cmd.Apply(context.Build());
 				cmd.ExecuteNonQuery();
 
@@ -226,26 +227,21 @@ namespace CodeDbTest {
 					var code = new ElementCode();
 					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
 					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
+					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
+					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
+					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
+					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
 					var s = TestDb.E.NewSql();
 					s.Code(code);
-					cmd.Apply(s.Build());
-					using (var dr = cmd.ExecuteReader()) {
-						foreach (var value in dr.Enumerate<Tuple<Guid, DateTime>>()) {
-							Console.WriteLine(value);
-						}
-						dr.NextResult();
-						foreach (var value in dr.Enumerate<Tuple<Guid, DateTime>>()) {
-							Console.WriteLine(value);
-						}
+					var commandable = s.Build<Tuple<Guid, DateTime>>();
+					using (var r = commandable.Execute(cmd)) {
+						do {
+							foreach (var record in r.Records) {
+								Console.WriteLine(record);
+							}
+						} while (r.DataReader.NextResult());
 					}
 				}
-
-				//for (int i = 0; i < 1000; i++) {
-				//	id.Value = i;
-				//	cmd.Apply(p);
-				//	cmd.ExecuteNonQuery();
-				//}
-				Console.WriteLine(p.CommandText);
 			}
 		}
 	}

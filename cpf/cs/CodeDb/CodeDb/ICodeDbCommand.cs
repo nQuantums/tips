@@ -9,7 +9,7 @@ namespace CodeDb {
 		string CommandText { get; set; }
 		int CommandTimeout { get; set; }
 
-		void Apply(SqlProgram program);
+		void Apply(Commandable program);
 
 		void Cancel();
 		int ExecuteNonQuery();
