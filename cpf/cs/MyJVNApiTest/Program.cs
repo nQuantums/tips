@@ -22,7 +22,9 @@ namespace MyJVNApiTest {
 			public static int[] KeywordIDs => E.Int32Array("keyword_ids");
 			public static string Keyword => E.String("keyword");
 			public static int UrlID => E.Int32("url_id");
+			public static int LinkUrlID => E.Int32("link_url_id");
 			public static string Url => E.String("url");
+			public static string Content => E.String("content");
 		}
 
 		public class TbKeyword : TableDef<TbKeyword.Cols> {
@@ -47,6 +49,27 @@ namespace MyJVNApiTest {
 		}
 		public static TbUrl Url { get; } = new TbUrl();
 
+		public class TbContent : TableDef<TbContent.Cols> {
+			public TbContent() : base(E, "tb_content") { }
+			public class Cols : ColumnsBase {
+				public int UrlID => As(() => C.UrlID);
+				public string Content => As(() => C.Content);
+			}
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID);
+		}
+		public static TbContent Content { get; } = new TbContent();
+
+		public class TbLink : TableDef<TbLink.Cols> {
+			public TbLink() : base(E, "tb_link") { }
+			public class Cols : ColumnsBase {
+				public int UrlID => As(() => C.UrlID);
+				public int LinkUrlID => As(() => C.LinkUrlID);
+			}
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID, () => _.LinkUrlID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, () => _.LinkUrlID));
+		}
+		public static TbLink Link { get; } = new TbLink();
+
 		public class TbUrlKeyword : TableDef<TbUrlKeyword.Cols> {
 			public TbUrlKeyword() : base(E, "tb_url_keyword") { }
 			public class Cols : ColumnsBase {
@@ -69,8 +92,13 @@ namespace MyJVNApiTest {
 		const string Password = "Passw0rd!";
 
 		static ICodeDbCommand Command;
-		static SqlProgram RegisterUrlProgram;
+		static Commandable<int> RegisterUrlCommand;
+		static Commandable RegisterContent;
+		static Commandable RegisterUrlLinkCommand;
 		static Variable UrlToRegister;
+		static Variable SrcUrlID;
+		static Variable ContentText;
+		static Variable DstUrlID;
 
 		const string AddUrl = "add_url";
 
@@ -143,9 +171,9 @@ $$ LANGUAGE plpgsql;
 					cmd.ExecuteNonQuery();
 				}
 
-				// URL挿入プログラム作成
+				// URL追加プログラム作成
 				{
-					UrlToRegister = new Variable("http");
+					UrlToRegister = new Variable("");
 
 					var code = new ElementCode();
 					code.Add(SqlKeyword.Select);
@@ -155,18 +183,34 @@ $$ LANGUAGE plpgsql;
 					code.EndParenthesize();
 					var s = Db.E.NewSql();
 					s.Code(code);
-					RegisterUrlProgram = s.Build();
+					RegisterUrlCommand = s.Build<int>();
+				}
+
+				// 内容追加プログラム作成
+				{
+					SrcUrlID = new Variable(0);
+					ContentText = new Variable("");
+
+					var sql = Db.E.NewSql();
+					sql.InsertIntoIfNotExists(Db.Content, t => new { UrlID = SrcUrlID, Content = ContentText });
+					RegisterContent = sql.Build();
+				}
+
+				// URLリンク追加プログラム作成
+				{
+					DstUrlID = new Variable("");
+
+					var sql = Db.E.NewSql();
+					sql.InsertIntoIfNotExists(Db.Link, t => new { UrlID = SrcUrlID, LinkUrlID = DstUrlID });
+					RegisterUrlLinkCommand = sql.Build();
 				}
 
 				// 挿入のテスト
-				UrlToRegister = new Variable("http");
-
-				var sql = new Sql(Db.E);
-				sql.InsertInto(Db.Url, t => new { Url = UrlToRegister });
-				RegisterUrlProgram = sql.Build();
 				Command = cmd;
 
-				CollectUrls("https://helpx.adobe.com/jp/security/products/acrobat/apsb18-02.html");
+				var urlID = RegisterUrl(0, "", "https://helpx.adobe.com/jp/security/products/acrobat/apsb18-02.html");
+
+				CollectUrls(urlID, "https://helpx.adobe.com/jp/security/products/acrobat/apsb18-02.html");
 				while (GetAsyncKeyState(0x0D) == 0) {
 					Thread.Sleep(1000);
 				}
@@ -179,8 +223,9 @@ $$ LANGUAGE plpgsql;
 		/// <summary>
 		/// 指定URLページ内からのリンクを収集する
 		/// </summary>
+		/// <param name="urlID">指定URLのID</param>
 		/// <param name="url">ホームページのURL</param>
-		static async void CollectUrls(string url) {
+		static async void CollectUrls(int urlID, string url) {
 			await Sem.WaitAsync();
 			try {
 				var uri = new Uri(url);
@@ -204,20 +249,9 @@ $$ LANGUAGE plpgsql;
 								detectedUrl = root + value;
 							}
 							if (detectedUrl != null) {
-								lock (Command) {
-									try {
-										UrlToRegister.Value = detectedUrl;
-										Command.Apply(RegisterUrlProgram);
-										Command.ExecuteNonQuery();
-									} catch (CodeDbEnvironmentException ex) {
-										if (ex.ErrorType != DbEnvironmentErrorType.DuplicateKey) {
-											throw;
-										}
-										detectedUrl = null;
-									}
-								}
-								if (detectedUrl != null) {
-									CollectUrls(detectedUrl);
+								var newUrlID = RegisterUrl(urlID, xmlstr, detectedUrl);
+								if(newUrlID != 0) {
+									CollectUrls(newUrlID, detectedUrl);
 								}
 							}
 						}
@@ -226,6 +260,26 @@ $$ LANGUAGE plpgsql;
 			} finally {
 				Sem.Release();
 			}
+		}
+
+		static int RegisterUrl(int sourceUrlID, string sourceUrlContent, string url) {
+			int id = 0;
+			lock (Command) {
+				UrlToRegister.Value = url;
+				using (var reader = RegisterUrlCommand.Execute(Command)) {
+					foreach (var urlID in reader.Records) {
+						id = urlID;
+					}
+				}
+				if (id != 0) {
+					SrcUrlID.Value = sourceUrlID;
+					ContentText.Value = sourceUrlContent;
+					RegisterContent.Execute(Command);
+					DstUrlID.Value = id;
+					RegisterUrlLinkCommand.Execute(Command);
+				}
+			}
+			return id;
 		}
 
 		static async void GetData() {

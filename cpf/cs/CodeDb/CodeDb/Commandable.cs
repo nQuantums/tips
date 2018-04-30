@@ -38,6 +38,15 @@ namespace CodeDb {
 			this.CommandText = commandText;
 			this.Parameters = parameters;
 		}
+
+		/// <summary>
+		/// 指定の<see cref="ICodeDbCommand"/>を使用してコマンドを実行する
+		/// </summary>
+		/// <param name="command">コマンド</param>
+		public void Execute(ICodeDbCommand command) {
+			command.Apply(this);
+			command.ExecuteNonQuery();
+		}
 	}
 
 	/// <summary>
