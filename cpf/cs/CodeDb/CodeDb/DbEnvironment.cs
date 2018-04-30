@@ -83,7 +83,7 @@ namespace CodeDb {
 		public abstract void ApplyDatabaseDelta(ElementCode context, IDatabaseDelta databaseDelta);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -91,7 +91,7 @@ namespace CodeDb {
 		public abstract bool Bool(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -99,7 +99,7 @@ namespace CodeDb {
 		public abstract bool[] BoolArray(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -107,7 +107,7 @@ namespace CodeDb {
 		public abstract bool? BoolNull(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -115,7 +115,7 @@ namespace CodeDb {
 		public abstract char Char(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -123,7 +123,7 @@ namespace CodeDb {
 		public abstract char[] CharArray(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -131,7 +131,7 @@ namespace CodeDb {
 		public abstract char? CharNull(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -139,7 +139,7 @@ namespace CodeDb {
 		public abstract int Int32(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -147,7 +147,7 @@ namespace CodeDb {
 		public abstract int[] Int32Array(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -155,7 +155,7 @@ namespace CodeDb {
 		public abstract int? Int32Null(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -163,7 +163,7 @@ namespace CodeDb {
 		public abstract long Int64(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -171,7 +171,7 @@ namespace CodeDb {
 		public abstract long[] Int64Array(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -179,7 +179,7 @@ namespace CodeDb {
 		public abstract long? Int64Null(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -187,7 +187,7 @@ namespace CodeDb {
 		public abstract double Real64(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -195,7 +195,7 @@ namespace CodeDb {
 		public abstract double[] Real64Array(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -203,7 +203,7 @@ namespace CodeDb {
 		public abstract double? Real64Null(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -211,7 +211,7 @@ namespace CodeDb {
 		public abstract string String(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -219,7 +219,7 @@ namespace CodeDb {
 		public abstract string[] StringArray(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -227,7 +227,7 @@ namespace CodeDb {
 		public abstract Guid Uuid(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -235,7 +235,7 @@ namespace CodeDb {
 		public abstract Guid[] UuidArray(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -243,7 +243,7 @@ namespace CodeDb {
 		public abstract Guid? UuidNull(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -251,7 +251,7 @@ namespace CodeDb {
 		public abstract DateTime DateTime(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -259,7 +259,7 @@ namespace CodeDb {
 		public abstract DateTime[] DateTimeArray(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>

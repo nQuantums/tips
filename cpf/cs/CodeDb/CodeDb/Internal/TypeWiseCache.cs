@@ -16,7 +16,7 @@ namespace CodeDb.Internal {
 		static Action<ElementCode, T> _AddValues;
 
 		/// <summary>
-		/// <see cref="T"/>型のオブジェクトを生成するファンクション、デフォルトコンストラクタがあればそれを優先し無ければメンバを引数として渡すものを探しデフォルト値を渡す
+		/// <c>T</c>型のオブジェクトを生成するファンクション、デフォルトコンストラクタがあればそれを優先し無ければメンバを引数として渡すものを探しデフォルト値を渡す
 		/// </summary>
 		public static Func<T> Creator {
 			get {
@@ -46,7 +46,7 @@ namespace CodeDb.Internal {
 		}
 
 		/// <summary>
-		/// <see cref="T"/>型のクローンを生成するファンクション、メンバーを渡すコンストラクタがあればそれを優先し無ければデフォルトコンストラクタ呼び出し後にメンバにアサインする
+		/// <c>T</c>型のクローンを生成するファンクション、メンバーを渡すコンストラクタがあればそれを優先し無ければデフォルトコンストラクタ呼び出し後にメンバにアサインする
 		/// </summary>
 		public static Func<T, T> Cloner {
 			get {
@@ -84,7 +84,7 @@ namespace CodeDb.Internal {
 		}
 
 		/// <summary>
-		/// <see cref="ICodeDbDataReader"/>から<see cref="T"/>を列挙するファンクション
+		/// <see cref="ICodeDbDataReader"/>から<c>T</c>を列挙するファンクション
 		/// </summary>
 		public static Func<ICodeDbDataReader, IEnumerable<T>> Reader {
 			get {

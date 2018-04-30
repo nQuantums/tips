@@ -35,7 +35,7 @@ for (int n = 0; n <= 10; n++) {
 
 <#	if (n != 0) {#>
 		/// <summary>
-		/// 引数を<see cref="Parameter[]"/>に設定する
+		/// 引数を<see cref="Parameter"/>の配列に設定する
 		/// </summary>
 		public Action<Parameter[], <#=tparams#>> ArgSetter { get; private set; }
 

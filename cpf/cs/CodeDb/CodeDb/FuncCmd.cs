@@ -44,7 +44,7 @@ namespace CodeDb {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// 引数を<see cref="Parameter[]"/>に設定する
+		/// 引数を<see cref="Parameter"/>の配列に設定する
 		/// </summary>
 		public Action<Parameter[], T1> ArgSetter { get; private set; }
 
@@ -83,7 +83,7 @@ namespace CodeDb {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// 引数を<see cref="Parameter[]"/>に設定する
+		/// 引数を<see cref="Parameter"/>の配列に設定する
 		/// </summary>
 		public Action<Parameter[], T1, T2> ArgSetter { get; private set; }
 
@@ -124,7 +124,7 @@ namespace CodeDb {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// 引数を<see cref="Parameter[]"/>に設定する
+		/// 引数を<see cref="Parameter"/>の配列に設定する
 		/// </summary>
 		public Action<Parameter[], T1, T2, T3> ArgSetter { get; private set; }
 
@@ -167,7 +167,7 @@ namespace CodeDb {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// 引数を<see cref="Parameter[]"/>に設定する
+		/// 引数を<see cref="Parameter"/>の配列に設定する
 		/// </summary>
 		public Action<Parameter[], T1, T2, T3, T4> ArgSetter { get; private set; }
 
@@ -212,7 +212,7 @@ namespace CodeDb {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// 引数を<see cref="Parameter[]"/>に設定する
+		/// 引数を<see cref="Parameter"/>の配列に設定する
 		/// </summary>
 		public Action<Parameter[], T1, T2, T3, T4, T5> ArgSetter { get; private set; }
 
@@ -259,7 +259,7 @@ namespace CodeDb {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// 引数を<see cref="Parameter[]"/>に設定する
+		/// 引数を<see cref="Parameter"/>の配列に設定する
 		/// </summary>
 		public Action<Parameter[], T1, T2, T3, T4, T5, T6> ArgSetter { get; private set; }
 
@@ -308,7 +308,7 @@ namespace CodeDb {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// 引数を<see cref="Parameter[]"/>に設定する
+		/// 引数を<see cref="Parameter"/>の配列に設定する
 		/// </summary>
 		public Action<Parameter[], T1, T2, T3, T4, T5, T6, T7> ArgSetter { get; private set; }
 
@@ -359,7 +359,7 @@ namespace CodeDb {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// 引数を<see cref="Parameter[]"/>に設定する
+		/// 引数を<see cref="Parameter"/>の配列に設定する
 		/// </summary>
 		public Action<Parameter[], T1, T2, T3, T4, T5, T6, T7, T8> ArgSetter { get; private set; }
 
@@ -412,7 +412,7 @@ namespace CodeDb {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// 引数を<see cref="Parameter[]"/>に設定する
+		/// 引数を<see cref="Parameter"/>の配列に設定する
 		/// </summary>
 		public Action<Parameter[], T1, T2, T3, T4, T5, T6, T7, T8, T9> ArgSetter { get; private set; }
 
@@ -467,7 +467,7 @@ namespace CodeDb {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// 引数を<see cref="Parameter[]"/>に設定する
+		/// 引数を<see cref="Parameter"/>の配列に設定する
 		/// </summary>
 		public Action<Parameter[], T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> ArgSetter { get; private set; }
 

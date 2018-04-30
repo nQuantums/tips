@@ -15,7 +15,7 @@ namespace CodeDb.Query {
 	/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 	public interface ISelect<TColumns> : ISelect, ITable<TColumns> {
 		/// <summary>
-		/// <see cref="ICodeDbDataReader"/>から<see cref="TColumns"/>を列挙するファンクション
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TColumns"/>を列挙するファンクション
 		/// </summary>
 		Func<ICodeDbDataReader, IEnumerable<TColumns>> Reader { get; }
 	}

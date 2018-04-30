@@ -54,7 +54,7 @@ namespace CodeDb.Query {
 		public ColumnMap ColumnMap { get; private set; }
 
 		/// <summary>
-		/// <see cref="ICodeDbDataReader"/>から<see cref="TColumns"/>を列挙するファンクション
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TColumns"/>を列挙するファンクション
 		/// </summary>
 		public Func<ICodeDbDataReader, IEnumerable<TColumns>> Reader => TypeWiseCache<TColumns>.Reader;
 		#endregion
@@ -64,7 +64,7 @@ namespace CodeDb.Query {
 		/// コンストラクタ、親ノードと列指定式を指定して初期化する
 		/// </summary>
 		/// <param name="parent">親ノード</param>
-		/// <param name="from">生成元の<see cref="IFrom"/></param>
+		/// <param name="columnsExpression">生成元の式</param>
 		public SelectFrom(IFrom parent, Expression<Func<TColumns>> columnsExpression) {
 			this.Parent = parent;
 			this.From = parent;

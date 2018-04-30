@@ -109,7 +109,6 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 列選択部を生成する
 		/// </summary>
-		/// <typeparam name="TColumns1">列をプロパティとして持つクラス</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { t1.A, t1.B } の様な式</param>
 		/// <returns>SELECT句</returns>
 		public Select<TColumnsOrder> Select(Expression<Func<TColumnsOrder>> columnsExpression) {

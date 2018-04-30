@@ -114,28 +114,28 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 内部結合の<see cref="Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="ITable{TColumns}.Columnsの型"/></typeparam>
+		/// <typeparam name="TColumns1">結合するテーブルの<see cref="CodeDb.ITable{TColumns}.Columns"/></typeparam>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
-		/// <returns>内部結合の<see cref="Join{TColumns}</returns>
+		/// <returns>内部結合の<see cref="Join{TColumns}"></see></returns>
 		public IJoin<TColumns1> InnerJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Inner, table, on);
 
 		/// <summary>
 		/// 左外部結合の<see cref="Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="ITable{TColumns}.Columnsの型"/></typeparam>
+		/// <typeparam name="TColumns1">結合するテーブルの<see cref="CodeDb.ITable{TColumns}.Columns"/></typeparam>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
-		/// <returns>左外部結合の<see cref="Join{TColumns}</returns>
+		/// <returns>左外部結合の<see cref="Join{TColumns}"/></returns>
 		public IJoin<TColumns1> LeftJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Left, table, on);
 
 		/// <summary>
 		/// 右外部結合の<see cref="Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="ITable{TColumns}.Columnsの型"/></typeparam>
+		/// <typeparam name="TColumns1">結合するテーブルの<see cref="CodeDb.ITable{TColumns}.Columns"/></typeparam>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
-		/// <returns>右外部結合の<see cref="Join{TColumns}</returns>
+		/// <returns>右外部結合の<see cref="Join{TColumns}"/></returns>
 		public IJoin<TColumns1> RightJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Right, table, on);
 
 		/// <summary>
@@ -228,11 +228,11 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 指定された結合種類の<see cref="Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="ITable{TColumns}.Columnsの型"/></typeparam>
+		/// <typeparam name="TColumns1">結合するテーブルの<see cref="ITable{TColumns}.Columns"/></typeparam>
 		/// <param name="joinType">結合種類</param>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
-		/// <returns><see cref="Join{TColumns}</returns>
+		/// <returns><see cref="Join{TColumns}"/></returns>
 		IJoin<TColumns1> JoinByType<TColumns1>(JoinType joinType, ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) {
 			if (this.JoinNodes == null) {
 				this.JoinNodes = new List<IJoin>();

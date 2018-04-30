@@ -16,7 +16,7 @@ namespace CodeDb {
 		static Action<TColumns> _AllColumnsBinder;
 
 		/// <summary>
-		/// <see cref="TColumns"/>の全プロパティを取得することで<see cref="ITable.BindColumn"/>を呼び出し<see cref="Column"/>を結びつけるアクション
+		/// <typeparamref name="TColumns"/>の全プロパティを取得することで<see cref="ITable.BindColumn"/>を呼び出し<see cref="Column"/>を結びつけるアクション
 		/// </summary>
 		protected static Action<TColumns> AllColumnsBinder {
 			get {

@@ -55,7 +55,7 @@ namespace CodeDb.Query {
 		public ColumnMap ColumnMap { get; private set; }
 
 		/// <summary>
-		/// <see cref="ICodeDbDataReader"/>から<see cref="TColumns"/>を列挙するファンクション
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TColumns"/>を列挙するファンクション
 		/// </summary>
 		public Func<ICodeDbDataReader, IEnumerable<TColumns>> Reader => TypeWiseCache<TColumns>.Reader;
 		#endregion

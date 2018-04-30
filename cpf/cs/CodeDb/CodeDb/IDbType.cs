@@ -15,7 +15,7 @@ namespace CodeDb {
 		/// <summary>
 		/// DB内の型を示す文字列を取得する
 		/// </summary>
-		/// <param name="asSerial">自動インクリメントを示す型を取得するなら true を指定する</param>
+		/// <param name="flags">オプションフラグ</param>
 		/// <returns>DB内型名</returns>
 		string ToDbTypeString(DbTypeStringFlags flags = 0);
 

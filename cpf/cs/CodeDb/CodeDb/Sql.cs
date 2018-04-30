@@ -102,7 +102,6 @@ namespace CodeDb {
 		/// <typeparam name="TColumnsOrder">列の順番を指定する匿名クラス</typeparam>
 		/// <param name="table">挿入先テーブル</param>
 		/// <param name="columnsAssignExpression">列への値代入を示す t => new { Name = "test", ID = 1 } の様な式、入力の t は列名参考用に使うのみ</param>
-		/// <param name="columnCountToWhere">NOT EXISTS (SELECT * FROM t WHERE t.Name = "test") の部分で判定に使用する列数、0が指定されたら全て使用する</param>
 		/// <returns>INSERT INTO句ノード</returns>
 		public InsertInto<TColumns, TColumnsOrder> InsertInto<TColumns, TColumnsOrder>(TableDef<TColumns> table, Expression<Func<TColumns, TColumnsOrder>> columnsAssignExpression) {
 			var node = new InsertInto<TColumns, TColumnsOrder>(this, table, columnsAssignExpression);

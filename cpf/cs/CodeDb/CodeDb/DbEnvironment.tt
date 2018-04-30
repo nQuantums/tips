@@ -112,7 +112,7 @@ foreach(var typeAndName in types) {
 #>
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -120,7 +120,7 @@ foreach(var typeAndName in types) {
 		public abstract <#=type#> <#=name#>(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -130,7 +130,7 @@ foreach(var typeAndName in types) {
 #>
 
 		/// <summary>
-		/// 列を定義する、<see cref="Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>

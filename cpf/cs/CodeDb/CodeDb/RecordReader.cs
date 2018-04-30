@@ -5,7 +5,7 @@ using System.Text;
 
 namespace CodeDb {
 	/// <summary>
-	/// <see cref="T"/>型の値を列挙する機能を提供
+	/// <typeparamref name="T"/>型の値を列挙する機能を提供
 	/// </summary>
 	/// <typeparam name="T">列挙される型</typeparam>
 	public class RecordReader<T> : IDisposable {
@@ -20,9 +20,9 @@ namespace CodeDb {
 		public IEnumerable<T> Records => this.DataReader.Enumerate<T>();
 
 		/// <summary>
-		/// コンストラクタ、<see cref="ICodeDbCommand.ExecuteReader"/>の戻り値を指定して初期化する
+		/// コンストラクタ、<see cref="ICodeDbCommand.ExecuteReader(Commandable)"/>の戻り値を指定して初期化する
 		/// </summary>
-		/// <param name="dataReader"><see cref="ICodeDbCommand.ExecuteReader"/>の戻り値</param>
+		/// <param name="dataReader"><see cref="ICodeDbCommand.ExecuteReader(Commandable)"/>の戻り値</param>
 		public RecordReader(ICodeDbDataReader dataReader) {
 			this.DataReader = dataReader;
 		}

@@ -448,7 +448,7 @@ namespace CodeDb {
 		/// </summary>
 		/// <param name="lambdaExpression">式木</param>
 		/// <param name="allAvailableColumns">使用可能な全ての列のプロパティマップ</param>
-		/// <param name="param0"><see cref="lambdaExpression"/>のパラメータ０がこれに置き換わる</param>
+		/// <param name="param0"><c>lambdaExpression</c>引数のパラメータ0がこれに置き換わる</param>
 		public ElementCode(LambdaExpression lambdaExpression, ColumnMap allAvailableColumns, object param0) {
 			_Core = new Core();
 			_CoreStack = new Stack<Core>();

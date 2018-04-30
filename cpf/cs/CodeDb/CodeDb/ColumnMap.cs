@@ -43,7 +43,7 @@ namespace CodeDb {
 		/// <summary>
 		/// 指定された名前のプロパティから対応する列定義を取得する
 		/// </summary>
-		/// <param name="name">プロパティ名</param>
+		/// <param name="propertyName">プロパティ名</param>
 		/// <returns>列定義</returns>
 		public Column TryGetByPropertyName(string propertyName) {
 			for (int i = 0, n = this.Count; i < n; i++) {
