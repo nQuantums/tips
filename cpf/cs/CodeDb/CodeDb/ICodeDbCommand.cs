@@ -9,10 +9,10 @@ namespace CodeDb {
 		string CommandText { get; set; }
 		int CommandTimeout { get; set; }
 
-		void Apply(Commandable program);
-
 		void Cancel();
 		int ExecuteNonQuery();
+		int ExecuteNonQuery(Commandable program);
 		ICodeDbDataReader ExecuteReader();
+		ICodeDbDataReader ExecuteReader(Commandable program);
 	}
 }

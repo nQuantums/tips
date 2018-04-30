@@ -205,18 +205,15 @@ namespace CodeDbTest {
 				// 差分を適用する
 				var context = new ElementCode();
 				E.ApplyDatabaseDelta(context, delta);
-				cmd.Apply(context.Build());
-				cmd.ExecuteNonQuery();
-
+				context.Build().Execute(cmd);
 
 				var sql = new Sql(TestDb.E);
 				var id = new Variable(4);
 				var now = new Variable(DateTime.Now);
 				sql.InsertInto(TestDb.User, t => new { UserName = "afe" });
 				var p = sql.Build();
-				cmd.Apply(p);
 				try {
-					cmd.ExecuteNonQuery();
+					p.Execute(cmd);
 				} catch (CodeDbEnvironmentException ex) {
 					if (ex.ErrorType != DbEnvironmentErrorType.DuplicateKey) {
 						throw;

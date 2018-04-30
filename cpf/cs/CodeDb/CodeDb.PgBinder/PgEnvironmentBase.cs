@@ -65,8 +65,7 @@ namespace CodeDb.PgBinder {
 				context.Concat(string.Concat("'", password, "'"));
 				context.Concat("LOGIN");
 				context.Go();
-				cmd.Apply(context.Build());
-				cmd.ExecuteNonQuery();
+				context.Build().Execute(cmd);
 			}
 		}
 
@@ -78,8 +77,7 @@ namespace CodeDb.PgBinder {
 				context.Add(SqlKeyword.Owner);
 				context.Concat(Quote(owner));
 				context.Go();
-				cmd.Apply(context.Build());
-				cmd.ExecuteNonQuery();
+				context.Build().Execute(cmd);
 			}
 		}
 

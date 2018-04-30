@@ -21,19 +21,6 @@ namespace CodeDb.PgBinder {
 			_Connection = connection;
 		}
 
-		public void Apply(Commandable program) {
-			_Core.CommandText = program.CommandText;
-			var prms = _Core.Parameters;
-			prms.Clear();
-			foreach (var p in program.ParameterNameAndValues) {
-				var variable = p.Value as Variable;
-				if (variable is null) {
-					prms.AddWithValue(p.Name, p.Value);
-				} else {
-					prms.AddWithValue(p.Name, variable.Value);
-				}
-			}
-		}
 		public void Cancel() {
 			try {
 				_Core.Cancel();
@@ -48,8 +35,38 @@ namespace CodeDb.PgBinder {
 				throw new PgEnvironmentException(ex);
 			}
 		}
+		public int ExecuteNonQuery(Commandable program) {
+			try {
+				_Core.CommandText = program.CommandText;
+				var destParams = _Core.Parameters;
+				var srcParams = program.Parameters;
+				destParams.Clear();
+				for (int i = 0; i < srcParams.Length; i++) {
+					var p = srcParams[i];
+					destParams.AddWithValue(p.Name, p.IsArgument ? (p.Value as Variable).Value : p.Value);
+				}
+				return _Core.ExecuteNonQuery();
+			} catch (PostgresException ex) {
+				throw new PgEnvironmentException(ex);
+			}
+		}
 		public ICodeDbDataReader ExecuteReader() {
 			try {
+				return new PgDataReader(_Core.ExecuteReader());
+			} catch (PostgresException ex) {
+				throw new PgEnvironmentException(ex);
+			}
+		}
+		public ICodeDbDataReader ExecuteReader(Commandable program) {
+			try {
+				_Core.CommandText = program.CommandText;
+				var destParams = _Core.Parameters;
+				var srcParams = program.Parameters;
+				destParams.Clear();
+				for (int i = 0; i < srcParams.Length; i++) {
+					var p = srcParams[i];
+					destParams.AddWithValue(p.Name, p.IsArgument ? (p.Value as Variable).Value : p.Value);
+				}
 				return new PgDataReader(_Core.ExecuteReader());
 			} catch (PostgresException ex) {
 				throw new PgEnvironmentException(ex);

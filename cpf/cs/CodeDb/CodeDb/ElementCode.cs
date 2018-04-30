@@ -319,20 +319,26 @@ namespace CodeDb {
 		/// </summary>
 		public class WorkingBuffer {
 			public StringBuilder Buffer { get; private set; } = new StringBuilder();
-			public List<object> Parameters { get; private set; } = new List<object>();
+			public List<Parameter> Parameters { get; private set; } = new List<Parameter>();
 			public List<object> Tables { get; private set; } = new List<object>();
 
 			public string GetParameterName(object value) {
 				// IndexOf などでは Variable のオーバーロードのせいで正しく判定できないので自前で object.ReferenceEquals 呼び出して判定する
 				var parameters = this.Parameters;
+				Parameter p;
 				for (int i = 0, n = parameters.Count; i < n; i++) {
-					if (object.ReferenceEquals(value, parameters[i])) {
-						return "@p" + i;
+					// リファレンス先として同じのが登録されてたら名前返す
+					p = parameters[i];
+					if (object.ReferenceEquals(value, p.Value)) {
+						return p.Name;
 					}
 				}
+
+				// インデックス番号を名前としてパラメータ作成する
 				var index = parameters.Count;
-				parameters.Add(value);
-				return "@p" + index;
+				p = new Parameter("@p" + index, value, value is Variable);
+				parameters.Add(p);
+				return p.Name;
 			}
 
 			public string GetTableAlias(object table) {

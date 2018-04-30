@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Linq;
 
 namespace CodeDb {
 	/// <summary>
-	/// SQLのコマンドに設定するテキストとパラメータ
+	/// <see cref="ICodeDbCommand"/>に設定するコマンドテキストとパラメータ
 	/// </summary>
 	public class Commandable {
 		/// <summary>
@@ -15,38 +16,24 @@ namespace CodeDb {
 		/// <summary>
 		/// パラメーター
 		/// </summary>
-		public List<object> Parameters { get; private set; }
-
-		/// <summary>
-		/// パラメーター名と値の列
-		/// </summary>
-		public IEnumerable<Parameter> ParameterNameAndValues {
-			get {
-				var parameters = this.Parameters;
-				for (int i = 0, n = parameters.Count; i < n; i++) {
-					yield return new Parameter("@p" + i, parameters[i]);
-				}
-			}
-		}
+		public Parameter[] Parameters { get; private set; }
 
 		/// <summary>
 		/// コンストラクタ、コマンド文字列とパラメーター列を指定して初期化する
 		/// </summary>
 		/// <param name="commandText">コマンド文字列</param>
 		/// <param name="parameters">パラメータ列</param>
-		public Commandable(string commandText, List<object> parameters) {
+		public Commandable(string commandText, IEnumerable<Parameter> parameters) {
 			this.CommandText = commandText;
-			this.Parameters = parameters;
+			this.Parameters = parameters.ToArray();
 		}
 
 		/// <summary>
 		/// 指定の<see cref="ICodeDbCommand"/>を使用してコマンドを実行する
 		/// </summary>
 		/// <param name="command">コマンド</param>
-		public void Execute(ICodeDbCommand command) {
-			command.Apply(this);
-			command.ExecuteNonQuery();
-		}
+		/// <returns>影響を受けた行の数</returns>
+		public int Execute(ICodeDbCommand command) => command.ExecuteNonQuery(this);
 	}
 
 	/// <summary>
@@ -61,31 +48,16 @@ namespace CodeDb {
 		public Commandable Core { get; private set; }
 
 		/// <summary>
-		/// コマンド文字列
-		/// </summary>
-		public string CommandText => this.Core.CommandText;
-
-		/// <summary>
-		/// パラメーター
-		/// </summary>
-		public List<object> Parameters => this.Core.Parameters;
-
-		/// <summary>
 		/// コンストラクタ、実体となる<see cref="Commandable"/>を指定して初期化する
 		/// </summary>
 		/// <param name="core"></param>
-		public Commandable(Commandable core) {
-			this.Core = core;
-		}
+		public Commandable(Commandable core) => this.Core = core;
 
 		/// <summary>
 		/// 指定の<see cref="ICodeDbCommand"/>を使用してコマンドを実行しレコード読み取りオブジェクトを取得する
 		/// </summary>
 		/// <param name="command">コマンド</param>
 		/// <returns>レコード読み取りオブジェクト</returns>
-		public RecordReader<T> Execute(ICodeDbCommand command) {
-			command.Apply(this.Core);
-			return new RecordReader<T>(command.ExecuteReader());
-		}
+		public RecordReader<T> Execute(ICodeDbCommand command) => new RecordReader<T>(command.ExecuteReader(this.Core));
 	}
 }
