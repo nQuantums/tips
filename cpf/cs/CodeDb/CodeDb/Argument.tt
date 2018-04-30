@@ -42,12 +42,12 @@ using System.Reflection;
 
 namespace CodeDb {
 	/// <summary>
-	/// SQL内変数、@variable などの変数に置き換わる
+	/// コマンドに対する引数として扱う事をマークするためのオブジェクト
 	/// </summary>
-	public class Variable {
+	public class Argument {
 		public object Value { get; set; }
 
-		public Variable(object value) {
+		public Argument(object value) {
 			this.Value = value;
 		}
 
@@ -70,8 +70,8 @@ namespace CodeDb {
 		}
 
 		// 明示的キャスト
-		public static bool operator true(Variable variable) => !(variable is null);
-		public static bool operator false(Variable variable) => variable is null;
+		public static bool operator true(Argument variable) => !(variable is null);
+		public static bool operator false(Argument variable) => variable is null;
 
 		// 暗黙的キャスト
 <#
@@ -82,17 +82,17 @@ foreach(var typeAndName in types) {
 	var dbtype = fields[2].Trim();
 	var isValue = fields[3].Trim() == "value";
 #>
-		public static implicit operator <#=type#>(Variable variable) => (<#=type#>)variable.Value;
+		public static implicit operator <#=type#>(Argument variable) => (<#=type#>)variable.Value;
 <#	if (isValue) {#>
-		public static implicit operator <#=type#>?(Variable variable) => (<#=type#>?)variable.Value;
+		public static implicit operator <#=type#>?(Argument variable) => (<#=type#>?)variable.Value;
 <#	}
 }
 #>
 
 		// 配列としてアクセス
-		public Variable this[int index] {
+		public Argument this[int index] {
 			get {
-				return default(Variable);
+				return default(Argument);
 			}
 		}
 
@@ -112,17 +112,17 @@ foreach(var opAndExprType in ops) {
 		var dbtype = fields[2].Trim();
 		var isValue = fields[3].Trim() == "value";
 #>
-		public static <#=rettype#> operator <#=op#>(<#=type#> l, Variable r) => default(<#=rettype#>);
-		public static <#=rettype#> operator <#=op#>(Variable l, <#=type#> r) => default(<#=rettype#>);
+		public static <#=rettype#> operator <#=op#>(<#=type#> l, Argument r) => default(<#=rettype#>);
+		public static <#=rettype#> operator <#=op#>(Argument l, <#=type#> r) => default(<#=rettype#>);
 <#		if (isValue) {#>
-		public static <#=rettypeNullable#> operator <#=op#>(<#=type#>? l, Variable r) => default(<#=rettypeNullable#>);
-		public static <#=rettypeNullable#> operator <#=op#>(Variable l, <#=type#>? r) => default(<#=rettypeNullable#>);
+		public static <#=rettypeNullable#> operator <#=op#>(<#=type#>? l, Argument r) => default(<#=rettypeNullable#>);
+		public static <#=rettypeNullable#> operator <#=op#>(Argument l, <#=type#>? r) => default(<#=rettypeNullable#>);
 <#		}
 	}#>
-		public static <#=retTypeIsBool ? "bool" : "Variable"#> operator <#=op#>(Variable l, Variable r) => default(<#=retTypeIsBool ? "bool" : "Variable"#>);
+		public static <#=retTypeIsBool ? "bool" : "Argument"#> operator <#=op#>(Argument l, Argument r) => default(<#=retTypeIsBool ? "bool" : "Argument"#>);
 <#
 }
 #>
-		public static bool operator !(Variable op) => op is null;
+		public static bool operator !(Argument op) => op is null;
 	}
 }

@@ -208,8 +208,8 @@ namespace CodeDbTest {
 				context.Build().Execute(cmd);
 
 				var sql = new Sql(TestDb.E);
-				var id = new Variable(4);
-				var now = new Variable(DateTime.Now);
+				var id = new Argument(4);
+				var now = new Argument(DateTime.Now);
 				sql.InsertInto(TestDb.User, t => new { UserName = "afe" });
 				var p = sql.Build();
 				try {

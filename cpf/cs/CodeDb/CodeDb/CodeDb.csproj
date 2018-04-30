@@ -13,9 +13,9 @@
       <Generator>TextTemplatingFileGenerator</Generator>
       <LastGenOutput>DbEnvironment.cs</LastGenOutput>
     </None>
-    <None Update="Variable.tt">
+    <None Update="Argument.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>Variable.cs</LastGenOutput>
+      <LastGenOutput>Argument.cs</LastGenOutput>
     </None>
   </ItemGroup>
 
@@ -34,10 +34,10 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>DbEnvironment.tt</DependentUpon>
     </Compile>
-    <Compile Update="Variable.cs">
+    <Compile Update="Argument.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
-      <DependentUpon>Variable.tt</DependentUpon>
+      <DependentUpon>Argument.tt</DependentUpon>
     </Compile>
   </ItemGroup>
 

@@ -73,10 +73,10 @@ namespace CodeDb.Internal {
 				break;
 			default: {
 					Column column;
-					Variable variable;
+					Argument variable;
 					if (!((column = instance as Column) is null)) {
 						typeWise.Do(column);
-					} else if (!((variable = instance as Variable) is null)) {
+					} else if (!((variable = instance as Argument) is null)) {
 						typeWise.Do(variable);
 					} else {
 						return false;

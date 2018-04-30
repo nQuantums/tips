@@ -34,6 +34,13 @@ namespace CodeDb {
 		/// <param name="command">コマンド</param>
 		/// <returns>影響を受けた行の数</returns>
 		public int Execute(ICodeDbCommand command) => command.ExecuteNonQuery(this);
+
+		/// <summary>
+		/// 指定の<see cref="ICodeDbCommand"/>を使用してコマンドを実行する
+		/// </summary>
+		/// <param name="command">コマンド</param>
+		/// <returns>読み取り用オブジェクト</returns>
+		public ICodeDbDataReader ExecuteReader(ICodeDbCommand command) => command.ExecuteReader(this);
 	}
 
 	/// <summary>
@@ -41,23 +48,48 @@ namespace CodeDb {
 	/// 指定型の値を列挙するコマンド
 	/// </summary>
 	/// <typeparam name="T">列挙する型</typeparam>
-	public class Commandable<T> {
+	public class ActionCmd<T> {
 		/// <summary>
-		/// 実体
+		/// コマンドテキストとパラメータ
 		/// </summary>
-		public Commandable Core { get; private set; }
+		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// コンストラクタ、実体となる<see cref="Commandable"/>を指定して初期化する
+		/// コンストラクタ、実体となる<see cref="CodeDb.Commandable"/>を指定して初期化する
 		/// </summary>
-		/// <param name="core"></param>
-		public Commandable(Commandable core) => this.Core = core;
+		/// <param name="core">実体</param>
+		public ActionCmd(Commandable core) => this.Commandable = core;
+
+		/// <summary>
+		/// 指定の<see cref="ICodeDbCommand"/>を使用してコマンドを実行しレコード読み取りオブジェクトを取得する
+		/// </summary>
+		/// <param name="command">コマンド</param>
+		/// <returns>影響を受けた行の数</returns>
+		public int Execute(ICodeDbCommand command) => this.Commandable.Execute(command);
+	}
+
+	/// <summary>
+	/// SQLのコマンドに設定するテキストとパラメータ、指定型の値を列挙する機能も提供する
+	/// 指定型の値を列挙するコマンド
+	/// </summary>
+	/// <typeparam name="TResult">列挙する型</typeparam>
+	public class FuncCmd<TResult> {
+		/// <summary>
+		/// コマンドテキストとパラメータ
+		/// </summary>
+		public Commandable Commandable { get; private set; }
+
+		/// <summary>
+		/// コンストラクタ、実体となる<see cref="CodeDb.Commandable"/>を指定して初期化する
+		/// </summary>
+		/// <param name="core">実体</param>
+		public FuncCmd(Commandable core) => this.Commandable = core;
 
 		/// <summary>
 		/// 指定の<see cref="ICodeDbCommand"/>を使用してコマンドを実行しレコード読み取りオブジェクトを取得する
 		/// </summary>
 		/// <param name="command">コマンド</param>
 		/// <returns>レコード読み取りオブジェクト</returns>
-		public RecordReader<T> Execute(ICodeDbCommand command) => new RecordReader<T>(command.ExecuteReader(this.Core));
+		public RecordReader<TResult> Execute(ICodeDbCommand command) => new RecordReader<TResult>(this.Commandable.ExecuteReader(command));
 	}
 }

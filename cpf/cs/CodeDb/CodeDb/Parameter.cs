@@ -18,7 +18,7 @@ namespace CodeDb {
 		public object Value { get; private set; }
 
 		/// <summary>
-		/// コマンドに対する引数として毎回変わる可能性があるものなら true となり<see cref="Variable.Value"/>の様な中身の値がパラメータとして使用される
+		/// コマンドに対する引数として毎回変わる可能性があるものなら true となり<see cref="Argument.Value"/>の様な中身の値がパラメータとして使用される
 		/// </summary>
 		public bool IsArgument { get; private set; }
 

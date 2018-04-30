@@ -43,7 +43,7 @@ namespace CodeDb.PgBinder {
 				destParams.Clear();
 				for (int i = 0; i < srcParams.Length; i++) {
 					var p = srcParams[i];
-					destParams.AddWithValue(p.Name, p.IsArgument ? (p.Value as Variable).Value : p.Value);
+					destParams.AddWithValue(p.Name, p.IsArgument ? (p.Value as Argument).Value : p.Value);
 				}
 				return _Core.ExecuteNonQuery();
 			} catch (PostgresException ex) {
@@ -65,7 +65,7 @@ namespace CodeDb.PgBinder {
 				destParams.Clear();
 				for (int i = 0; i < srcParams.Length; i++) {
 					var p = srcParams[i];
-					destParams.AddWithValue(p.Name, p.IsArgument ? (p.Value as Variable).Value : p.Value);
+					destParams.AddWithValue(p.Name, p.IsArgument ? (p.Value as Argument).Value : p.Value);
 				}
 				return new PgDataReader(_Core.ExecuteReader());
 			} catch (PostgresException ex) {

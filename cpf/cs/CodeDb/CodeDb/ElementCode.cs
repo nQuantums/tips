@@ -55,7 +55,7 @@ namespace CodeDb {
 			public void Do(DateTime value) => _EditableExpr.Add(value);
 			public void Do(DateTime[] value) => _EditableExpr.Add(value);
 			public void Do(Column value) => _EditableExpr.Add(value);
-			public void Do(Variable value) => _EditableExpr.Add(value);
+			public void Do(Argument value) => _EditableExpr.Add(value);
 		}
 
 		/// <summary>
@@ -336,7 +336,7 @@ namespace CodeDb {
 
 				// インデックス番号を名前としてパラメータ作成する
 				var index = parameters.Count;
-				p = new Parameter("@p" + index, value, value is Variable);
+				p = new Parameter("@p" + index, value, value is Argument);
 				parameters.Add(p);
 				return p.Name;
 			}
@@ -539,7 +539,7 @@ namespace CodeDb {
 		public void Add(DateTime value) => _Core.Items.Add(value);
 		public void Add(DateTime[] value) => _Core.Items.Add(value);
 		public void Add(Column value) => _Core.Items.Add(value);
-		public void Add(Variable value) => _Core.Items.Add(value);
+		public void Add(Argument value) => _Core.Items.Add(value);
 		public void Add(IElementizable value) => _Core.Items.Add(value);
 		public void Add(ITable value) => _Core.Items.Add(value);
 		public void Add(ElementCode value) => _Core.Items.Add(value);
@@ -685,11 +685,11 @@ namespace CodeDb {
 		}
 
 		/// <summary>
-		/// 全<see cref="Variable"/>を列挙する
+		/// 全<see cref="Argument"/>を列挙する
 		/// </summary>
-		public IEnumerable<Variable> FindVariables() {
+		public IEnumerable<Argument> FindVariables() {
 			foreach (var item in _Core.Items) {
-				var variable = item as Variable;
+				var variable = item as Argument;
 				if (variable is null) {
 					var ec = item as ElementCode;
 					if (ec != null) {

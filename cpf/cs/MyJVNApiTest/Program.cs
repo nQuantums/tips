@@ -92,13 +92,13 @@ namespace MyJVNApiTest {
 		const string Password = "Passw0rd!";
 
 		static ICodeDbCommand Command;
-		static Commandable<int> RegisterUrlCommand;
+		static FuncCmd<int> RegisterUrlCommand;
 		static Commandable RegisterContent;
 		static Commandable RegisterUrlLinkCommand;
-		static Variable UrlToRegister;
-		static Variable SrcUrlID;
-		static Variable ContentText;
-		static Variable DstUrlID;
+		static Argument UrlToRegister;
+		static Argument SrcUrlID;
+		static Argument ContentText;
+		static Argument DstUrlID;
 
 		const string AddUrl = "add_url";
 
@@ -133,8 +133,7 @@ namespace MyJVNApiTest {
 				{
 					var dropSql = Db.E.NewSql();
 					dropSql.DropTable(Db.Url);
-					cmd.Apply(dropSql.Build());
-					cmd.ExecuteNonQuery();
+					dropSql.Build().Execute(cmd);
 				}
 
 				// データベースの状態を取得
@@ -147,8 +146,7 @@ namespace MyJVNApiTest {
 				// 差分を適用する
 				var context = new ElementCode();
 				E.ApplyDatabaseDelta(context, delta);
-				cmd.Apply(context.Build());
-				cmd.ExecuteNonQuery();
+				context.Build().Execute(cmd);
 
 				// URL追加ストアド作成
 				{
@@ -167,13 +165,12 @@ $$ LANGUAGE plpgsql;
 ");
 					var s = Db.E.NewSql();
 					s.Code(code);
-					cmd.Apply(s.Build());
-					cmd.ExecuteNonQuery();
+					s.Build().Execute(cmd);
 				}
 
 				// URL追加プログラム作成
 				{
-					UrlToRegister = new Variable("");
+					UrlToRegister = new Argument("");
 
 					var code = new ElementCode();
 					code.Add(SqlKeyword.Select);
@@ -188,8 +185,8 @@ $$ LANGUAGE plpgsql;
 
 				// 内容追加プログラム作成
 				{
-					SrcUrlID = new Variable(0);
-					ContentText = new Variable("");
+					SrcUrlID = new Argument(0);
+					ContentText = new Argument("");
 
 					var sql = Db.E.NewSql();
 					sql.InsertIntoIfNotExists(Db.Content, t => new { UrlID = SrcUrlID, Content = ContentText });
@@ -198,7 +195,7 @@ $$ LANGUAGE plpgsql;
 
 				// URLリンク追加プログラム作成
 				{
-					DstUrlID = new Variable("");
+					DstUrlID = new Argument("");
 
 					var sql = Db.E.NewSql();
 					sql.InsertIntoIfNotExists(Db.Link, t => new { UrlID = SrcUrlID, LinkUrlID = DstUrlID });

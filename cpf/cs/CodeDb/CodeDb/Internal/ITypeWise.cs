@@ -37,6 +37,6 @@ namespace CodeDb.Internal {
 		void Do(DateTime value);
 		void Do(DateTime[] value);
 		void Do(Column value);
-		void Do(Variable value);
+		void Do(Argument value);
 	}
 }
