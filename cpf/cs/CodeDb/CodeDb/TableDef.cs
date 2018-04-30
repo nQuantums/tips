@@ -151,6 +151,16 @@ namespace CodeDb {
 		}
 
 		/// <summary>
+		/// 指定されたプロパティに対応する列名を取得する
+		/// </summary>
+		/// <param name="propertyName">プロパティ名</param>
+		/// <returns>列名</returns>
+		public virtual string ColumnName(string propertyName) {
+			var column = this.ColumnMap.TryGetByPropertyName(propertyName);
+			return column?.Name;
+		}
+
+		/// <summary>
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
@@ -163,7 +173,6 @@ namespace CodeDb {
 		#endregion
 
 		#region 非公開メソッド
-
 		/// <summary>
 		/// プライマリキー定義を生成する、<see cref="GetPrimaryKey"/>内で呼び出す
 		/// </summary>

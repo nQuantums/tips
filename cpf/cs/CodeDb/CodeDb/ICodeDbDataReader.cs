@@ -18,7 +18,7 @@ namespace CodeDb {
 		Guid GetGuid(int ordinal);
 		DateTime GetDateTime(int ordinal);
 		object GetValue(int ordinal);
-		TypeOfCols Get<TypeOfCols>();
-		IEnumerable<TypeOfCols> Enumerate<TypeOfCols>();
+		TColumns Get<TColumns>();
+		IEnumerable<TColumns> Enumerate<TColumns>();
 	}
 }

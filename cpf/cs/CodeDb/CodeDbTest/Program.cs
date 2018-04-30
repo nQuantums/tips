@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Net.Http;
 using System.Threading.Tasks;
+using System.Linq;
+using System.Linq.Expressions;
 using CodeDb;
 using CodeDb.PgBinder;
 
@@ -217,6 +219,24 @@ namespace CodeDbTest {
 				} catch (CodeDbEnvironmentException ex) {
 					if (ex.ErrorType != DbEnvironmentErrorType.DuplicateKey) {
 						throw;
+					}
+				}
+
+				{
+					var code = new ElementCode();
+					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
+					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now();");
+					var s = TestDb.E.NewSql();
+					s.Code(code);
+					cmd.Apply(s.Build());
+					using (var dr = cmd.ExecuteReader()) {
+						foreach (var value in dr.Enumerate<Tuple<Guid, DateTime>>()) {
+							Console.WriteLine(value);
+						}
+						dr.NextResult();
+						foreach (var value in dr.Enumerate<Tuple<Guid, DateTime>>()) {
+							Console.WriteLine(value);
+						}
 					}
 				}
 

@@ -72,6 +72,8 @@ namespace MyJVNApiTest {
 		static SqlProgram RegisterUrlProgram;
 		static Variable UrlToRegister;
 
+		const string AddUrl = "add_url";
+
 		static void Main(string[] args) {
 			var E = Db.E;
 
@@ -119,6 +121,27 @@ namespace MyJVNApiTest {
 				E.ApplyDatabaseDelta(context, delta);
 				cmd.Apply(context.Build());
 				cmd.ExecuteNonQuery();
+
+				// URL追加ストアド作成
+				{
+					var code = new ElementCode();
+					code.Concat($@"
+DROP FUNCTION IF EXISTS {AddUrl}(TEXT);
+CREATE OR REPLACE FUNCTION {AddUrl}(url_to_add TEXT)
+RETURNS INT AS $$
+	BEGIN
+		INSERT INTO {Db.Url.Name}({Db.Url.ColumnName(nameof(Db.Url._.Url))}) VALUES (url_to_add);
+		RETURN lastval();
+	EXCEPTION WHEN SQLSTATE '23505' THEN
+		RETURN 0;
+	END;
+$$ LANGUAGE plpgsql;
+");
+					var s = Db.E.NewSql();
+					s.Code(code);
+					cmd.Apply(s.Build());
+					cmd.ExecuteNonQuery();
+				}
 
 				// 挿入のテスト
 				UrlToRegister = new Variable("http");
