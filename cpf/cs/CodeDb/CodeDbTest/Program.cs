@@ -210,7 +210,7 @@ namespace CodeDbTest {
 				var sql = new Sql(TestDb.E);
 				var id = new Argument(4);
 				var now = new Argument(DateTime.Now);
-				sql.InsertInto(TestDb.User, t => new { UserName = "afe" });
+				sql.InsertIntoWithValueIfNotExists(TestDb.User, t => new[] { t.UserName == "afe" });
 				var p = sql.Build();
 				try {
 					p.Execute(cmd);

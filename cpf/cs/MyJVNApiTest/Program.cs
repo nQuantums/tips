@@ -183,7 +183,7 @@ $$ LANGUAGE plpgsql;
 					var srcUrlID = new Argument(0);
 					var contentText = new Argument("");
 					var sql = Db.E.NewSql();
-					sql.InsertIntoIfNotExists(Db.Content, t => new { UrlID = srcUrlID, Content = contentText });
+					sql.InsertIntoWithValueIfNotExists(Db.Content, t => new[] { t.UrlID == srcUrlID, t.Content == contentText }, 1);
 					RegisterContent = sql.BuildAction<int, string>(srcUrlID, contentText);
 				}
 
@@ -192,7 +192,7 @@ $$ LANGUAGE plpgsql;
 					var srcUrlID = new Argument(0);
 					var dstUrlID = new Argument(0);
 					var sql = Db.E.NewSql();
-					sql.InsertIntoIfNotExists(Db.Link, t => new { UrlID = srcUrlID, LinkUrlID = dstUrlID });
+					sql.InsertIntoWithValueIfNotExists(Db.Link, t => new [] { t.UrlID == srcUrlID, t.LinkUrlID == dstUrlID });
 					RegisterUrlLinkCommand = sql.BuildAction<int, int>(srcUrlID, dstUrlID);
 				}
 

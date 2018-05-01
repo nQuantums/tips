@@ -145,7 +145,7 @@ namespace CodeDb {
 			c.ColumnMap = map = new ColumnMap();
 			c.Columns = columns = TypeWiseCache<TColumns>.Creator();
 			foreach (var column in this.ColumnMap) {
-				map.Add(column.AliasedClone(columns, c));
+				map.Add(column.Clone(columns, c));
 			}
 			return c;
 		}

@@ -99,30 +99,27 @@ namespace CodeDb {
 		/// 値をテーブルへ挿入する
 		/// </summary>
 		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
-		/// <typeparam name="TColumnsOrder">列の順番を指定する匿名クラス</typeparam>
 		/// <param name="table">挿入先テーブル</param>
-		/// <param name="columnsAssignExpression">列への値代入を示す t => new { Name = "test", ID = 1 } の様な式、入力の t は列名参考用に使うのみ</param>
+		/// <param name="columnsExpression">列と設定値を指定する t => new[] { t.A == a, t.B == b } の様な式</param>
 		/// <returns>INSERT INTO句ノード</returns>
-		public InsertInto<TColumns, TColumnsOrder> InsertInto<TColumns, TColumnsOrder>(TableDef<TColumns> table, Expression<Func<TColumns, TColumnsOrder>> columnsAssignExpression) {
-			var node = new InsertInto<TColumns, TColumnsOrder>(this, table, columnsAssignExpression);
+		public InsertInto<TColumns> InsertIntoWithValue<TColumns>(TableDef<TColumns> table, Expression<Func<TColumns, bool[]>> columnsExpression) {
+			var node = new InsertInto<TColumns>(this, table, columnsExpression);
 			this.Children.Add(node);
-			node.Select(columnsAssignExpression);
 			return node;
 		}
 
 		/// <summary>
-		/// 同一の値が無い場合のみテーブルへ挿入する
+		/// 同一値が無い場合のみ値をテーブルへ挿入する
 		/// </summary>
 		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
-		/// <typeparam name="TColumnsOrder">列の順番を指定する匿名クラス</typeparam>
 		/// <param name="table">挿入先テーブル</param>
-		/// <param name="columnsAssignExpression">列への値代入を示す t => new { Name = "test", ID = 1 } の様な式、入力の t は列名参考用に使うのみ</param>
+		/// <param name="columnsExpression">列と設定値を指定する t => new[] { t.A == a, t.B == b } の様な式</param>
 		/// <param name="columnCountToWhere">NOT EXISTS (SELECT * FROM t WHERE t.Name = "test") の部分で判定に使用する列数、0が指定されたら全て使用する</param>
 		/// <returns>INSERT INTO句ノード</returns>
-		public InsertInto<TColumns, TColumnsOrder> InsertIntoIfNotExists<TColumns, TColumnsOrder>(TableDef<TColumns> table, Expression<Func<TColumns, TColumnsOrder>> columnsAssignExpression, int columnCountToWhere = 0) {
-			var node = new InsertInto<TColumns, TColumnsOrder>(this, table, columnsAssignExpression);
+		public InsertInto<TColumns> InsertIntoWithValueIfNotExists<TColumns>(TableDef<TColumns> table, Expression<Func<TColumns, bool[]>> columnsExpression, int columnCountToWhere = 0) {
+			var node = new InsertInto<TColumns>(this, table, columnsExpression);
+			node.IfNotExists(columnCountToWhere);
 			this.Children.Add(node);
-			node.SelectIfNotExists(columnsAssignExpression, columnCountToWhere);
 			return node;
 		}
 
@@ -161,6 +158,10 @@ namespace CodeDb {
 
 		public static bool NotExists(ISelect select) {
 			return default(bool);
+		}
+
+		public static bool Set(object l, object r) {
+			return true;
 		}
 		#endregion
 	}

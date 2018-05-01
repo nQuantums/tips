@@ -75,15 +75,26 @@ namespace CodeDb {
 		}
 
 		/// <summary>
-		/// エイリアス用にクローンを作成する
+		/// 指定引数部分を置き換えてクローンを作成する
 		/// </summary>
 		/// <param name="instance">プロパティを直接保持するオブジェクト</param>
 		/// <param name="table">新しく所属する<see cref="ITable"/></param>
 		/// <returns>クローン</returns>
-		public Column AliasedClone(object instance, ITable table) {
+		public Column Clone(object instance, ITable table) {
 			var c = this.MemberwiseClone() as Column;
 			c.Instance = instance;
 			c.Table = table;
+			return c;
+		}
+
+		/// <summary>
+		/// 指定引数部分を置き換えてクローンを作成する
+		/// </summary>
+		/// <param name="source">列を生成する元となった式</param>
+		/// <returns>クローン</returns>
+		public Column Clone(ElementCode source) {
+			var c = this.MemberwiseClone() as Column;
+			c.Source = source;
 			return c;
 		}
 

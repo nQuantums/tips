@@ -171,7 +171,7 @@ namespace CodeDb.Query {
 			// もし型が Variable なら内部の値の型を取得する
 			var type = property.PropertyType;
 			if (source != null && typeof(Argument).IsAssignableFrom(type)) {
-				var variable = source.FindVariables().FirstOrDefault();
+				var variable = source.FindArguments().FirstOrDefault();
 				if (!(variable is null) && variable.Value != null) {
 					type = variable.Value.GetType();
 				}

@@ -8,6 +8,7 @@ using CodeDb.Query;
 using CodeDb.Internal;
 
 using MethodNodeHandler = System.Action<CodeDb.ElementCode.Visitor, CodeDb.ElementCode, System.Linq.Expressions.MethodCallExpression>;
+using System.Runtime.CompilerServices;
 
 namespace CodeDb {
 	/// <summary>
@@ -28,6 +29,16 @@ namespace CodeDb {
 			/// 数式的要素数
 			/// </summary>
 			public int ItemCount = 0;
+
+			/// <summary>
+			/// 値を追加する
+			/// </summary>
+			/// <param name="value">値</param>
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public void Add(object value) {
+				this.Items.Add(value);
+				this.ItemCount++;
+			}
 		}
 
 		/// <summary>
@@ -522,35 +533,40 @@ namespace CodeDb {
 			_Core.ItemCount++;
 		}
 
-		public void Add(char value) => _Core.Items.Add(value);
-		public void Add(char[] value) => _Core.Items.Add(value);
+		public void Add(char value) => _Core.Add(value);
+		public void Add(char[] value) => _Core.Add(value);
 		public void Add(bool value) => this.Concat(value.ToString());
-		public void Add(bool[] value) => _Core.Items.Add(value);
+		public void Add(bool[] value) => _Core.Add(value);
 		public void Add(int value) => this.Concat(value.ToString());
-		public void Add(int[] value) => _Core.Items.Add(value);
+		public void Add(int[] value) => _Core.Add(value);
 		public void Add(long value) => this.Concat(value.ToString());
-		public void Add(long[] value) => _Core.Items.Add(value);
+		public void Add(long[] value) => _Core.Add(value);
 		public void Add(double value) => this.Concat(value.ToString());
-		public void Add(double[] value) => _Core.Items.Add(value);
-		public void Add(string value) => _Core.Items.Add(value);
-		public void Add(string[] value) => _Core.Items.Add(value);
+		public void Add(double[] value) => _Core.Add(value);
+		public void Add(string value) => _Core.Add(value);
+		public void Add(string[] value) => _Core.Add(value);
 		public void Add(Guid value) => this.Concat(string.Concat("'", value, "'"));
-		public void Add(Guid[] value) => _Core.Items.Add(value);
-		public void Add(DateTime value) => _Core.Items.Add(value);
-		public void Add(DateTime[] value) => _Core.Items.Add(value);
-		public void Add(Column value) => _Core.Items.Add(value);
-		public void Add(Argument value) => _Core.Items.Add(value);
-		public void Add(IElementizable value) => _Core.Items.Add(value);
-		public void Add(ITable value) => _Core.Items.Add(value);
-		public void Add(ElementCode value) => _Core.Items.Add(value);
-		public void Add(Expression value, ColumnMap map) =>new Visitor(this, map).Visit(value);
+		public void Add(Guid[] value) => _Core.Add(value);
+		public void Add(DateTime value) => _Core.Add(value);
+		public void Add(DateTime[] value) => _Core.Add(value);
+		public void Add(Column value) => _Core.Add(value);
+		public void Add(IElementizable value) => _Core.Add(value);
+		public void Add(ITable value) => _Core.Add(value);
+		public void Add(ElementCode value) => _Core.Add(value);
+		public void Add(Type value) => _Core.Add(value);
+		public void Add(Argument value) {
+			_Core.Add(value);
+		}
+		public void Add(Expression value, ColumnMap map) {
+			new Visitor(this, map).Visit(value);
+		}
 		public void Add(object value) {
 			if (!TypeWiseExecutor.Do(_TypeWise, value)) {
 				throw new ApplicationException($"The type '{value.GetType().FullName}' can not be included in an expression.");
 			}
 		}
-		public void AddValues<TypeOfCols>(TypeOfCols value) {
-			TypeWiseCache<TypeOfCols>.AddValues(this, value);
+		public void AddValues<TColumns>(TColumns value) {
+			TypeWiseCache<TColumns>.AddValues(this, value);
 		}
 
 		public void Add(SqlKeyword keyword) {
@@ -649,37 +665,20 @@ namespace CodeDb {
 		}
 
 		/// <summary>
-		/// 再帰的に指定のバッファへ展開する
+		/// 全<see cref="Type"/>を列挙する
 		/// </summary>
-		/// <param name="work">展開先バッファ</param>
-		void Build(WorkingBuffer work) {
-			foreach (var item in this.Items) {
-				StringBuilder buffer;
-				ElementCode ec;
-				ITableDef tableDef;
-				ITable table;
-				Column column;
-
-				if ((buffer = item as StringBuilder) != null) {
-					work.Concat(buffer.ToString());
-				} else if ((ec = item as ElementCode) != null) {
-					ec.Build(work);
-				} else if ((tableDef = item as ITableDef) != null) {
-					work.Concat(tableDef.Name);
-					work.Concat(work.GetTableAlias(tableDef));
-				} else if ((table = item as ITable) != null) {
-					var context = new ElementCode();
-					context.Push();
-					table.ToElementCode(context);
-					context.Pop();
-					context.Concat(work.GetTableAlias(table));
-					context.Build(work);
-				} else if ((column = item as Column) != null) {
-					work.Concat(work.GetTableAlias(column.Table));
-					work.Concat(".");
-					work.Concat(column.Name);
+		public IEnumerable<Type> FindTypes() {
+			foreach (var item in _Core.Items) {
+				var type = item as Type;
+				if (type is null) {
+					var ec = item as ElementCode;
+					if (ec != null) {
+						foreach (var t in ec.FindTypes()) {
+							yield return t;
+						}
+					}
 				} else {
-					work.Concat(work.GetParameterName(item));
+					yield return type;
 				}
 			}
 		}
@@ -687,13 +686,13 @@ namespace CodeDb {
 		/// <summary>
 		/// 全<see cref="Argument"/>を列挙する
 		/// </summary>
-		public IEnumerable<Argument> FindVariables() {
+		public IEnumerable<Argument> FindArguments() {
 			foreach (var item in _Core.Items) {
 				var variable = item as Argument;
 				if (variable is null) {
 					var ec = item as ElementCode;
 					if (ec != null) {
-						foreach (var v in ec.FindVariables()) {
+						foreach (var v in ec.FindArguments()) {
 							yield return v;
 						}
 					}
@@ -924,6 +923,47 @@ namespace CodeDb {
 				return "UNIQUE";
 			default:
 				return "";
+			}
+		}
+		#endregion
+
+		#region 非公開メソッド
+		/// <summary>
+		/// 再帰的に指定のバッファへ展開する
+		/// </summary>
+		/// <param name="work">展開先バッファ</param>
+		void Build(WorkingBuffer work) {
+			foreach (var item in this.Items) {
+				StringBuilder buffer;
+				ElementCode ec;
+				ITableDef tableDef;
+				ITable table;
+				Column column;
+				Type type;
+
+				if ((buffer = item as StringBuilder) != null) {
+					work.Concat(buffer.ToString());
+				} else if ((ec = item as ElementCode) != null) {
+					ec.Build(work);
+				} else if ((tableDef = item as ITableDef) != null) {
+					work.Concat(tableDef.Name);
+					work.Concat(work.GetTableAlias(tableDef));
+				} else if ((table = item as ITable) != null) {
+					var context = new ElementCode();
+					context.Push();
+					table.ToElementCode(context);
+					context.Pop();
+					context.Concat(work.GetTableAlias(table));
+					context.Build(work);
+				} else if ((column = item as Column) != null) {
+					work.Concat(work.GetTableAlias(column.Table));
+					work.Concat(".");
+					work.Concat(column.Name);
+				} else if ((type = item as Type) != null) {
+					// 型をマーキングしてあるだけなので何もする事はない
+				} else {
+					work.Concat(work.GetParameterName(item));
+				}
 			}
 		}
 		#endregion
