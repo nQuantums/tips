@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using CodeDb;
 using CodeDb.Internal;
@@ -371,6 +372,10 @@ namespace CodeDb.PgBinder {
 					Add(context, tableName, unique);
 				}
 			}
+		}
+
+		public override IRecordReader<T> CreateRecordReader<T>(PropertyInfo[] propertiesToAssign) {
+			return new PgRecordReader<T>(propertiesToAssign);
 		}
 	}
 }

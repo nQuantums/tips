@@ -12,7 +12,6 @@ namespace CodeDb.Internal {
 	public static class TypeWiseCache<T> {
 		static Func<T> _Creator;
 		static Func<T, T> _Cloner;
-		static Func<ICodeDbDataReader, IEnumerable<T>> _Reader;
 		static Action<ElementCode, T> _AddValues;
 
 		/// <summary>
@@ -80,18 +79,6 @@ namespace CodeDb.Internal {
 					}
 				}
 				return _Cloner;
-			}
-		}
-
-		/// <summary>
-		/// <see cref="ICodeDbDataReader"/>から<c>T</c>を列挙するファンクション
-		/// </summary>
-		public static Func<ICodeDbDataReader, IEnumerable<T>> Reader {
-			get {
-				if (_Reader == null) {
-					_Reader = dr => dr.Enumerate<T>();
-				}
-				return _Reader;
 			}
 		}
 

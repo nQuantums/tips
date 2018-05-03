@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Reflection;
 using CodeDb.Internal;
 
 namespace CodeDb.Query {
@@ -52,11 +53,6 @@ namespace CodeDb.Query {
 		/// テーブルが直接保持する列定義の取得
 		/// </summary>
 		public ColumnMap ColumnMap { get; private set; }
-
-		/// <summary>
-		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TColumns"/>を列挙するファンクション
-		/// </summary>
-		public Func<ICodeDbDataReader, IEnumerable<TColumns>> Reader => TypeWiseCache<TColumns>.Reader;
 		#endregion
 
 		#region コンストラクタ
@@ -71,31 +67,58 @@ namespace CodeDb.Query {
 			this.ColumnMap = new ColumnMap();
 			this.Columns = TypeWiseCache<TColumns>.Creator();
 
-			// new 演算子でクラスを生成するもの以外はエラーとする
 			var body = columnsExpression.Body;
-			if (body.NodeType != ExpressionType.New) {
-				throw new ApplicationException();
-			}
+			if (body.NodeType == ExpressionType.New) {
+				// new 演算子でのクラス生成式に対応
 
-			// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
-			var newexpr = body as NewExpression;
-			var args = newexpr.Arguments;
-			var properties = typeof(TColumns).GetProperties();
-			if (args.Count != properties.Length) {
-				throw new ApplicationException();
-			}
-
-			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
-			var owner = this.Owner;
-			var environment = owner.Environment;
-			var allColumns = owner.AllColumns;
-			for (int i = 0; i < properties.Length; i++) {
-				var pi = properties[i];
-				if (pi.PropertyType != args[i].Type) {
+				// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
+				var newexpr = body as NewExpression;
+				var args = newexpr.Arguments;
+				var properties = typeof(TColumns).GetProperties();
+				if (args.Count != properties.Length) {
 					throw new ApplicationException();
 				}
-				BindColumn(pi.Name, "c" + i, environment.CreateDbTypeFromType(pi.PropertyType), 0, new ElementCode(args[i], allColumns));
+
+				// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
+				var owner = this.Owner;
+				var environment = owner.Environment;
+				var allColumns = owner.AllColumns;
+				for (int i = 0; i < properties.Length; i++) {
+					var pi = properties[i];
+					if (pi.PropertyType != args[i].Type) {
+						throw new ApplicationException();
+					}
+					BindColumn(pi.Name, "c" + i, environment.CreateDbTypeFromType(pi.PropertyType), 0, new ElementCode(args[i], allColumns));
+				}
+			} else if (body.NodeType == ExpressionType.MemberInit) {
+				// メンバ初期化式に対応
+
+				// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
+				var initexpr = body as MemberInitExpression;
+				var bindings = initexpr.Bindings;
+
+				// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
+				var owner = this.Owner;
+				var environment = owner.Environment;
+				var allColumns = owner.AllColumns;
+				for (int i = 0; i < bindings.Count; i++) {
+					var binding = bindings[i];
+					if (binding.BindingType != MemberBindingType.Assignment) {
+						throw new ApplicationException();
+					}
+					var assign = binding as MemberAssignment;
+
+					var member = binding.Member;
+					if (member.MemberType != System.Reflection.MemberTypes.Property) {
+						throw new ApplicationException();
+					}
+					var property = (PropertyInfo)member;
+					BindColumn(property.Name, "c" + i, environment.CreateDbTypeFromType(property.PropertyType), 0, new ElementCode(assign.Expression, allColumns));
+				}
+			} else {
+				throw new ApplicationException();
 			}
+
 		}
 		#endregion
 
@@ -137,8 +160,6 @@ namespace CodeDb.Query {
 				context.Add(SqlKeyword.As);
 				context.Concat("c" + (i++));
 			});
-
-			this.From.ToElementCode(context);
 		}
 		#endregion
 

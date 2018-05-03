@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Reflection;
 using CodeDb.Query;
 
 namespace CodeDb {
@@ -81,6 +82,14 @@ namespace CodeDb {
 		/// <param name="context">コマンド生成先のバッファ</param>
 		/// <param name="databaseDelta">データベース変化分</param>
 		public abstract void ApplyDatabaseDelta(ElementCode context, IDatabaseDelta databaseDelta);
+
+		/// <summary>
+		/// レコード読み取りオブジェクトを作成する
+		/// </summary>
+		/// <param name="propertiesToAssign">列をバインドする<typeparamref name="T"/>内のプロパティ情報配列、読み取られる列の並びに一致している、<typeparamref name="T"/>がプリミティブ型の場合、または全プロパティを使用するには null を指定する</param>
+		/// <typeparam name="T">レコードの型</typeparam>
+		/// <returns>レコード読み取りオブジェクト</returns>
+		public abstract IRecordReader<T> CreateRecordReader<T>(PropertyInfo[] propertiesToAssign);
 
 		/// <summary>
 		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される

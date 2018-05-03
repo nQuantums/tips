@@ -53,11 +53,6 @@ namespace CodeDb.Query {
 		/// テーブルが直接保持する列定義の取得
 		/// </summary>
 		public ColumnMap ColumnMap { get; private set; }
-
-		/// <summary>
-		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TColumns"/>を列挙するファンクション
-		/// </summary>
-		public Func<ICodeDbDataReader, IEnumerable<TColumns>> Reader => TypeWiseCache<TColumns>.Reader;
 		#endregion
 
 		#region コンストラクタ

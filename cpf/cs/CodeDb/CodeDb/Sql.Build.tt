@@ -32,7 +32,17 @@ namespace CodeDb {
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>関数コマンド</returns>
 		public FuncCmd<TResult> BuildFunc<TResult>() {
-			return new FuncCmd<TResult>(this.Build());
+			return new FuncCmd<TResult>(this.Build(), this.Environment.CreateRecordReader<TResult>(null));
+		}
+
+		/// <summary>
+		/// <see cref="ICodeDbCommand"/>に対して実行可能な関数をビルドする
+		/// </summary>
+		/// <param name="select">SELECT句ノード、これにより列挙するレコード型が推論される</param>
+		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
+		/// <returns>実行可能SQL</returns>
+		public FuncCmd<TResult> BuildSelectFunc<TResult>(ISelect<TResult> @select) {
+			return new FuncCmd<TResult>(this.Build(), this.Environment.CreateRecordReader<TResult>((from c in @select.ColumnMap select c.Property).ToArray()));
 		}
 <#
 for (int n = 1; n <= 10; n++) {
@@ -95,7 +105,36 @@ for (int n = 1; n <= 10; n++) {
 			var blockExpr = Expression.Block(
 				<#=assignExprs#>
 			);
-			return new FuncCmd<<#=tparams#>, TResult>(commandable, Expression.Lambda<Action<Parameter[], <#=tparams#>>>(blockExpr, paramsExpr, <#=paramExprs#>).Compile());
+			return new FuncCmd<<#=tparams#>, TResult>(commandable, this.Environment.CreateRecordReader<TResult>(null), Expression.Lambda<Action<Parameter[], <#=tparams#>>>(blockExpr, paramsExpr, <#=paramExprs#>).Compile());
+		}
+
+		/// <summary>
+		/// <see cref="ICodeDbCommand"/>に対して実行可能な関数をビルドする
+		/// </summary>
+		/// <param name="select">SELECT句ノード、これにより列挙するレコード型が推論される</param>
+<#
+	for (int i = 1; i <= n; i++) {#>
+		/// <param name="arg<#=i#>">引数<#=i#></param>
+<#	}#>
+<#
+	for (int i = 1; i <= n; i++) {#>
+		/// <typeparam name="T<#=i#>">引数<#=i#>の型</typeparam>
+<#	}#>
+		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
+		/// <returns>実行可能SQL</returns>
+		public FuncCmd<<#=tparams#>, TResult> BuildSelectFunc<<#=tparams#>, TResult>(ISelect<TResult> select, <#=tparamArgs#>) {
+			var commandable = this.Build();
+			var piPrmValue = typeof(Parameter).GetProperty("Value");
+			var piArgValue = typeof(Argument).GetProperty("Value");
+			var paramsExpr = Expression.Parameter(typeof(Parameter[]));
+<#
+	for (int i = 1; i <= n; i++) {#>
+			var arg<#=i#>Expr = Expression.Parameter(typeof(T<#=i#>));
+<#	}#>
+			var blockExpr = Expression.Block(
+				<#=assignExprs#>
+			);
+			return new FuncCmd<<#=tparams#>, TResult>(commandable, this.Environment.CreateRecordReader<TResult>((from c in @select.ColumnMap select c.Property).ToArray()), Expression.Lambda<Action<Parameter[], <#=tparams#>>>(blockExpr, paramsExpr, <#=paramExprs#>).Compile());
 		}
 <#
 }

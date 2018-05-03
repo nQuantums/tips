@@ -36,6 +36,11 @@ namespace CodeDb.Query {
 		/// LIMIT句のノード
 		/// </summary>
 		ILimit LimitNode { get; }
+
+		/// <summary>
+		/// SELECT句のノード
+		/// </summary>
+		ISelect SelectNode { get; }
 	}
 
 	/// <summary>

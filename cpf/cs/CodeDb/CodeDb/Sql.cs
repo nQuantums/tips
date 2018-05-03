@@ -89,8 +89,26 @@ namespace CodeDb {
 			return node;
 		}
 
-		public From<TColumns> From<TColumns>(ISelect<TColumns> tableOrSelect) {
-			var node = new From<TColumns>(this, tableOrSelect);
+		/// <summary>
+		/// テーブルを指定してFROM句ノードを作成する
+		/// </summary>
+		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
+		/// <param name="table">入力テーブル</param>
+		/// <returns>FROM句ノード</returns>
+		public From<TColumns> From<TColumns>(TableDef<TColumns> table) {
+			var node = new From<TColumns>(this, table);
+			this.Children.Add(node);
+			return node;
+		}
+
+		/// <summary>
+		/// SELECTを指定してFROM句ノードを作成する
+		/// </summary>
+		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
+		/// <param name="select">入力元のSELECTノード</param>
+		/// <returns>FROM句ノード</returns>
+		public From<TColumns> From<TColumns>(ISelect<TColumns> select) {
+			var node = new From<TColumns>(this, select);
 			this.Children.Add(node);
 			return node;
 		}

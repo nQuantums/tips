@@ -41,13 +41,18 @@ namespace CodeDbTest {
 			public static DateTime CreateDateTime => E.DateTime("create_date_time", ColumnFlags.DefaultCurrentTimestamp);
 		}
 
-		public class TblUser : TableDef<TblUser.Cols> {
+		public class TblUser : TableDef<TblUser.D> {
 			public TblUser() : base(E, "tb_user") { }
 
-			public class Cols : ColumnsBase {
+			public class D : ColumnsBase {
 				public int UserID => As(() => C.UserID, ColumnFlags.Serial);
 				public string UserName => As(() => C.UserName);
 				public DateTime CreateDateTime => As(() => C.CreateDateTime);
+			}
+			public class R : D {
+				new public int UserID { get; set; }
+				new public string UserName { get; set; }
+				new public DateTime CreateDateTime { get; set; }
 			}
 
 			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => Columns.UserID);
@@ -195,6 +200,12 @@ namespace CodeDbTest {
 				var cmd = con.CreateCommand();
 				cmd.CommandTimeout = 0;
 
+				{
+					var s = TestDb.E.NewSql();
+					s.DropTable(TestDb.User);
+					s.Build().Execute(cmd);
+				}
+
 				// データベースの状態を取得
 				var current = E.ReadDatabaseDef(con);
 				// クラスからデータベース定義を生成する
@@ -207,16 +218,22 @@ namespace CodeDbTest {
 				E.ApplyDatabaseDelta(context, delta);
 				context.Build().Execute(cmd);
 
-				var sql = new Sql(TestDb.E);
-				var id = new Argument(4);
-				var now = new Argument(DateTime.Now);
-				sql.InsertIntoWithValueIfNotExists(TestDb.User, t => new[] { t.UserName == "afe" });
-				var p = sql.Build();
-				try {
-					p.Execute(cmd);
-				} catch (CodeDbEnvironmentException ex) {
-					if (ex.ErrorType != DbEnvironmentErrorType.DuplicateKey) {
-						throw;
+				{
+					var sql = TestDb.E.NewSql();
+					sql.InsertIntoWithValue(TestDb.User, t => new[] { t.UserName == "a" });
+					sql.InsertIntoWithValue(TestDb.User, t => new[] { t.UserName == "b" });
+					sql.InsertIntoWithValue(TestDb.User, t => new[] { t.UserName == "c" });
+					sql.BuildAction().Execute(cmd);
+				}
+				{
+					var sql = TestDb.E.NewSql();
+					var from = sql.From(TestDb.User);
+					var select = from.Select(() => new TestDb.TblUser.R { UserName = from._.UserName, UserID = from._.UserID, CreateDateTime = from._.CreateDateTime });
+					var f = sql.BuildSelectFunc(select);
+					using (var reader = f.Execute(cmd)) {
+						foreach (var record in reader.Records) {
+							Console.WriteLine($"{record.UserID} {record.UserName} {record.CreateDateTime}");
+						}
 					}
 				}
 

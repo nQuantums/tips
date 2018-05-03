@@ -34,6 +34,11 @@ for (int n = 0; n <= 10; n++) {
 		/// </summary>
 		public Commandable Commandable { get; private set; }
 
+		/// <summary>
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// </summary>
+		public IRecordReader<TResult> RecordReader { get; private set; }
+
 <#	if (n != 0) {#>
 		/// <summary>
 		/// 引数を<see cref="Parameter"/>の配列に設定する
@@ -42,17 +47,19 @@ for (int n = 0; n <= 10; n++) {
 
 <#	}#>
 		/// <summary>
-		/// コンストラクタ、実体となる<see cref="CodeDb.Commandable"/>を指定して初期化する
+		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 <#	if (n != 0) {#>
 		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
 <#	}#>
-		public FuncCmd(Commandable commandable<#=n != 0 ? ", Action<Parameter[], " + tparams + "> argSetter": ""#>) {
+		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader<#=n != 0 ? ", Action<Parameter[], " + tparams + "> argSetter": ""#>) {
 <#	if (n != 0) {#>
 			this.ArgSetter = argSetter;
 <#	}#>
 			this.Commandable = commandable;
+			this.RecordReader = recordReader;
 		}
 
 		/// <summary>
@@ -63,12 +70,12 @@ for (int n = 0; n <= 10; n++) {
 	for (int i = 1; i <= n; i++) {#>
 		/// <param name="arg<#=i#>">引数<#=i#></param>
 <#	}#>
-		/// <returns>レコード読み取りオブジェクト</returns>
-		public RecordReader<TResult> Execute(ICodeDbCommand command<#=n != 0 ? ", " + tparamArgs : ""#>) {
+		/// <returns>レコード列挙オブジェクト</returns>
+		public RecordEnumerator<TResult> Execute(ICodeDbCommand command<#=n != 0 ? ", " + tparamArgs : ""#>) {
 <#	if (n != 0) {#>
 			this.ArgSetter(this.Commandable.Parameters, <#=args#>);
 <#	}#>
-			return new RecordReader<TResult>(this.Commandable.ExecuteReader(command));
+			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}
 	}
 

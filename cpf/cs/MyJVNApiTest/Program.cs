@@ -49,11 +49,15 @@ namespace MyJVNApiTest {
 		}
 		public static TbUrl Url { get; } = new TbUrl();
 
-		public class TbContent : TableDef<TbContent.Cols> {
+		public class TbContent : TableDef<TbContent.D> {
 			public TbContent() : base(E, "tb_content") { }
-			public class Cols : ColumnsBase {
+			public class D : ColumnsBase {
 				public int UrlID => As(() => C.UrlID);
 				public string Content => As(() => C.Content);
+			}
+			public class R : D {
+				new public int UrlID { get; set; }
+				new public string Content { get; set; }
 			}
 			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID);
 		}
@@ -126,11 +130,11 @@ namespace MyJVNApiTest {
 				var cmd = con.CreateCommand();
 				cmd.CommandTimeout = 0;
 
-				{
-					var dropSql = Db.E.NewSql();
-					dropSql.DropTable(Db.Url);
-					dropSql.Build().Execute(cmd);
-				}
+				//{
+				//	var dropSql = Db.E.NewSql();
+				//	dropSql.DropTable(Db.Url);
+				//	dropSql.Build().Execute(cmd);
+				//}
 
 				// データベースの状態を取得
 				var current = E.ReadDatabaseDef(con);
@@ -143,6 +147,13 @@ namespace MyJVNApiTest {
 				var context = new ElementCode();
 				E.ApplyDatabaseDelta(context, delta);
 				context.Build().Execute(cmd);
+
+				{
+					var s = E.NewSql();
+					var f = s.From(Db.Content);
+				}
+
+				return;
 
 				// URL追加ストアド作成
 				{

@@ -91,6 +91,11 @@ namespace CodeDb.Query {
 		/// LIMIT句のノード
 		/// </summary>
 		public ILimit LimitNode { get; private set; }
+
+		/// <summary>
+		/// SELECT句のノード
+		/// </summary>
+		public ISelect SelectNode { get; private set; }
 		#endregion
 
 		#region コンストラクタ
@@ -187,7 +192,9 @@ namespace CodeDb.Query {
 		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { t1.A, t1.B } の様な式</param>
 		/// <returns>SELECT句</returns>
 		public SelectFrom<TColumns1> Select<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
-			return new SelectFrom<TColumns1>(this, columnsExpression);
+			var node = new SelectFrom<TColumns1>(this, columnsExpression);
+			this.SelectNode = node;
+			return node;
 		}
 
 		/// <summary>
@@ -195,6 +202,10 @@ namespace CodeDb.Query {
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
 		public void ToElementCode(ElementCode context) {
+			if (this.SelectNode != null) {
+				this.SelectNode.ToElementCode(context);
+			}
+
 			if (this.Table != null) {
 				context.Add(SqlKeyword.From);
 				context.Add(this.Table);
