@@ -227,8 +227,7 @@ namespace CodeDbTest {
 				}
 				{
 					var sql = TestDb.E.NewSql();
-					var from = sql.From(TestDb.User);
-					var select = from.Select(() => new TestDb.TblUser.R { UserName = from._.UserName, UserID = from._.UserID, CreateDateTime = from._.CreateDateTime });
+					var select = sql.From(TestDb.User).Where(t => t.UserName == "a").Select(t => new { t.UserName, t.UserID, t.CreateDateTime });
 					var f = sql.BuildSelectFunc(select);
 					using (var reader = f.Execute(cmd)) {
 						foreach (var record in reader.Records) {
@@ -241,15 +240,15 @@ namespace CodeDbTest {
 					var code = new ElementCode();
 					var arg1 = new Argument(0);
 					var arg2 = new Argument(0);
-					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now(),");
+					code.Concat("SELECT ARRAY[1, 2, 3], '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now(),");
 					code.Add(arg1);
 					code.Go();
-					code.Concat("SELECT '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now(),");
+					code.Concat("SELECT ARRAY[1, 2, 3], '{8EA22A18-EB0A-49E5-B61D-F026CA7773FF}'::uuid, now(),");
 					code.Add(arg2);
 					code.Go();
 					var s = TestDb.E.NewSql();
 					s.Code(code);
-					var commandable = s.BuildFunc<int, int, Tuple<Guid, DateTime, int>>(arg1, arg2);
+					var commandable = s.BuildFunc<int, int, Tuple<int[], Guid, DateTime, int>>(arg1, arg2);
 					using (var reader = commandable.Execute(cmd, 16, 32)) {
 						do {
 							foreach (var record in reader.Records) {

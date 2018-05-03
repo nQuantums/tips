@@ -10,8 +10,8 @@ namespace CodeDb.Query {
 	/// <summary>
 	/// FROM句を含むSELECT
 	/// </summary>
-	/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
-	public class SelectFrom<TColumns> : ISelect<TColumns> {
+	/// <typeparam name="TSelectedColumns">プロパティを列として扱う<see cref="TableDef{TSelectedColumns}"/>のTColumnsに該当するクラス</typeparam>
+	public class SelectFrom<TSelectedColumns> : ISelect<TSelectedColumns> {
 		#region プロパティ
 		/// <summary>
 		/// ノードが属するSQLオブジェクト
@@ -42,12 +42,12 @@ namespace CodeDb.Query {
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
 		/// </summary>
-		public TColumns Columns { get; private set; }
+		public TSelectedColumns Columns { get; private set; }
 
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
 		/// </summary>
-		public TColumns _ => this.Columns;
+		public TSelectedColumns _ => this.Columns;
 
 		/// <summary>
 		/// テーブルが直接保持する列定義の取得
@@ -60,21 +60,20 @@ namespace CodeDb.Query {
 		/// コンストラクタ、親ノードと列指定式を指定して初期化する
 		/// </summary>
 		/// <param name="parent">親ノード</param>
-		/// <param name="columnsExpression">生成元の式</param>
-		public SelectFrom(IFrom parent, Expression<Func<TColumns>> columnsExpression) {
+		/// <param name="body">生成元の式</param>
+		public SelectFrom(IFrom parent, Expression body) {
 			this.Parent = parent;
 			this.From = parent;
 			this.ColumnMap = new ColumnMap();
-			this.Columns = TypeWiseCache<TColumns>.Creator();
+			this.Columns = TypeWiseCache<TSelectedColumns>.Creator();
 
-			var body = columnsExpression.Body;
 			if (body.NodeType == ExpressionType.New) {
 				// new 演算子でのクラス生成式に対応
 
 				// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
 				var newexpr = body as NewExpression;
 				var args = newexpr.Arguments;
-				var properties = typeof(TColumns).GetProperties();
+				var properties = typeof(TSelectedColumns).GetProperties();
 				if (args.Count != properties.Length) {
 					throw new ApplicationException();
 				}
@@ -135,7 +134,7 @@ namespace CodeDb.Query {
 		public Column BindColumn(string propertyName, string name, IDbType dbType, ColumnFlags flags = 0, ElementCode source = null) {
 			var column = this.ColumnMap.TryGetByPropertyName(propertyName);
 			if (column == null) {
-				this.ColumnMap.Add(column = new Column(this.Owner.Environment, this.Columns, typeof(TColumns).GetProperty(propertyName), this, name, dbType, flags, source));
+				this.ColumnMap.Add(column = new Column(this.Owner.Environment, this.Columns, typeof(TSelectedColumns).GetProperty(propertyName), this, name, dbType, flags, source));
 			}
 			return column;
 		}
@@ -144,7 +143,7 @@ namespace CodeDb.Query {
 		/// エイリアス用にクローンを作成する
 		/// </summary>
 		/// <returns>クローン</returns>
-		public SelectFrom<TColumns> AliasedClone() {
+		public SelectFrom<TSelectedColumns> AliasedClone() {
 			return this;
 		}
 
@@ -164,7 +163,7 @@ namespace CodeDb.Query {
 		#endregion
 
 		#region 非公開メソッド
-		ITable<TColumns> ITable<TColumns>.AliasedClone() => this.AliasedClone();
+		ITable<TSelectedColumns> ITable<TSelectedColumns>.AliasedClone() => this.AliasedClone();
 		ITable ITable.AliasedClone() => this.AliasedClone();
 		#endregion
 	}

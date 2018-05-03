@@ -147,16 +147,21 @@ namespace CodeDb.Query {
 		/// WHERE句の式を登録する
 		/// </summary>
 		/// <param name="expression">式</param>
-		public void Where(Expression<Func<bool>> expression) {
-			this.WhereNode = new Where(this, expression);
+		/// <returns>自分</returns>
+		public From<TColumns> Where(Expression<Func<TColumns, bool>> expression) {
+			var body = ParameterReplacer.Replace(expression.Body, new Dictionary<Expression, object> { { expression.Parameters[0], this.Columns } });
+			this.WhereNode = new Where(this, new ElementCode(body, this.Owner.AllColumns));
+			return this;
 		}
 
 		/// <summary>
 		/// WHERE句の式を登録する
 		/// </summary>
 		/// <param name="expression">式</param>
-		public void Where(ElementCode expression) {
+		/// <returns>自分</returns>
+		public From<TColumns> Where(ElementCode expression) {
 			this.WhereNode = new Where(this, expression);
+			return this;
 		}
 
 		/// <summary>
@@ -164,8 +169,10 @@ namespace CodeDb.Query {
 		/// </summary>
 		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
-		public void GroupBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
+		/// <returns>自分</returns>
+		public From<TColumns> GroupBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
 			this.GroupByNode = new GroupBy<TColumns1>(this, columnsExpression);
+			return this;
 		}
 
 		/// <summary>
@@ -173,26 +180,31 @@ namespace CodeDb.Query {
 		/// </summary>
 		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
-		public void OrderBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
+		/// <returns>自分</returns>
+		public From<TColumns> OrderBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
 			this.OrderByNode = new OrderBy<TColumns1>(this, columnsExpression);
+			return this;
 		}
 
 		/// <summary>
 		/// LIMITの値を登録する
 		/// </summary>
 		/// <param name="count">制限値</param>
-		public void Limit(object count) {
+		/// <returns>自分</returns>
+		public From<TColumns> Limit(object count) {
 			this.LimitNode = new Limit(this, count);
+			return this;
 		}
 
 		/// <summary>
 		/// 列選択部を生成する
 		/// </summary>
-		/// <typeparam name="TColumns1">列をプロパティとして持つクラス</typeparam>
-		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { t1.A, t1.B } の様な式</param>
+		/// <typeparam name="TSelectedColumns">列をプロパティとして持つクラス</typeparam>
+		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する t => new { t.A, t1.B, t3.C } の様な式、<c>t</c>はFROM元のテーブルの列</param>
 		/// <returns>SELECT句</returns>
-		public SelectFrom<TColumns1> Select<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
-			var node = new SelectFrom<TColumns1>(this, columnsExpression);
+		public SelectFrom<TSelectedColumns> Select<TSelectedColumns>(Expression<Func<TColumns, TSelectedColumns>> columnsExpression) {
+			var expr = ParameterReplacer.Replace(columnsExpression.Body, new Dictionary<Expression, object> { { columnsExpression.Parameters[0], this.Columns } });
+			var node = new SelectFrom<TSelectedColumns>(this, expr);
 			this.SelectNode = node;
 			return node;
 		}

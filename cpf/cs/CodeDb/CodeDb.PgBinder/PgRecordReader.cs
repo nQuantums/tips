@@ -84,6 +84,7 @@ namespace CodeDb.PgBinder {
 			var drtype = typeof(NpgsqlDataReader);
 			var cvtype = typeof(Convert);
 
+			// TODO: 配列にも対応する
 			if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>)) {
 				// null 許容型の場合は一旦 GetValue() で取得して System.DBNull 以外ならキャストする
 				var primtype = type.GenericTypeArguments[0];
@@ -109,18 +110,28 @@ namespace CodeDb.PgBinder {
 					Expression.New(type),
 					Expression.New(type.GetConstructor(new Type[] { primtype }), GenerateCast(primtype, info, assign)));
 			} else {
-				// null 許容型でない場合には null 判定が必要無いため最適なメソッドで値を取得する
 				CvmInfo info;
-				if (!CvmInfos.TryGetValue(type, out info)) {
-					throw new ApplicationException();
-				}
-
-				if (info.MethodNameOfGet != null) {
-					// Get* メソッドで直接目的の型が取得できるもの
-					return Expression.Call(dr, drtype.GetMethod(info.MethodNameOfGet), Expression.Constant(ordinal));
+				if (type.IsArray) {
+					// 配列なら要素の型で判断
+					var elementType = type.GetElementType();
+					if (!CvmInfos.TryGetValue(elementType, out info)) {
+						throw new ApplicationException();
+					}
+					// 配列は現状直接取得できるメソッドが無いので as で変換しておく
+					return Expression.TypeAs(Expression.Call(dr, drtype.GetMethod(nameof(NpgsqlDataReader.GetValue)), Expression.Constant(ordinal)), type);
 				} else {
-					// GetValue メソッドで一旦 object 取得後に変換が必要なもの
-					return GenerateCast(type, info, Expression.Call(dr, drtype.GetMethod(nameof(NpgsqlDataReader.GetValue)), Expression.Constant(ordinal)));
+					// null 許容型でも配列でもない場合には null 判定が必要無いため最適なメソッドで値を取得する
+					if (!CvmInfos.TryGetValue(type, out info)) {
+						throw new ApplicationException();
+					}
+
+					if (info.MethodNameOfGet != null) {
+						// Get* メソッドで直接目的の型が取得できるもの
+						return Expression.Call(dr, drtype.GetMethod(info.MethodNameOfGet), Expression.Constant(ordinal));
+					} else {
+						// GetValue メソッドで一旦 object 取得後に変換が必要なもの
+						return GenerateCast(type, info, Expression.Call(dr, drtype.GetMethod(nameof(NpgsqlDataReader.GetValue)), Expression.Constant(ordinal)));
+					}
 				}
 			}
 		}
