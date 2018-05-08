@@ -29,6 +29,11 @@ namespace PatchStalker {
 		/// </summary>
 		public class Link {
 			/// <summary>
+			/// リンクのID
+			/// </summary>
+			public int Id { get; private set; }
+
+			/// <summary>
 			/// リンク先アドレス
 			/// </summary>
 			public string Address { get; set; }
@@ -56,7 +61,8 @@ namespace PatchStalker {
 			/// <summary>
 			/// コンストラクタ、全要素を指定して初期化する
 			/// </summary>
-			public Link(string address, string keyword, int distance, int priority) {
+			public Link(int id, string address, string keyword, int distance, int priority) {
+				this.Id = id;
 				this.Address = address;
 				this.Keyword = keyword;
 				this.Distance = distance;
@@ -153,15 +159,7 @@ namespace PatchStalker {
 					d();
 				}
 			}
-			public void setTable(int id, object[] cells) {
-			}
-			public void setInnerText(string htmlText) {
-				lock (this) {
-					File.WriteAllText(this.Count + ".txt", htmlText, Encoding.UTF8);
-					this.Count++;
-				}
-			}
-			public void addLink(string address, string keyword) {
+			public void addLink(int id, string address, string keyword) {
 				lock (this) {
 					// 既に巡回したアドレスは無視する
 					if (this.KnownLinks.Contains(address)) {
@@ -170,7 +168,16 @@ namespace PatchStalker {
 					this.KnownLinks.Add(address);
 
 					// 巡回するアドレスとして登録
-					this.Links.Add(new Link(address, keyword, this.CurrentDistance, CalcPriority(address, keyword, this.CurrentDistance)));
+					this.Links.Add(new Link(id, address, keyword, this.CurrentDistance, CalcPriority(address, keyword, this.CurrentDistance)));
+				}
+			}
+			public void setTable(int id, object[] cells) {
+				// TODO: テーブルを構築し、リンクが関連する行や列から情報を取得しタグ付けしながら Link オブジェクトに情報を追加していく
+			}
+			public void setInnerText(string htmlText) {
+				lock (this) {
+					File.WriteAllText(this.Count + ".txt", htmlText, Encoding.UTF8);
+					this.Count++;
 				}
 			}
 			public void end() {
