@@ -171,7 +171,8 @@ namespace PatchStalker {
 					this.Links.Add(new Link(id, address, keyword, this.CurrentDistance, CalcPriority(address, keyword, this.CurrentDistance)));
 				}
 			}
-			public void setTable(int id, object[] cells) {
+			public void setTable(int id, object[] tableData) {
+				var table = new Table(tableData);
 				// TODO: テーブルを構築し、リンクが関連する行や列から情報を取得しタグ付けしながら Link オブジェクトに情報を追加していく
 			}
 			public void setInnerText(string htmlText) {
