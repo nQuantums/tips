@@ -144,6 +144,9 @@ namespace PatchStalker {
 			public List<Link> Links { get; private set; } = new List<Link>();
 
 
+			public void testFunc(object[] values) {
+			}
+
 			public void setInnerText(string htmlText) {
 				lock (this) {
 					File.WriteAllText(this.Count + ".txt", htmlText, Encoding.UTF8);
@@ -199,25 +202,25 @@ namespace PatchStalker {
 				// ページ内の全リンク取得後の処理
 				this.Dispatcher.BeginInvoke(new Action(() => {
 					lock (_HostObj) {
-						var links = _HostObj.Links;
-						while (links.Count != 0) {
-							// 優先度が最高のものを取り出す
-							var index = _HostObj.Links.Count - 1;
-							var link = _HostObj.Links[index];
-							links.RemoveAt(index);
+						//var links = _HostObj.Links;
+						//while (links.Count != 0) {
+						//	// 優先度が最高のものを取り出す
+						//	var index = _HostObj.Links.Count - 1;
+						//	var link = _HostObj.Links[index];
+						//	links.RemoveAt(index);
 
-							// スタートページから遠いものは破棄する
-							if (4 <= link.Distance) {
-								continue;
-							}
+						//	// スタートページから遠いものは破棄する
+						//	if (4 <= link.Distance) {
+						//		continue;
+						//	}
 
-							// 表示先ページの距離を計算して表示する
-							_HostObj.CurrentDistance = link.Distance + 1;
-							_LoadEnded = false;
-							this.tbUrl.Text = _Browser.Address = link.Address;
-							System.Diagnostics.Debug.WriteLine(_Browser.Address);
-							break;
-						}
+						//	// 表示先ページの距離を計算して表示する
+						//	_HostObj.CurrentDistance = link.Distance + 1;
+						//	_LoadEnded = false;
+						//	Navigate(_Browser.Address = link.Address);
+						//	System.Diagnostics.Debug.WriteLine(_Browser.Address);
+						//	break;
+						//}
 					}
 				}));
 			};
@@ -250,10 +253,14 @@ namespace PatchStalker {
 			this.gridRoot.Children.Add(_Browser);
 			this.Loaded += MainWindow_Loaded;
 
+			//Navigate("https://jvndb.jvn.jp/");
+			//Navigate("https://helpx.adobe.com/security/products/acrobat/apsb18-02.html");
+			//Navigate("https://supportdownloads.adobe.com/product.jsp?product=1&platform=Windows");
+			Navigate(System.IO.Path.Combine(Directory.GetCurrentDirectory(), "test1.html"));
+		}
 
-			//_Browser.Address = "https://jvndb.jvn.jp/";
-			this.tbUrl.Text = _Browser.Address = "https://helpx.adobe.com/security/products/acrobat/apsb18-02.html";
-			//this.tbUrl.Text = _Browser.Address = "https://supportdownloads.adobe.com/product.jsp?product=1&platform=Windows";
+		void Navigate(string url) {
+			this.tbUrl.Text = _Browser.Address = url;
 		}
 
 		private void MainWindow_Loaded(object sender, RoutedEventArgs e) {

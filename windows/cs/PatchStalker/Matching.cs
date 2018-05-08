@@ -38,9 +38,12 @@ namespace PatchStalker {
 		};
 
 		static readonly string[] ProductNames = new[] {
-			"Acrobat *Reader",
-			"Adobe *Reader",
-			"Adobe *Acrobat *Reader",
+			"(Adobe |)Acrobat *DC",
+			"(Adobe |)Acrobat *DC *2015",
+			"(Adobe |)Acrobat *Reader",
+			"(Adobe |)Acrobat *Reader *DC",
+			"(Adobe |)Acrobat *2017",
+			"(Adobe |)Acrobat *Reader *2017",
 		};
 
 		static Regex _EntityMatcher;
