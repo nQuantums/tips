@@ -147,16 +147,18 @@ namespace PatchStalker {
 			public void testFunc(object[] values) {
 			}
 
+			public void start() {
+				var d = this.AddLinkStart;
+				if (d != null) {
+					d();
+				}
+			}
+			public void setTable(int id, object[] cells) {
+			}
 			public void setInnerText(string htmlText) {
 				lock (this) {
 					File.WriteAllText(this.Count + ".txt", htmlText, Encoding.UTF8);
 					this.Count++;
-				}
-			}
-			public void startAddLink() {
-				var d = this.AddLinkStart;
-				if (d != null) {
-					d();
 				}
 			}
 			public void addLink(string address, string keyword) {
@@ -171,7 +173,7 @@ namespace PatchStalker {
 					this.Links.Add(new Link(address, keyword, this.CurrentDistance, CalcPriority(address, keyword, this.CurrentDistance)));
 				}
 			}
-			public void endAddLink() {
+			public void end() {
 				lock (this) {
 					this.Links.Sort((l, r) => l.Priority - r.Priority);
 				}
