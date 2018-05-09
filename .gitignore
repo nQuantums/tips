@@ -330,4 +330,4 @@ __pycache__/
 *.xsd.cs
 
 # MeCabDic
-NMeCabTest/dic/
+**/NMeCabTest/dic/
