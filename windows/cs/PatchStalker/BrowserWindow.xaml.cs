@@ -20,7 +20,7 @@ namespace PatchStalker {
 	/// <summary>
 	/// BrowserWindow.xaml の相互作用ロジック
 	/// </summary>
-	public partial class BrowserWindow : Window, ILifeSpanHandler {
+	public partial class BrowserWindow : Window, ILifeSpanHandler, ILoadHandler {
 		const string BinderName = "HostObj";
 		static string _EmbeddingJs;
 
@@ -89,24 +89,19 @@ namespace PatchStalker {
 			// 埋め込みJavaScriptとの仲介オブジェクト登録
 			this.BrowserControl.JavascriptObjectRepository.Register(BinderName, this.Bridge = new Bridge());
 
-			// ページ読み込みが完了したらJavaScript側から処理を呼び出す
-			this.BrowserControl.LoadingStateChanged += (s, a) => {
-				if (this.LoadEnded && !a.IsLoading) {
-					this.BrowserControl.ExecuteScriptAsync(_EmbeddingJs);
-				}
-			};
-			this.BrowserControl.FrameLoadStart += (sender, args) => {
-				// TODO: ポップアップだとここに来ない
-				this.LoadEnded = false;
-			};
-			this.BrowserControl.FrameLoadEnd += (sender, args) => {
-				this.LoadEnded = true;
-			};
+			// イベントハンドラ設定
 			this.BrowserControl.LifeSpanHandler = this;
+			this.BrowserControl.LoadHandler = this;
 
 			InitializeComponent();
 
 			this.gridRoot.Children.Add(this.BrowserControl);
+
+			this.Loaded += BrowserWindow_Loaded;
+		}
+
+		private void BrowserWindow_Loaded(object sender, RoutedEventArgs e) {
+			//this.BrowserControl.ShowDevTools();
 		}
 
 		public BrowserWindow() : this(new ChromiumWebBrowser()) {
@@ -151,6 +146,24 @@ namespace PatchStalker {
 		}
 
 		public void OnBeforeClose(IWebBrowser browserControl, IBrowser browser) {
+		}
+
+		public void OnLoadingStateChange(IWebBrowser browserControl, LoadingStateChangedEventArgs loadingStateChangedArgs) {
+			if (this.LoadEnded && !loadingStateChangedArgs.IsLoading) {
+				// ページ読み込みが完了したらJavaScript側から処理を呼び出す
+				this.BrowserControl.ExecuteScriptAsync(_EmbeddingJs);
+			}
+		}
+
+		public void OnFrameLoadStart(IWebBrowser browserControl, FrameLoadStartEventArgs frameLoadStartArgs) {
+			this.LoadEnded = false;
+		}
+
+		public void OnFrameLoadEnd(IWebBrowser browserControl, FrameLoadEndEventArgs frameLoadEndArgs) {
+			this.LoadEnded = true;
+		}
+
+		public void OnLoadError(IWebBrowser browserControl, LoadErrorEventArgs loadErrorArgs) {
 		}
 	}
 }
