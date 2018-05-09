@@ -21,7 +21,7 @@ namespace PatchStalker {
 	/// <summary>
 	/// MainWindow.xaml の相互作用ロジック
 	/// </summary>
-	public partial class MainWindow : Window {
+	public partial class MainWindow : Window, ILifeSpanHandler {
 		const string BinderName = "HostObj";
 
 		/// <summary>
@@ -193,11 +193,12 @@ namespace PatchStalker {
 			}
 		}
 
+		static string _EmbeddingJs;
 		HostObj _HostObj = new HostObj();
 		ChromiumWebBrowser _Browser;
 		bool _LoadEnded;
 
-		public MainWindow() {
+		static MainWindow() {
 			var asm = Assembly.GetExecutingAssembly();
 			var sb = new StringBuilder();
 			using (var jquery = new StreamReader(asm.GetManifestResourceStream("PatchStalker.jquery-min.js"), Encoding.UTF8))
@@ -205,8 +206,10 @@ namespace PatchStalker {
 				sb.AppendLine(jquery.ReadToEnd());
 				sb.AppendLine(embedding.ReadToEnd());
 			}
-			var embeddingjs = sb.ToString();
+			_EmbeddingJs = sb.ToString();
+		}
 
+		public MainWindow(string url) {
 			_HostObj.CurrentDistance = 1;
 			_HostObj.AddLinkEnd += () => {
 				// ページ内の全リンク取得後の処理
@@ -248,7 +251,7 @@ namespace PatchStalker {
 			// ページ読み込みが完了したらJavaScript側から処理を呼び出す
 			_Browser.LoadingStateChanged += (s, a) => {
 				if (_LoadEnded && !a.IsLoading) {
-					_Browser.ExecuteScriptAsync(embeddingjs);
+					_Browser.ExecuteScriptAsync(_EmbeddingJs);
 				}
 			};
 			_Browser.FrameLoadStart += (sender, args) => {
@@ -257,6 +260,7 @@ namespace PatchStalker {
 			_Browser.FrameLoadEnd += (sender, args) => {
 				_LoadEnded = true;
 			};
+			_Browser.LifeSpanHandler = this;
 
 			InitializeComponent();
 
@@ -266,7 +270,12 @@ namespace PatchStalker {
 			//Navigate("https://jvndb.jvn.jp/");
 			//Navigate("https://helpx.adobe.com/security/products/acrobat/apsb18-02.html");
 			//Navigate("https://supportdownloads.adobe.com/product.jsp?product=1&platform=Windows");
-			Navigate(System.IO.Path.Combine(Directory.GetCurrentDirectory(), "test1.html"));
+			//Navigate("https://www.catalog.update.microsoft.com/Search.aspx?q=KB4056893");
+			//Navigate(System.IO.Path.Combine(Directory.GetCurrentDirectory(), "test1.html"));
+			Navigate(url);
+		}
+
+		public MainWindow() : this("https://www.catalog.update.microsoft.com/Search.aspx?q=KB4056893") {
 		}
 
 		void Navigate(string url) {
@@ -275,6 +284,47 @@ namespace PatchStalker {
 
 		private void MainWindow_Loaded(object sender, RoutedEventArgs e) {
 			_Browser.ShowDevTools();
+		}
+
+		public bool OnBeforePopup(IWebBrowser browserControl, IBrowser browser, IFrame frame, string targetUrl, string targetFrameName, WindowOpenDisposition targetDisposition, bool userGesture, IPopupFeatures popupFeatures, IWindowInfo windowInfo, IBrowserSettings browserSettings, ref bool noJavascriptAccess, out IWebBrowser newBrowser) {
+			var chromiumWebBrowser = (ChromiumWebBrowser)browserControl;
+
+			ChromiumWebBrowser chromiumBrowser = null;
+
+			var windowX = windowInfo.X;
+			var windowY = windowInfo.Y;
+			var windowWidth = (windowInfo.Width == int.MinValue) ? 600 : windowInfo.Width;
+			var windowHeight = (windowInfo.Height == int.MinValue) ? 800 : windowInfo.Height;
+
+			chromiumWebBrowser.Dispatcher.Invoke(new Action(() => {
+				chromiumBrowser = new ChromiumWebBrowser();
+				chromiumBrowser.SetAsPopup();
+
+				var popup = new BrowserWindow(chromiumBrowser) {
+					Address = targetUrl,
+					Left = windowX,
+					Top = windowY,
+					Width = windowWidth,
+					Height = windowHeight,
+				};
+
+				popup.Owner = this;
+				popup.Show();
+			}));
+
+			newBrowser = chromiumBrowser;
+
+			return false;
+		}
+
+		public void OnAfterCreated(IWebBrowser browserControl, IBrowser browser) {
+		}
+
+		public bool DoClose(IWebBrowser browserControl, IBrowser browser) {
+			return false;
+		}
+
+		public void OnBeforeClose(IWebBrowser browserControl, IBrowser browser) {
 		}
 	}
 }
