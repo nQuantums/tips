@@ -12,8 +12,18 @@
 			<RowDefinition Height="*"/>
 		</Grid.RowDefinitions>
 
-		<TextBlock
-			Name="tbUrl"
-			Grid.Row="0"/>
+		<Grid>
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*"/>
+				<ColumnDefinition Width="auto"/>
+			</Grid.ColumnDefinitions>
+
+			<TextBlock Name="tbUrl"/>
+			<Button
+				Name="btnShowDevTool"
+				Content="ShowDev"
+				Grid.Column="1"
+				Click="btnShowDevTool_Click"/>
+		</Grid>
 	</Grid>
 </Window>

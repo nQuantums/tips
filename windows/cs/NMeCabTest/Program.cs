@@ -14,11 +14,11 @@ namespace NMeCabTest {
 			var mPara = new MeCabParam();
 
 			//辞書ファイルがあるフォルダを指定(NuGetで入れれば勝手に入る)
-			mPara.DicDir = Path.Combine(dir, @"mecab-ipadic-neologd");
+			mPara.DicDir = Path.Combine(dir, @"dic\mecab-ipadic-neologd");
 
 			var mTagger = MeCabTagger.Create(mPara);
 
-			var sentence = @"Do not go.";//解析する文字列
+			var sentence = @"電源がオンになっている仮想マシンのみの一覧を返す場合、Get-VM コマンドにフィルターを追加します。 フィルターは Where-Object コマンドを使用して追加できます。 フィルター処理の詳細については、Where-Object の使用に関するドキュメントをご覧ください。";//解析する文字列
 			var node = mTagger.ParseToNode(sentence);
 			while (node != null) {
 				if (node.CharType > 0) {

@@ -9,11 +9,17 @@
 	<Grid Name="gridRoot">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="auto"/>
+			<RowDefinition Height="auto"/>
 			<RowDefinition Height="*"/>
 		</Grid.RowDefinitions>
 
-		<TextBlock
+		<TextBox
 			Name="tbUrl"
 			Grid.Row="0"/>
+		<Button
+			Name="btnGo"
+			Content="Go"
+			Grid.Row="1"
+			Click="btnGo_Click"/>
 	</Grid>
 </Window>
