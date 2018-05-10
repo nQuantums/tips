@@ -17,7 +17,9 @@ namespace PhantomJsTest {
 			//}
 
 			var dir = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "../../../"));
-			ProcessScript(Path.Combine(dir, "test.js"));
+			Directory.SetCurrentDirectory(dir);
+			//ProcessScript(Path.Combine(dir, "test.js"));
+			ProcessScript("webserver.js");
 		}
 
 		static void ProcessScript(string script, params string[] args) {
