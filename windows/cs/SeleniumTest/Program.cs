@@ -83,28 +83,45 @@ namespace SeleniumTest {
 				chrome.Url = @"http://www.google.com";
 				windowHandles.Add(chrome.CurrentWindowHandle);
 
-				var pageInitHandler = new Action<string>((handle) => {
+				// ページを支配下に置くための初期化、既に初期化済みの場合には処理はスキップされる
+				var pageInitializer = new Action<string>((handle) => {
 					lock (chrome) {
-						Console.WriteLine("--------");
+						Console.WriteLine("----start----");
 						chrome.ExecuteScript(SetEventsJs, handle, LocalHttpServerUrl);
 						Console.WriteLine(chrome.Url);
-						Console.WriteLine("--------");
+						Console.WriteLine("----end----");
 					}
 				});
 
-				pageInitHandler(chrome.CurrentWindowHandle);
-				pageInitHandler(chrome.CurrentWindowHandle);
-				pageInitHandler(chrome.CurrentWindowHandle);
-				pageInitHandler(chrome.CurrentWindowHandle);
+				// 新規ウィンドウ検出し初期化する
+				var newWindowDetector = new Action(() => {
+					lock (chrome) {
+						var curHandles = new HashSet<string>();
+						foreach (var h in chrome.WindowHandles) {
+							curHandles.Add(h);
+						}
+
+						windowHandles.RemoveWhere(h => !curHandles.Contains(h));
+
+						foreach (var h in curHandles) {
+							if (!windowHandles.Contains(h)) {
+								windowHandles.Add(h);
+								chrome.SwitchTo().Window(h);
+								pageInitializer(chrome.CurrentWindowHandle);
+							}
+						}
+					}
+				});
 
 
+				pageInitializer(chrome.CurrentWindowHandle);
+
+
+				// ページ終了した後のページで初期化する
 				var unloadHandler = new Action<string>((handle) => {
 					Task.Run(() => {
-						//Thread.Sleep(500);
-						lock (chrome) {
-							Console.WriteLine(chrome.Url);
-							pageInitHandler(chrome.CurrentWindowHandle);
-						}
+						Console.WriteLine(chrome.Url);
+						pageInitializer(chrome.CurrentWindowHandle);
 					});
 				});
 				Unload += unloadHandler;
@@ -113,59 +130,29 @@ namespace SeleniumTest {
 				});
 				Focus += focusHandler;
 
+				// ウィンドウのフォーカスが移ったなら新しいウィンドウを探し出す
 				var blurHandler = new Action<string>(handle => {
 					Task.Run(() => {
-						//Thread.Sleep(1000);
-						lock (chrome) {
-							var curHandles = new HashSet<string>();
-							foreach (var h in chrome.WindowHandles) {
-								curHandles.Add(h);
-							}
-
-							windowHandles.RemoveWhere(h => !curHandles.Contains(h));
-
-							foreach (var h in curHandles) {
-								if (!windowHandles.Contains(h)) {
-									windowHandles.Add(h);
-									chrome.SwitchTo().Window(h);
-									pageInitHandler(chrome.CurrentWindowHandle);
-								}
-							}
-						}
+						newWindowDetector();
 					});
 				});
 				Blur += blurHandler;
 
+				// ページの可視状態の切り替わりにより新しいウィンドウを探したりカレントのウィンドウを操作対象とする
 				var visibilityChangeHandler = new Action<string, string>((handle, visibilityState) => {
 					if (visibilityState == "hidden") {
 						Task.Run(() => {
-							//Thread.Sleep(1000);
-							lock (chrome) {
-								var curHandles = new HashSet<string>();
-								foreach (var h in chrome.WindowHandles) {
-									curHandles.Add(h);
-								}
-
-								windowHandles.RemoveWhere(h => !curHandles.Contains(h));
-
-								foreach (var h in curHandles) {
-									if (!windowHandles.Contains(h)) {
-										windowHandles.Add(h);
-										chrome.SwitchTo().Window(h);
-										pageInitHandler(chrome.CurrentWindowHandle);
-									}
-								}
-							}
+							newWindowDetector();
 						});
 					} else if (visibilityState == "visible") {
 						Task.Run(() => {
-							//Thread.Sleep(100);
+							// 表示状態になったウィンドウを操作対象とする
 							lock (chrome) {
 								var curHandles = chrome.WindowHandles;
 								var index = curHandles.IndexOf(handle);
 								Console.WriteLine(index);
 								if (0 <= index) {
-									chrome.SwitchTo().Window(curHandles[index]);
+									chrome.SwitchTo().Window(handle);
 								}
 							}
 						});
@@ -224,12 +211,6 @@ namespace SeleniumTest {
 											WriteLine(e, atrs, 0);
 										}
 									}
-								} else if (names[0] == "cxp") {
-									if (2 <= names.Length && currentElement != null) {
-										foreach (var e in (elements = currentElement.FindElements(By.XPath(names[1])))) {
-											WriteLine(e, names, 2);
-										}
-									}
 								} else if (names[0] == "ce") {
 									if (2 <= names.Length) {
 										if (int.TryParse(names[1], out int elementIndex)) {
@@ -258,19 +239,8 @@ namespace SeleniumTest {
 									Console.WriteLine(chrome.ExecuteScript("return document.activeElement.tabIndex"));
 								} else if (names[0] == "js") {
 									Console.WriteLine(chrome.ExecuteScript(line.Substring(2)));
-								} else if (names[0] == "httptest") {
-									var js = @"
-(async() => {
-	try {
-		const response = await fetch('http://localhost:9999/index.html?id=32');
-		console.log(await response.text());
-		console.log(response.status);
-	} catch (e) {
-		console.log('error!')
-	}
-})();
-";
-									Console.WriteLine(chrome.ExecuteScript(js));
+								} else if (names[0] == "init") {
+									pageInitializer(chrome.CurrentWindowHandle);
 								}
 							}
 						}
@@ -382,7 +352,7 @@ namespace SeleniumTest {
 		}
 
 		/// <summary>
-		/// xp{{XPath}} 取得要素の表示属性名... の様な形式の文字列からXPathと要素名一覧を取得する
+		/// xp{{XPath}} 表示属性名... の様な形式の文字列からXPathと属性名一覧を取得する
 		/// </summary>
 		/// <param name="line">文字列</param>
 		/// <returns>XPathと要素名一覧のタプル</returns>
