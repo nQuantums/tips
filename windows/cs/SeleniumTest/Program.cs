@@ -13,6 +13,7 @@ using OpenQA.Selenium;
 using OpenQA.Selenium.Support;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Support.Events;
+using Newtonsoft.Json;
 
 namespace SeleniumTest {
 	class Program {
@@ -270,6 +271,8 @@ namespace SeleniumTest {
 					res.Headers.Add("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
 					res.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
 
+					var responceBuffer = new StringBuilder();
+
 					var ev = req.QueryString["event"];
 					Console.WriteLine(ev);
 					switch (ev) {
@@ -301,6 +304,13 @@ namespace SeleniumTest {
 							}
 						}
 						break;
+					case "click": {
+							using (var sr = new StreamReader(req.InputStream, req.ContentEncoding)) {
+								Console.WriteLine(sr.ReadToEnd());
+							}
+							responceBuffer.Append(JsonConvert.SerializeObject(new { Result = 0 }));
+						}
+						break;
 					}
 					//Console.WriteLine(req.HttpMethod);
 					//foreach (var value in req.QueryString) {
@@ -311,7 +321,6 @@ namespace SeleniumTest {
 					res.ContentEncoding = Encoding.UTF8;
 					res.ContentType = "text/plain";
 
-					var sb = new StringBuilder();
 					//sb.AppendLine($"{req.HttpMethod} {req.RawUrl} HTTP/{req.ProtocolVersion}");
 					//sb.AppendLine(String.Join("\r\n", req.Headers.AllKeys.Select(k => $"{k}: {req.Headers[k]}")));
 					//sb.AppendLine(req.Url.ToString());
@@ -321,7 +330,7 @@ namespace SeleniumTest {
 					//}
 
 					var sw = new StreamWriter(res.OutputStream, Encoding.UTF8);
-					sw.WriteLine(sb.ToString());
+					sw.WriteLine(responceBuffer.ToString());
 					sw.Flush();
 				}
 			}

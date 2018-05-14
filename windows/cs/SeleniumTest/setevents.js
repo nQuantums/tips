@@ -4,24 +4,44 @@ console.log(arguments);
 if (!window.seleniumWindowHandle) {
     window.seleniumWindowHandle = arguments[0];
 
-    var fetcher = async(jsonData) => {
+    var fetcher = async(paramsJson) => {
         var params = '?';
         var first = true;
-        for (var p in jsonData) {
+        for (var p in paramsJson) {
             if (first) {
                 first = false;
             } else {
                 params += '&';
             }
             params += p + '=';
-            params += jsonData[p];
+            params += paramsJson[p];
         }
         var url = arguments[1] + params;
-        console.log(url)
         const response = await fetch(url);
         if (response) {
-            var text = await response.text();
-            console.log(text);
+            return await response.text();
+        } else {
+            return null;
+        }
+    };
+    var fetcherPost = async(paramsJson, bodyData) => {
+        var params = '?';
+        var first = true;
+        for (var p in paramsJson) {
+            if (first) {
+                first = false;
+            } else {
+                params += '&';
+            }
+            params += p + '=';
+            params += paramsJson[p];
+        }
+        var url = arguments[1] + params;
+        const response = await fetch(url, { method: 'POST', body: bodyData });
+        if (response) {
+            return await response.text();
+        } else {
+            return null;
         }
     };
 
@@ -31,6 +51,23 @@ if (!window.seleniumWindowHandle) {
         var startMsec = new Date();
         // 指定ミリ秒間、空ループ。CPUは常にビジー。
         while (new Date() - startMsec < waitMsec);
+    }
+
+    async function detectText(e) {
+        document.clickedElement = e;
+        var text = e.innerText || e.textContent;
+        while (text.length < 128) {
+            var p = e.parentElement;
+            if (p) {
+                e = p;
+                text = text = e.textContent || e.innerText;
+            } else {
+                break;
+            }
+        }
+        var result = await fetcherPost({ event: 'click', handle: window.seleniumWindowHandle }, text);
+        console.log(result);
+        console.log(JSON.parse(result));
     }
 
     window.addEventListener('unload', (e) => {
@@ -50,6 +87,12 @@ if (!window.seleniumWindowHandle) {
     window.addEventListener('blur', () => {
         fetcher({ event: 'blur', handle: window.seleniumWindowHandle });
     });
+
+    document.addEventListener('click', function(e) {
+        e = e || window.event;
+        var target = e.target || e.srcElement;
+        detectText(target);
+    }, false);
 } else {
 
 }
