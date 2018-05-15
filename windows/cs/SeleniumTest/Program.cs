@@ -161,7 +161,7 @@ namespace SeleniumTest {
 				});
 				VisibilityChange += visibilityChangeHandler;
 
-
+				// コマンドラインからの入力をループ
 				ReadOnlyCollection<IWebElement> elements = null;
 				IWebElement currentElement = null;
 				string line;
