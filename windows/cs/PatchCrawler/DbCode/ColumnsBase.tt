@@ -1,0 +1,94 @@
+﻿<#@ template  debug="true" hostSpecific="true" #>
+<#@ output extension=".cs" #>
+<#@ Assembly Name="System.Core" #>
+<#@ Assembly Name="System.Windows.Forms" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Diagnostics" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Collections" #>
+<#@ import namespace="System.Collections.Generic" #> 
+<#
+var types = new [] {
+	"bool, Bool, Boolean, value",
+	"char, Char, Char, value",
+	"int, Int32, Integer, value",
+	"long, Int64, Bigint, value",
+	"double, Real64, Double, value",
+	"string, String, Text, object",
+	"Guid, Uuid, Uuid, value",
+	"DateTime, DateTime, Timestamp, value",
+};
+#>
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using CodeDb.Query;
+
+namespace CodeDb {
+	/// <summary>
+	/// 列配列基本クラス
+	/// </summary>
+	/// <remarks>プロパティは全て列として扱われる</remarks>
+	public class ColumnsBase {
+		#region 列定義用メソッド
+<#
+foreach(var typeAndName in types) {
+	var fields = typeAndName.Split(',');
+	var type = fields[0].Trim();
+	var name = fields[1].Trim();
+	var dbtype = fields[2].Trim();
+	var isValue = fields[3].Trim() == "value";
+#>
+		/// <summary>
+		/// プロパティを<see cref="Column"/>に結びつける、プロパティの get 内から呼び出す必要がある
+		/// </summary>
+		/// <param name="getter">列定義シングルトンのプロパティ取得を呼び出す処理</param>
+		/// <param name="flags">列定義のオプションフラグ</param>
+		/// <param name="propertyName">プロパティ名</param>
+		/// <returns>ダミー値</returns>
+		protected <#=type#> As(Func<<#=type#>> getter, ColumnFlags flags = 0, [CallerMemberName] string propertyName = null) {
+			Mediator.ColumnFlags = flags;
+			Mediator.PropertyName = propertyName;
+			return getter();
+		}
+
+		/// <summary>
+		/// プロパティを<see cref="Column"/>に結びつける、プロパティの get 内から呼び出す必要がある
+		/// </summary>
+		/// <param name="getter">列定義シングルトンのプロパティ取得を呼び出す処理</param>
+		/// <param name="flags">列定義のオプションフラグ</param>
+		/// <param name="propertyName">プロパティ名</param>
+		/// <returns>ダミー値</returns>
+		protected <#=type#>[] As(Func<<#=type#>[]> getter, ColumnFlags flags = 0, [CallerMemberName] string propertyName = null) {
+			Mediator.ColumnFlags = flags;
+			Mediator.PropertyName = propertyName;
+			return getter();
+		}
+<#	if (isValue) {
+#>
+
+		/// <summary>
+		/// プロパティを<see cref="Column"/>に結びつける、プロパティの get 内から呼び出す必要がある
+		/// </summary>
+		/// <param name="getter">列定義シングルトンのプロパティ取得を呼び出す処理</param>
+		/// <param name="flags">列定義のオプションフラグ</param>
+		/// <param name="propertyName">プロパティ名</param>
+		/// <returns>ダミー値</returns>
+		protected <#=type#>? As(Func<<#=type#>?> getter, ColumnFlags flags = 0, [CallerMemberName] string propertyName = null) {
+			Mediator.ColumnFlags = flags;
+			Mediator.PropertyName = propertyName;
+			return getter();
+		}
+
+<#
+	}
+#>
+<#
+}
+#>
+		#endregion
+	}
+}

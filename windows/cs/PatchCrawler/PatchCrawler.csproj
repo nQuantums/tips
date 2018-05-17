@@ -37,9 +37,16 @@
     <Reference Include="Newtonsoft.Json, Version=11.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>packages\Newtonsoft.Json.11.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
+    <Reference Include="Npgsql, Version=3.2.7.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
+      <HintPath>packages\Npgsql.3.2.7\lib\net451\Npgsql.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Threading.Tasks.Extensions, Version=4.1.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>packages\System.Threading.Tasks.Extensions.4.3.0\lib\portable-net45+win8+wp8+wpa81\System.Threading.Tasks.Extensions.dll</HintPath>
+    </Reference>
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -54,6 +61,86 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Db.cs" />
+    <Compile Include="DbCode.PgBind\Class1.cs" />
+    <Compile Include="DbCode.PgBind\PgColumnDef.cs" />
+    <Compile Include="DbCode.PgBind\PgCommand.cs" />
+    <Compile Include="DbCode.PgBind\PgConnection.cs" />
+    <Compile Include="DbCode.PgBind\PgDatabaseDef.cs" />
+    <Compile Include="DbCode.PgBind\PgDatabaseDelta.cs" />
+    <Compile Include="DbCode.PgBind\PgDataReader.cs" />
+    <Compile Include="DbCode.PgBind\PgDbType.cs" />
+    <Compile Include="DbCode.PgBind\PgEnvironment.cs" />
+    <Compile Include="DbCode.PgBind\PgEnvironmentBase.cs" />
+    <Compile Include="DbCode.PgBind\PgEnvironmentException.cs" />
+    <Compile Include="DbCode.PgBind\PgRecordReader.cs" />
+    <Compile Include="DbCode.PgBind\PgTableDef.cs" />
+    <Compile Include="DbCode.PgBind\PgTableDelta.cs" />
+    <Compile Include="DbCode\ActionCmd.cs" />
+    <Compile Include="DbCode\Argument.cs" />
+    <Compile Include="DbCode\Column.cs" />
+    <Compile Include="DbCode\ColumnMap.cs" />
+    <Compile Include="DbCode\ColumnsBase.cs" />
+    <Compile Include="DbCode\Commandable.cs" />
+    <Compile Include="DbCode\DbCodeException.cs" />
+    <Compile Include="DbCode\DbEnvironment.cs" />
+    <Compile Include="DbCode\ElementCode.cs" />
+    <Compile Include="DbCode\FuncCmd.cs" />
+    <Compile Include="DbCode\ICodeDbCommand.cs" />
+    <Compile Include="DbCode\ICodeDbConnection.cs" />
+    <Compile Include="DbCode\ICodeDbDataReader.cs" />
+    <Compile Include="DbCode\IColumnDef.cs" />
+    <Compile Include="DbCode\IDatabaseDef.cs" />
+    <Compile Include="DbCode\IDatabaseDelta.cs" />
+    <Compile Include="DbCode\IDbType.cs" />
+    <Compile Include="DbCode\IElementizable.cs" />
+    <Compile Include="DbCode\IIndexDef.cs" />
+    <Compile Include="DbCode\IndexDef.cs" />
+    <Compile Include="DbCode\Internal\ITypeWise.cs" />
+    <Compile Include="DbCode\Internal\Mediator.cs" />
+    <Compile Include="DbCode\Internal\ParameterReplacer.cs" />
+    <Compile Include="DbCode\Internal\TypeSystem.cs" />
+    <Compile Include="DbCode\Internal\TypeWiseCache.cs" />
+    <Compile Include="DbCode\Internal\TypeWiseExecutor.cs" />
+    <Compile Include="DbCode\IPrimaryKeyDef.cs" />
+    <Compile Include="DbCode\IRecordReader.cs" />
+    <Compile Include="DbCode\ITable.cs" />
+    <Compile Include="DbCode\ITableDef.cs" />
+    <Compile Include="DbCode\ITableDelta.cs" />
+    <Compile Include="DbCode\IUniqueDef.cs" />
+    <Compile Include="DbCode\Parameter.cs" />
+    <Compile Include="DbCode\PrimaryKeyDef.cs" />
+    <Compile Include="DbCode\Query\CodeNode.cs" />
+    <Compile Include="DbCode\Query\DropTable.cs" />
+    <Compile Include="DbCode\Query\From.cs" />
+    <Compile Include="DbCode\Query\GroupBy.cs" />
+    <Compile Include="DbCode\Query\IDropTable.cs" />
+    <Compile Include="DbCode\Query\IExists.cs" />
+    <Compile Include="DbCode\Query\IFrom.cs" />
+    <Compile Include="DbCode\Query\IGroupBy.cs" />
+    <Compile Include="DbCode\Query\IInsertInto.cs" />
+    <Compile Include="DbCode\Query\IJoin.cs" />
+    <Compile Include="DbCode\Query\ILimit.cs" />
+    <Compile Include="DbCode\Query\InsertInto.cs" />
+    <Compile Include="DbCode\Query\IOrderBy.cs" />
+    <Compile Include="DbCode\Query\IQueryNode.cs" />
+    <Compile Include="DbCode\Query\ISelect.cs" />
+    <Compile Include="DbCode\Query\IValues.cs" />
+    <Compile Include="DbCode\Query\IWhere.cs" />
+    <Compile Include="DbCode\Query\Join.cs" />
+    <Compile Include="DbCode\Query\Limit.cs" />
+    <Compile Include="DbCode\Query\OrderBy.cs" />
+    <Compile Include="DbCode\Query\Select.cs" />
+    <Compile Include="DbCode\Query\SelectFrom.cs" />
+    <Compile Include="DbCode\Query\Values.cs" />
+    <Compile Include="DbCode\Query\ValueSetter.cs" />
+    <Compile Include="DbCode\Query\Where.cs" />
+    <Compile Include="DbCode\RecordEnumerator.cs" />
+    <Compile Include="DbCode\Sql.Build.cs" />
+    <Compile Include="DbCode\Sql.cs" />
+    <Compile Include="DbCode\SqlKeyword.cs" />
+    <Compile Include="DbCode\TableDef.cs" />
+    <Compile Include="DbCode\UniqueDef.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
@@ -64,6 +151,39 @@
   <ItemGroup>
     <EmbeddedResource Include="setevents.js" />
     <EmbeddedResource Include="setuniqueid.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="DbCode.PgBind\PgEnvironment.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>PgEnvironment1.cs</LastGenOutput>
+    </Content>
+    <Content Include="DbCode\ActionCmd.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>ActionCmd1.cs</LastGenOutput>
+    </Content>
+    <Content Include="DbCode\Argument.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Argument1.cs</LastGenOutput>
+    </Content>
+    <Content Include="DbCode\ColumnsBase.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>ColumnsBase1.cs</LastGenOutput>
+    </Content>
+    <Content Include="DbCode\DbEnvironment.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>DbEnvironment1.cs</LastGenOutput>
+    </Content>
+    <Content Include="DbCode\FuncCmd.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>FuncCmd1.cs</LastGenOutput>
+    </Content>
+    <Content Include="DbCode\Sql.Build.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Sql.Build1.cs</LastGenOutput>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="packages\Selenium.Chrome.WebDriver.2.38\build\Selenium.Chrome.WebDriver.targets" Condition="Exists('packages\Selenium.Chrome.WebDriver.2.38\build\Selenium.Chrome.WebDriver.targets')" />

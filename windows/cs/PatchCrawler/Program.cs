@@ -14,6 +14,8 @@ using OpenQA.Selenium.Support;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Support.Events;
 using Newtonsoft.Json;
+using DbCode;
+using DbCode.PgBind;
 
 namespace PatchCrawler {
 	class Program {
@@ -62,12 +64,26 @@ namespace PatchCrawler {
 		}
 
 		static void Main(string[] args) {
-			var cts = new CancellationTokenSource();
-			var t = StartHttpServer(cts.Token);
+			Db.Initialize();
 
-			RunControlBrowser();
+			using (var con = Db.CreateConnection()) {
+				con.Open();
 
-			StopHttpServer(t, cts);
+				var cmd = con.CreateCommand();
+				int id = 0;
+				using (var reader = Db.AddUrl.Execute(cmd, "asdfsaaaaaaaaaaaaaaaaaadfsaf")) {
+					foreach (var r in reader.Records) {
+						id = r;
+					}
+				}
+			}
+
+			//var cts = new CancellationTokenSource();
+			//var t = StartHttpServer(cts.Token);
+
+			//RunControlBrowser();
+
+			//StopHttpServer(t, cts);
 		}
 
 		/// <summary>

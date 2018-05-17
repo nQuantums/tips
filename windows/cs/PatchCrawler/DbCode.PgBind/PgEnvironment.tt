@@ -1,0 +1,67 @@
+﻿<#@ template  debug="true" hostSpecific="true" #>
+<#@ output extension=".cs" #>
+<#@ Assembly Name="System.Core" #>
+<#@ Assembly Name="System.Windows.Forms" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Diagnostics" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Collections" #>
+<#@ import namespace="System.Collections.Generic" #> 
+<#
+var types = new [] {
+	"bool, Bool, Boolean, value",
+	"char, Char, Char, value",
+	"int, Int32, Integer, value",
+	"long, Int64, Bigint, value",
+	"double, Real64, Double, value",
+	"string, String, Text, object",
+	"Guid, Uuid, Uuid, value",
+	"DateTime, DateTime, Timestamp, value",
+};
+#>
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Linq;
+using System.Linq.Expressions;
+using CodeDb;
+using CodeDb.Internal;
+using Npgsql;
+using NpgsqlTypes;
+
+namespace CodeDb.PgBinder {
+	/// <summary>
+	/// Npgsql接続環境クラス
+	/// </summary>
+	public class PgEnvironment : PgEnvironmentBase {
+<#
+foreach(var typeAndName in types) {
+	var fields = typeAndName.Split(',');
+	var type = fields[0].Trim();
+	var name = fields[1].Trim();
+	var dbtype = fields[2].Trim();
+	var isValue = fields[3].Trim() == "value";
+#>
+		public override <#=type#> <#=name#>(string name, ColumnFlags flags = 0) {
+			Mediator.Column = Mediator.Table.BindColumn(Mediator.PropertyName, name, new PgDbType(typeof(<#=type#>)), flags | Mediator.ColumnFlags);
+			return default(<#=type#>);
+		}
+		public override <#=type#>[] <#=name#>Array(string name, ColumnFlags flags = 0) {
+			Mediator.Column = Mediator.Table.BindColumn(Mediator.PropertyName, name, new PgDbType(typeof(<#=type#>[])), flags | Mediator.ColumnFlags);
+			return default(<#=type#>[]);
+		}
+<#	if (isValue) {
+#>
+		public override <#=type#>? <#=name#>Null(string name, ColumnFlags flags = 0) {
+			Mediator.Column = Mediator.Table.BindColumn(Mediator.PropertyName, name, new PgDbType(typeof(<#=type#>?)), flags | Mediator.ColumnFlags | ColumnFlags.Nullable);
+			return default(<#=type#>?);
+		}
+<#
+	}
+#>
+<#
+}
+#>
+	}
+}
