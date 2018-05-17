@@ -23,6 +23,8 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -32,6 +34,8 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Newtonsoft.Json, Version=11.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
@@ -141,6 +145,32 @@
     <Compile Include="DbCode\SqlKeyword.cs" />
     <Compile Include="DbCode\TableDef.cs" />
     <Compile Include="DbCode\UniqueDef.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\BitUtils.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\CharInfo.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\CharProperty.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\Connector.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\DoubleArray.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\IniParser.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\MeCabDictionary.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\MeCabPath.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\NBestGenerator.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\PriorityQueue.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\StrUtils.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\Token.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\Tokenizer.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\Utils.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\Viterbi.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Core\Writer.cs" />
+    <Compile Include="LibNMeCab\NMeCab.Properties\Settings.cs" />
+    <Compile Include="LibNMeCab\NMeCab\DictionaryType.cs" />
+    <Compile Include="LibNMeCab\NMeCab\MeCabException.cs" />
+    <Compile Include="LibNMeCab\NMeCab\MeCabFileFormatException.cs" />
+    <Compile Include="LibNMeCab\NMeCab\MeCabInvalidFileException.cs" />
+    <Compile Include="LibNMeCab\NMeCab\MeCabLatticeLevel.cs" />
+    <Compile Include="LibNMeCab\NMeCab\MeCabNode.cs" />
+    <Compile Include="LibNMeCab\NMeCab\MeCabNodeStat.cs" />
+    <Compile Include="LibNMeCab\NMeCab\MeCabParam.cs" />
+    <Compile Include="LibNMeCab\NMeCab\MeCabTagger.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

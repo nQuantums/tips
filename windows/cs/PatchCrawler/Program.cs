@@ -16,15 +16,22 @@ using OpenQA.Selenium.Support.Events;
 using Newtonsoft.Json;
 using DbCode;
 using DbCode.PgBind;
+using Newtonsoft.Json.Linq;
+using NMeCab;
 
 namespace PatchCrawler {
 	class Program {
 		const string LocalHttpServerUrl = "http://localhost:9999/";
 
+		static IDbCodeCommand Cmd;
+
+		static MeCabTagger MeCab;
+
 		static event Action<string> Unload;
 		static event Action<string> Focus;
 		static event Action<string> Blur;
 		static event Action<string, string> VisibilityChange;
+		static event Action<string, string> Jump;
 
 		/// <summary>
 		/// XPath指定部分取得用の正規表現
@@ -64,26 +71,21 @@ namespace PatchCrawler {
 		}
 
 		static void Main(string[] args) {
-			Db.Initialize();
+			// 形態素解析のMeCabを初期化
+			var mecabPara = new MeCabParam();
+			mecabPara.DicDir = @"c:\dic\mecab-ipadic-neologd";
+			MeCab = MeCabTagger.Create(mecabPara);
 
+			Db.Initialize();
 			using (var con = Db.CreateConnection()) {
 				con.Open();
+				Cmd = con.CreateCommand();
 
-				var cmd = con.CreateCommand();
-				int id = 0;
-				using (var reader = Db.AddUrl.Execute(cmd, "asdfsaaaaaaaaaaaaaaaaaadfsaf")) {
-					foreach (var r in reader.Records) {
-						id = r;
-					}
-				}
+				var cts = new CancellationTokenSource();
+				var t = StartHttpServer(cts.Token);
+				RunControlBrowser();
+				StopHttpServer(t, cts);
 			}
-
-			//var cts = new CancellationTokenSource();
-			//var t = StartHttpServer(cts.Token);
-
-			//RunControlBrowser();
-
-			//StopHttpServer(t, cts);
 		}
 
 		/// <summary>
@@ -104,8 +106,36 @@ namespace PatchCrawler {
 				var pageInitializer = new Action<string>((handle) => {
 					lock (chrome) {
 						Console.WriteLine("----start----");
-						chrome.ExecuteScript(SetEventsJs, handle, LocalHttpServerUrl);
-						Console.WriteLine(chrome.Url);
+
+						//chrome.ExecuteScript(SetEventsJs, handle, LocalHttpServerUrl);
+						var jobj = JObject.Parse(chrome.ExecuteScript(SetEventsJs, handle, LocalHttpServerUrl) as string);
+						var url = (string)jobj["url"];
+						var title = (string)jobj["title"];
+						var text = (string)jobj["text"];
+
+						var keywords = new Dictionary<string, int>();
+						var node = MeCab.ParseToNode(text);
+						while (node != null) {
+							if (node.CharType != 0) {
+								if (!(node.Feature.StartsWith("記号,") || node.Feature.StartsWith("名詞,数,"))) {
+									var keyword = node.Surface.ToLower();
+									if (keywords.ContainsKey(keyword)) {
+										keywords[keyword]++;
+									} else {
+										keywords[keyword] = 1;
+									}
+								}
+							}
+							node = node.Next;
+						}
+
+						var urlID = Db.AddUrl(Cmd, url);
+						Db.AddUrlTitle(Cmd, urlID, title);
+						foreach (var kvp in keywords) {
+							var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+							Db.AddUrlKeyword(Cmd, urlID, keywordID, kvp.Value);
+						}
+
 						Console.WriteLine("----end----");
 					}
 				});
@@ -177,6 +207,14 @@ namespace PatchCrawler {
 				});
 				VisibilityChange += visibilityChangeHandler;
 
+				// ページ内のリンクを踏んでジャンプした際の処理
+				var jumpHandler = new Action<string, string>((src, dst) => {
+					var srcUrlID = Db.AddUrl(Cmd, src);
+					var dstUrlID = Db.AddUrl(Cmd, dst);
+					Db.AddLink(Cmd, srcUrlID, dstUrlID);
+				});
+				Jump += jumpHandler;
+
 				// コマンドラインからの入力をループ
 				ReadOnlyCollection<IWebElement> elements = null;
 				IWebElement currentElement = null;
@@ -206,6 +244,8 @@ namespace PatchCrawler {
 									}
 								} else if (names[0] == "wnds") {
 									foreach (var w in chrome.WindowHandles) {
+										chrome.SwitchTo().Window(w);
+										pageInitializer(w);
 										Console.WriteLine(w);
 									}
 								} else if (names[0] == "id") {
@@ -321,10 +361,23 @@ namespace PatchCrawler {
 						}
 						break;
 					case "click": {
+							//using (var sr = new StreamReader(req.InputStream, req.ContentEncoding)) {
+							//	Console.WriteLine(sr.ReadToEnd());
+							//}
+							//responceBuffer.Append(JsonConvert.SerializeObject(new { Result = 0 }));
+						}
+						break;
+					case "jump": {
+							string src, dst;
 							using (var sr = new StreamReader(req.InputStream, req.ContentEncoding)) {
-								Console.WriteLine(sr.ReadToEnd());
+								var jobj = JObject.Parse(sr.ReadToEnd());
+								src = (string)jobj["src"];
+								dst = (string)jobj["dst"];
 							}
-							responceBuffer.Append(JsonConvert.SerializeObject(new { Result = 0 }));
+							var d = Jump;
+							if (d != null) {
+								d(src, dst);
+							}
 						}
 						break;
 					}

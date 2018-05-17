@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Linq;
 using System.Linq.Expressions;
+using DbCode;
 using DbCode.Query;
 using DbCode.Internal;
 
@@ -79,6 +80,38 @@ namespace DbCode {
 		}
 
 		/// <summary>
+		/// コードをそのままノードにする
+		/// </summary>
+		/// <param name="code">コード</param>
+		/// <returns>ノード</returns>
+		public CodeNode Code(string code) {
+			var node = new CodeNode(this, new ElementCode(code));
+			this.Children.Add(node);
+			return node;
+		}
+
+		/// <summary>
+		/// 指定された名前のストアドプロシージャ（戻り値有り）を呼び出すノードを作成する
+		/// </summary>
+		/// <param name="funcName">ストアドプロシージャ名</param>
+		/// <param name="arguments">ストアドプロシージャへの引数列</param>
+		/// <returns>ノード</returns>
+		public CodeNode CallFunc(string funcName, params Argument[] arguments) {
+			var code = new ElementCode();
+			code.Add(SqlKeyword.Select);
+			code.Concat(funcName);
+			code.BeginParenthesize();
+			for (int i = 0; i < arguments.Length; i++) {
+				if (i != 0) {
+					code.AddComma();
+				}
+				code.Add(arguments[i]);
+			}
+			code.EndParenthesize();
+			return this.Code(code);
+		}
+
+		/// <summary>
 		/// 指定のテーブル定義を破棄する
 		/// </summary>
 		/// <param name="table">テーブル定義</param>
@@ -120,7 +153,7 @@ namespace DbCode {
 		/// <param name="table">挿入先テーブル</param>
 		/// <param name="columnsExpression">列と設定値を指定する t => new[] { t.A == a, t.B == b } の様な式</param>
 		/// <returns>INSERT INTO句ノード</returns>
-		public InsertInto<TColumns> InsertIntoWithValue<TColumns>(TableDef<TColumns> table, Expression<Func<TColumns, bool[]>> columnsExpression) {
+		public InsertInto<TColumns> InsertInto<TColumns>(TableDef<TColumns> table, Expression<Func<TColumns, bool[]>> columnsExpression) {
 			var node = new InsertInto<TColumns>(this, table, columnsExpression);
 			this.Children.Add(node);
 			return node;
@@ -134,7 +167,7 @@ namespace DbCode {
 		/// <param name="columnsExpression">列と設定値を指定する t => new[] { t.A == a, t.B == b } の様な式</param>
 		/// <param name="columnCountToWhere">NOT EXISTS (SELECT * FROM t WHERE t.Name = "test") の部分で判定に使用する列数、0が指定されたら全て使用する</param>
 		/// <returns>INSERT INTO句ノード</returns>
-		public InsertInto<TColumns> InsertIntoWithValueIfNotExists<TColumns>(TableDef<TColumns> table, Expression<Func<TColumns, bool[]>> columnsExpression, int columnCountToWhere = 0) {
+		public InsertInto<TColumns> InsertIntoIfNotExists<TColumns>(TableDef<TColumns> table, Expression<Func<TColumns, bool[]>> columnsExpression, int columnCountToWhere = 0) {
 			var node = new InsertInto<TColumns>(this, table, columnsExpression);
 			node.IfNotExists(columnCountToWhere);
 			this.Children.Add(node);

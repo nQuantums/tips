@@ -442,6 +442,14 @@ namespace DbCode {
 		}
 
 		/// <summary>
+		/// コンストラクタ、SQLのコードを指定して初期化する
+		/// </summary>
+		/// <param name="code">SQLコード</param>
+		public ElementCode(string code) : this() {
+			this.Concat(code);
+		}
+
+		/// <summary>
 		/// コンストラクタ、式木と列プロパティマップを指定して初期化する
 		/// </summary>
 		/// <param name="expression">式木</param>

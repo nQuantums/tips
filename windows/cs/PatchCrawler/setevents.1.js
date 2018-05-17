@@ -4,7 +4,11 @@ console.log(arguments);
 if (!window.seleniumWindowHandle) {
     window.seleniumWindowHandle = arguments[0];
 
-    let fetcher = async(paramsJson) => {
+    /**
+     * 呼び出し元プログラムが用意したHTTPサーバーへGET要求を送る
+     * @param {*} paramsJson HTTPサーバーへ送るパラメータ
+     */
+    async function fetcher(paramsJson) {
         let params = '?';
         let first = true;
         for (let p in paramsJson) {
@@ -24,7 +28,13 @@ if (!window.seleniumWindowHandle) {
             return null;
         }
     };
-    let fetcherPost = async(paramsJson, bodyData) => {
+
+    /**
+     * 呼び出し元プログラムが用意したHTTPサーバーへPOST要求を送る
+     * @param {*} paramsJson HTTPサーバーへ送るパラメータ
+     * @param {*} bodyData ボディーデータ
+     */
+    async function fetcherPost(paramsJson, bodyData) {
         let params = '?';
         let first = true;
         for (let p in paramsJson) {
@@ -45,8 +55,10 @@ if (!window.seleniumWindowHandle) {
         }
     };
 
-    // JavaScriptでsleepする方法
-    // ビジーwaitを使う方法
+    /**
+     * 指定時間経過するまでループ処理にて待つ
+     * @param {Number} waitMsec ミリ秒単位での待ち時間
+     */
     function sleep(waitMsec) {
         let startMsec = new Date();
         // 指定ミリ秒間、空ループ。CPUは常にビジー。
@@ -156,29 +168,19 @@ if (!window.seleniumWindowHandle) {
         e = e || window.event;
         let target = e.target || e.srcElement;
 
-        if (target.nodeName === 'A') {
-            let href = target.href;
-            if (href && !href.startsWith('#')) {
-                fetcherPost({ event: 'jump', handle: window.seleniumWindowHandle }, JSON.stringify({ src: document.URL, dst: href }));
-            }
-        }
-
         fetcherPost({ event: 'click', handle: window.seleniumWindowHandle }, JSON.stringify(target.href || ''));
 
         // detectText(target);
-        let tbl = target.closest('table');
-        if (tbl) {
-            document.clickedElement = tbl;
-            let cells = analyzeTable(tbl);
+        let t = target.closest('table');
+        if (t) {
+            document.clickedElement = t;
+            let cells = analyzeTable(t);
             fetcherPost({ event: 'click', handle: window.seleniumWindowHandle }, JSON.stringify(cells));
         }
     }, false);
-} else {
-
 }
 
 return JSON.stringify({
     url: document.URL,
-    title: document.title,
     text: document.documentElement.innerText
 });
