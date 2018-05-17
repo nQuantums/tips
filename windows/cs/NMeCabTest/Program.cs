@@ -9,12 +9,10 @@ using NMeCab;
 namespace NMeCabTest {
 	class Program {
 		static void Main(string[] args) {
-			var dir = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), @"..\..\"));
-
 			var mPara = new MeCabParam();
 
 			//辞書ファイルがあるフォルダを指定(NuGetで入れれば勝手に入る)
-			mPara.DicDir = Path.Combine(dir, @"dic\mecab-ipadic-neologd");
+			mPara.DicDir = @"c:\dic\mecab-ipadic-neologd";
 
 			var mTagger = MeCabTagger.Create(mPara);
 			string line = null;

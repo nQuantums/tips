@@ -1,0 +1,128 @@
+﻿<#@ template  debug="true" hostSpecific="true" language="C#" #>
+<#@ output extension=".cs" #>
+<#@ Assembly Name="System.Core" #>
+<#@ Assembly Name="System.Windows.Forms" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Diagnostics" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Collections" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#
+var types = new [] {
+	"bool, Bool, Boolean, value",
+	"char, Char, Char, value",
+	"int, Int32, Integer, value",
+	"long, Int64, Bigint, value",
+	"double, Real64, Double, value",
+	"string, String, Text, object",
+	"Guid, Uuid, Uuid, value",
+	"DateTime, DateTime, Timestamp, value",
+};
+var ops = new [] {
+	"+, value, Addition, Add",
+	"-, value, Subtraction, Subtract",
+	"*, value, Multiply, Multiply",
+	"/, value, Division, Divide",
+	"<, bool, LessThan, LessThan",
+	">, bool, GreaterThan, GreaterThan",
+	"<=, bool, LessThanOrEqual, LessThanOrEqual",
+	">=, bool, GreaterThanOrEqual, GreaterThanOrEqual",
+	"==, bool, Equality, Equal",
+	"!=, bool, Inequal, NotEqual",
+	"|, value, BitwiseOr, Or",
+	"&, value,  BitwiseAnd, And",
+};#>
+using System;
+using System.Collections.Generic;
+using System.Dynamic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
+
+namespace CodeDb {
+	/// <summary>
+	/// コマンドに対する引数として扱う事をマークするためのオブジェクト
+	/// </summary>
+	public class Argument {
+		public object Value { get; set; }
+
+		public Argument(object value) {
+			this.Value = value;
+		}
+
+		public override string ToString() {
+			var value = this.Value;
+			if (value == null) {
+				return "null";
+			} else {
+				return value.ToString();
+			}
+		}
+
+		public override bool Equals(object obj) {
+			return object.ReferenceEquals(this, obj);
+		}
+
+		public override int GetHashCode() {
+			var value = this.Value;
+			return value != null ? value.GetHashCode() : 0;
+		}
+
+		// 明示的キャスト
+		public static bool operator true(Argument variable) => !(variable is null);
+		public static bool operator false(Argument variable) => variable is null;
+
+		// 暗黙的キャスト
+<#
+foreach(var typeAndName in types) {
+	var fields = typeAndName.Split(',');
+	var type = fields[0].Trim();
+	var name = fields[1].Trim();
+	var dbtype = fields[2].Trim();
+	var isValue = fields[3].Trim() == "value";
+#>
+		public static implicit operator <#=type#>(Argument variable) => (<#=type#>)variable.Value;
+<#	if (isValue) {#>
+		public static implicit operator <#=type#>?(Argument variable) => (<#=type#>?)variable.Value;
+<#	}
+}
+#>
+
+		// 配列としてアクセス
+		public Argument this[int index] {
+			get {
+				return default(Argument);
+			}
+		}
+
+		// 以下演算子オーバーロード
+<#
+foreach(var opAndExprType in ops) {
+	var opexpr = opAndExprType.Split(',');
+	var op = opexpr[0].Trim();
+	var retTypeIsBool = opexpr[1].Trim() == "bool";
+	var exprNodeType = opexpr[3].Trim();
+	foreach(var typeAndName in types) {
+		var fields = typeAndName.Split(',');
+		var type = fields[0].Trim();
+		var rettype = retTypeIsBool ? "bool" : type;
+		var rettypeNullable = retTypeIsBool ? "bool" : type + "?";
+		var name = fields[1].Trim();
+		var dbtype = fields[2].Trim();
+		var isValue = fields[3].Trim() == "value";
+#>
+		public static <#=rettype#> operator <#=op#>(<#=type#> l, Argument r) => default(<#=rettype#>);
+		public static <#=rettype#> operator <#=op#>(Argument l, <#=type#> r) => default(<#=rettype#>);
+<#		if (isValue) {#>
+		public static <#=rettypeNullable#> operator <#=op#>(<#=type#>? l, Argument r) => default(<#=rettypeNullable#>);
+		public static <#=rettypeNullable#> operator <#=op#>(Argument l, <#=type#>? r) => default(<#=rettypeNullable#>);
+<#		}
+	}#>
+		public static <#=retTypeIsBool ? "bool" : "Argument"#> operator <#=op#>(Argument l, Argument r) => default(<#=retTypeIsBool ? "bool" : "Argument"#>);
+<#
+}
+#>
+		public static bool operator !(Argument op) => op is null;
+	}
+}
