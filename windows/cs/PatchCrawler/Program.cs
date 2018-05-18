@@ -27,6 +27,7 @@ namespace PatchCrawler {
 
 		static MeCabTagger MeCab;
 
+		static event Action<JObject> PageAfterInit;
 		static event Action<string> Unload;
 		static event Action<string> Focus;
 		static event Action<string> Blur;
@@ -76,7 +77,10 @@ namespace PatchCrawler {
 			mecabPara.DicDir = @"c:\dic\mecab-ipadic-neologd";
 			MeCab = MeCabTagger.Create(mecabPara);
 
+			// データベース関係初期化
 			Db.Initialize();
+
+			// データベースへ接続しブラウザの制御を開始する
 			using (var con = Db.CreateConnection()) {
 				con.Open();
 				Cmd = con.CreateCommand();
@@ -105,40 +109,45 @@ namespace PatchCrawler {
 				// ページを支配下に置くための初期化、既に初期化済みの場合には処理はスキップされる
 				var pageInitializer = new Action<string>((handle) => {
 					lock (chrome) {
-						Console.WriteLine("----start----");
-
-						//chrome.ExecuteScript(SetEventsJs, handle, LocalHttpServerUrl);
-						var jobj = JObject.Parse(chrome.ExecuteScript(SetEventsJs, handle, LocalHttpServerUrl) as string);
-						var url = (string)jobj["url"];
-						var title = (string)jobj["title"];
-						var text = (string)jobj["text"];
-
-						var keywords = new Dictionary<string, int>();
-						var node = MeCab.ParseToNode(text);
-						while (node != null) {
-							if (node.CharType != 0) {
-								if (!(node.Feature.StartsWith("記号,") || node.Feature.StartsWith("名詞,数,"))) {
-									var keyword = node.Surface.ToLower();
-									if (keywords.ContainsKey(keyword)) {
-										keywords[keyword]++;
-									} else {
-										keywords[keyword] = 1;
-									}
-								}
-							}
-							node = node.Next;
-						}
-
-						var urlID = Db.AddUrl(Cmd, url);
-						Db.AddUrlTitle(Cmd, urlID, title);
-						foreach (var kvp in keywords) {
-							var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-							Db.AddUrlKeyword(Cmd, urlID, keywordID, kvp.Value);
-						}
-
-						Console.WriteLine("----end----");
+						Console.WriteLine("----init start----");
+						chrome.ExecuteScript(SetEventsJs, handle, LocalHttpServerUrl);
+						Console.WriteLine("----init end----");
 					}
 				});
+
+				// ページ初期化後の処理
+				var pageAfterInit = new Action<JObject>(jobj => {
+					Task.Run(() => {
+						lock (Cmd) {
+							Console.WriteLine("----after init start----");
+							var url = (string)jobj["url"];
+							var title = (string)jobj["title"];
+							var text = (string)jobj["text"];
+							var content = (string)jobj["content"];
+
+							var urlID = Db.AddUrl(Cmd, url);
+							Db.AddUrlTitle(Cmd, urlID, title);
+							Db.AddUrlContent(Cmd, urlID, content);
+
+							foreach (var kvp in DetectKeywords(url)) {
+								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+								Db.AddUrlKeyword(Cmd, urlID, keywordID, kvp.Value);
+							}
+
+							foreach (var kvp in DetectKeywords(title)) {
+								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+								Db.AddTitleKeyword(Cmd, urlID, keywordID, kvp.Value);
+							}
+
+							foreach (var kvp in DetectKeywords(text)) {
+								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+								Db.AddContentKeyword(Cmd, urlID, keywordID, kvp.Value);
+							}
+							Console.WriteLine("----after init end----");
+						}
+					});
+				});
+				PageAfterInit += pageAfterInit;
 
 				// 新規ウィンドウ検出し初期化する
 				var newWindowDetector = new Action(() => {
@@ -209,9 +218,13 @@ namespace PatchCrawler {
 
 				// ページ内のリンクを踏んでジャンプした際の処理
 				var jumpHandler = new Action<string, string>((src, dst) => {
-					var srcUrlID = Db.AddUrl(Cmd, src);
-					var dstUrlID = Db.AddUrl(Cmd, dst);
-					Db.AddLink(Cmd, srcUrlID, dstUrlID);
+					Task.Run(() => {
+						lock (Cmd) {
+							var srcUrlID = Db.AddUrl(Cmd, src);
+							var dstUrlID = Db.AddUrl(Cmd, dst);
+							Db.AddLink(Cmd, srcUrlID, dstUrlID);
+						}
+					});
 				});
 				Jump += jumpHandler;
 
@@ -332,6 +345,17 @@ namespace PatchCrawler {
 					var ev = req.QueryString["event"];
 					Console.WriteLine(ev);
 					switch (ev) {
+					case "page_after_init": {
+							var d = PageAfterInit;
+							if (d != null) {
+								JObject jobj;
+								using (var sr = new StreamReader(req.InputStream, req.ContentEncoding)) {
+									jobj = JObject.Parse(sr.ReadToEnd());
+								}
+								d(jobj);
+							}
+						}
+						break;
 					case "unload": {
 							var d = Unload;
 							if (d != null) {
@@ -448,6 +472,123 @@ namespace PatchCrawler {
 				}
 			}
 			return (xp.Value, names.ToArray());
+		}
+
+		static readonly Regex RegexCve = new Regex("cve-(|([0-9]+(|-(|([0-9]+)))))$", RegexOptions.Compiled);
+		static readonly Regex RegexJvndb = new Regex("jvndb-(|([0-9]+(|-(|([0-9]+)))))$", RegexOptions.Compiled);
+		static readonly Regex RegexCveComplete = new Regex("cve-[0-9]+-[0-9]+$", RegexOptions.Compiled);
+		static readonly Regex RegexJvndbComplete = new Regex("jvndb-[0-9]+-[0-9]+$", RegexOptions.Compiled);
+
+		/// <summary>
+		/// 指定キーワードを特別処理する必要があるなら処理用のデリゲートを返す
+		/// </summary>
+		/// <param name="keyword">キーワード</param>
+		/// <param name="addTodic">キーワードを辞書に登録する処理</param>
+		/// <returns>デリゲート</returns>
+		static Func<string, bool> SpecialKeyword(string keyword, Action<string> addTodic) {
+			switch (keyword) {
+			case "cve": {
+					var list = new List<string>();
+					list.Add(keyword);
+					return new Func<string, bool>(k => {
+						var n = list.Count;
+						if (k.Length != 0) {
+							list.Add(k);
+						}
+						if (k.Length == 0 || !RegexCve.IsMatch(string.Concat(list))) {
+							var c = string.Concat(list.Take(n));
+							if (RegexCveComplete.IsMatch(c)) {
+								addTodic(c);
+								Console.WriteLine(c);
+							} else {
+								list.ForEach(i => addTodic(i));
+							}
+							return false;
+						} else {
+							return true;
+						}
+					});
+				}
+			case "jvndb": {
+					var list = new List<string>();
+					list.Add(keyword);
+					return new Func<string, bool>(k => {
+						var n = list.Count;
+						if (k.Length != 0) {
+							list.Add(k);
+						}
+						if (k.Length == 0 || !RegexJvndb.IsMatch(string.Concat(list))) {
+							var c = string.Concat(list.Take(n));
+							if (RegexJvndbComplete.IsMatch(c)) {
+								addTodic(c);
+								Console.WriteLine(c);
+							} else {
+								list.ForEach(i => addTodic(i));
+							}
+							return false;
+						} else {
+							return true;
+						}
+					});
+				}
+			default:
+				return null;
+			}
+		}
+
+		/// <summary>
+		/// <see cref="SpecialKeyword"/>で取得されているデリゲートを通してキーワードを処理する
+		/// </summary>
+		/// <param name="receivers">デリゲートリスト、処理が完了したものは取り除かれる</param>
+		/// <param name="keyword">キーワード</param>
+		static void SpecialKeywordProc(List<Func<string, bool>> receivers, string keyword) {
+			for (int i = receivers.Count - 1; i != -1; --i) {
+				if (!receivers[i](keyword)) {
+					receivers.RemoveAt(i);
+				}
+			}
+		}
+
+		/// <summary>
+		/// 指定テキスト内に含まれるキーワードとカウントを取得する
+		/// </summary>
+		/// <param name="text">検出元テキスト</param>
+		/// <returns>キーワードをキー、カウントを値とするディクショナリ</returns>
+		static Dictionary<string, int> DetectKeywords(string text) {
+			var result = new Dictionary<string, int>();
+			var receivers = new List<Func<string, bool>>();
+			var node = MeCab.ParseToNode(text);
+
+			var addToDic = new Action<string>(k => {
+				if (result.ContainsKey(k)) {
+					result[k]++;
+				} else {
+					result[k] = 1;
+				}
+			});
+
+			while (node != null) {
+				if (node.CharType != 0) {
+					var keyword = node.Surface.ToLower();
+					if (!(node.Feature.StartsWith("記号,") || node.Feature.StartsWith("名詞,数,"))) {
+						SpecialKeywordProc(receivers, keyword);
+
+						var r = SpecialKeyword(keyword, addToDic);
+						if (r is null) {
+							addToDic(keyword);
+						} else {
+							receivers.Add(r);
+						}
+					} else {
+						SpecialKeywordProc(receivers, keyword);
+					}
+				}
+				node = node.Next;
+			}
+
+			SpecialKeyword("", addToDic);
+
+			return result;
 		}
 	}
 }

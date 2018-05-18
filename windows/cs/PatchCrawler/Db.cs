@@ -24,6 +24,7 @@ namespace PatchCrawler {
 			public static int UrlID => E.Int32("url_id");
 			public static int SrcUrlID => E.Int32("src_url_id");
 			public static int DstUrlID => E.Int32("dst_url_id");
+			public static string Content => E.String("content");
 			public static string Url => E.String("url");
 			public static string UrlTitle => E.String("url_title");
 			public static int KeywordID => E.Int32("keyword_id");
@@ -33,6 +34,9 @@ namespace PatchCrawler {
 		#endregion
 
 		#region テーブル定義
+		/// <summary>
+		/// URL情報メインテーブル、URLのIDとURL文字列を持つ
+		/// </summary>
 		public class TbUrl : TableDef<TbUrl.D> {
 			public TbUrl() : base(E, "tb_url") { }
 
@@ -51,6 +55,9 @@ namespace PatchCrawler {
 		}
 		public static TbUrl Url { get; private set; } = new TbUrl();
 
+		/// <summary>
+		/// URLのIDとタイトル文字列を持つ
+		/// </summary>
 		public class TbUrlTitle : TableDef<TbUrlTitle.D> {
 			public TbUrlTitle() : base(E, "tb_url_title") { }
 
@@ -66,6 +73,24 @@ namespace PatchCrawler {
 		}
 		public static TbUrlTitle UrlTitle { get; private set; } = new TbUrlTitle();
 
+		/// <summary>
+		/// URLのIDと内容HTMLの文字列を持つ
+		/// </summary>
+		public class TbUrlContent : TableDef<TbUrlContent.D> {
+			public TbUrlContent() : base(E, "tb_url_content") { }
+
+			public class D : ColumnsBase {
+				public int UrlID => As(() => C.UrlID);
+				public string Content => As(() => C.Content);
+			}
+
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID);
+		}
+		public static TbUrlContent UrlContent { get; private set; } = new TbUrlContent();
+
+		/// <summary>
+		/// キーワード情報メインテーブル、キーワードIDとキーワード文字列を持つ
+		/// </summary>
 		public class TbKeyword : TableDef<TbKeyword.D> {
 			public TbKeyword() : base(E, "tb_keyword") { }
 
@@ -84,6 +109,9 @@ namespace PatchCrawler {
 		}
 		public static TbKeyword Keyword { get; private set; } = new TbKeyword();
 
+		/// <summary>
+		/// URLに含まれるキーワード情報テーブル、URLのIDとキーワードのIDとキーワード数を持つ
+		/// </summary>
 		public class TbUrlKeyword : TableDef<TbUrlKeyword.D> {
 			public TbUrlKeyword() : base(E, "tb_url_keyword") { }
 
@@ -100,6 +128,47 @@ namespace PatchCrawler {
 		}
 		public static TbUrlKeyword UrlKeyword { get; private set; } = new TbUrlKeyword();
 
+		/// <summary>
+		/// タイトルに含まれるキーワード情報テーブル、URLのIDとキーワードのIDとキーワード数を持つ
+		/// </summary>
+		public class TbTitleKeyword : TableDef<TbTitleKeyword.D> {
+			public TbTitleKeyword() : base(E, "tb_title_keyword") { }
+
+			public class D : ColumnsBase {
+				public int UrlID => As(() => C.UrlID);
+				public int KeywordID => As(() => C.KeywordID);
+				public int KeywordCount => As(() => C.KeywordCount);
+			}
+
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID, () => _.KeywordID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
+				MakeIndex(0, () => _.KeywordID)
+			);
+		}
+		public static TbTitleKeyword TitleKeyword { get; private set; } = new TbTitleKeyword();
+
+		/// <summary>
+		/// 内容に含まれるキーワード情報テーブル、URLのIDとキーワードのIDとキーワード数を持つ
+		/// </summary>
+		public class TbContentKeyword : TableDef<TbContentKeyword.D> {
+			public TbContentKeyword() : base(E, "tb_content_keyword") { }
+
+			public class D : ColumnsBase {
+				public int UrlID => As(() => C.UrlID);
+				public int KeywordID => As(() => C.KeywordID);
+				public int KeywordCount => As(() => C.KeywordCount);
+			}
+
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID, () => _.KeywordID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
+				MakeIndex(0, () => _.KeywordID)
+			);
+		}
+		public static TbContentKeyword ContentKeyword { get; private set; } = new TbContentKeyword();
+
+		/// <summary>
+		/// URLのリンク情報テーブル、リンク元URLのIDとリンク先URLのIDを持つ
+		/// </summary>
 		public class TbUrlLink : TableDef<TbUrlLink.D> {
 			public TbUrlLink() : base(E, "tb_url_link") { }
 
@@ -211,7 +280,9 @@ $$ LANGUAGE plpgsql;
 		#endregion
 
 		#region DBアクセス関数
-		static Func<IDbCodeCommand, string, int> _AddUrl;
+		/// <summary>
+		/// 可能ならURL追加しURLのIDを取得する
+		/// </summary>
 		public static Func<IDbCodeCommand, string, int> AddUrl {
 			get {
 				if (_AddUrl == null) {
@@ -233,8 +304,11 @@ $$ LANGUAGE plpgsql;
 				return _AddUrl;
 			}
 		}
+		static Func<IDbCodeCommand, string, int> _AddUrl;
 
-		static Func<IDbCodeCommand, string, int> _AddKeyword;
+		/// <summary>
+		/// 可能ならキーワード追加しキーワードのIDを取得する
+		/// </summary>
 		public static Func<IDbCodeCommand, string, int> AddKeyword {
 			get {
 				if (_AddKeyword == null) {
@@ -256,8 +330,53 @@ $$ LANGUAGE plpgsql;
 				return _AddKeyword;
 			}
 		}
+		static Func<IDbCodeCommand, string, int> _AddKeyword;
 
-		static Action<IDbCodeCommand, int, int, int> _AddUrlKeyword;
+		/// <summary>
+		/// 可能ならURLに対応するタイトルを追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, int, string> AddUrlTitle {
+			get {
+				if (_AddUrlTitle == null) {
+					var argUrlId = new Argument(0);
+					var argTitle = new Argument("");
+					var sql = E.NewSql();
+					sql.InsertIntoIfNotExists(UrlTitle, t => new[] { t.UrlID == argUrlId, t.UrlTitle == argTitle }, 1);
+
+					var action = sql.BuildAction<int, string>(argUrlId, argTitle);
+					_AddUrlTitle = new Action<IDbCodeCommand, int, string>((cmd, urlID, urlTitle) => {
+						action.Execute(cmd, urlID, urlTitle);
+					});
+				}
+				return _AddUrlTitle;
+			}
+		}
+		static Action<IDbCodeCommand, int, string> _AddUrlTitle;
+
+		/// <summary>
+		/// 可能ならURLに対応する内容HTML文字列を追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, int, string> AddUrlContent {
+			get {
+				if (_AddUrlContent == null) {
+					var argUrlId = new Argument(0);
+					var argContent = new Argument("");
+					var sql = E.NewSql();
+					sql.InsertIntoIfNotExists(UrlContent, t => new[] { t.UrlID == argUrlId, t.Content == argContent }, 1);
+
+					var action = sql.BuildAction<int, string>(argUrlId, argContent);
+					_AddUrlContent = new Action<IDbCodeCommand, int, string>((cmd, urlID, content) => {
+						action.Execute(cmd, urlID, content);
+					});
+				}
+				return _AddUrlContent;
+			}
+		}
+		static Action<IDbCodeCommand, int, string> _AddUrlContent;
+
+		/// <summary>
+		/// 可能ならURLに含まれるキーワードのIDを追加する
+		/// </summary>
 		public static Action<IDbCodeCommand, int, int, int> AddUrlKeyword {
 			get {
 				if (_AddUrlKeyword == null) {
@@ -275,26 +394,55 @@ $$ LANGUAGE plpgsql;
 				return _AddUrlKeyword;
 			}
 		}
+		static Action<IDbCodeCommand, int, int, int> _AddUrlKeyword;
 
-		static Action<IDbCodeCommand, int, string> _AddUrlTitle;
-		public static Action<IDbCodeCommand, int, string> AddUrlTitle {
+		/// <summary>
+		/// 可能ならタイトルに含まれるキーワードのIDを追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, int, int, int> AddTitleKeyword {
 			get {
-				if (_AddUrlTitle == null) {
+				if (_AddTitleKeyword == null) {
 					var argUrlId = new Argument(0);
-					var argTitle = new Argument("");
+					var argKeywordId = new Argument(0);
+					var argKeywordCount = new Argument(0);
 					var sql = E.NewSql();
-					sql.InsertIntoIfNotExists(UrlTitle, t => new[] { t.UrlID == argUrlId, t.UrlTitle == argTitle }, 1);
+					sql.InsertIntoIfNotExists(TitleKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
 
-					var action = sql.BuildAction<int, string>(argUrlId, argTitle);
-					_AddUrlTitle = new Action<IDbCodeCommand, int, string>((cmd, urlID, urlTitle) => {
-						action.Execute(cmd, urlID, urlTitle);
+					var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
+					_AddTitleKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
+						action.Execute(cmd, urlID, keywordID, keywordCount);
 					});
 				}
-				return _AddUrlTitle;
+				return _AddTitleKeyword;
 			}
 		}
+		static Action<IDbCodeCommand, int, int, int> _AddTitleKeyword;
 
-		static Action<IDbCodeCommand, int, int> _AddLink;
+		/// <summary>
+		/// 可能なら内容に含まれるキーワードのIDを追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, int, int, int> AddContentKeyword {
+			get {
+				if (_AddContentKeyword == null) {
+					var argUrlId = new Argument(0);
+					var argKeywordId = new Argument(0);
+					var argKeywordCount = new Argument(0);
+					var sql = E.NewSql();
+					sql.InsertIntoIfNotExists(ContentKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
+
+					var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
+					_AddContentKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
+						action.Execute(cmd, urlID, keywordID, keywordCount);
+					});
+				}
+				return _AddContentKeyword;
+			}
+		}
+		static Action<IDbCodeCommand, int, int, int> _AddContentKeyword;
+
+		/// <summary>
+		/// 可能ならリンク情報を追加する
+		/// </summary>
 		public static Action<IDbCodeCommand, int, int> AddLink {
 			get {
 				if (_AddLink == null) {
@@ -311,6 +459,7 @@ $$ LANGUAGE plpgsql;
 				return _AddLink;
 			}
 		}
+		static Action<IDbCodeCommand, int, int> _AddLink;
 		#endregion
 	}
 }
