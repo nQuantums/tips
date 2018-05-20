@@ -40,6 +40,7 @@ namespace DbCode.Query {
 		#endregion
 
 		#region コンストラクタ
+		[SqlMethod]
 		public ValueSetter(IQueryNode parent, ColumnMap columns, ElementCode[] values) {
 			if (columns.Count != values.Length) {
 				throw new ApplicationException();
@@ -87,6 +88,7 @@ namespace DbCode.Query {
 		/// WHERE句のノードを登録する
 		/// </summary>
 		/// <param name="where">WHERE句ノード</param>
+		[SqlMethod]
 		public ValueSetter Where(IWhere where) {
 			if (this.WhereNode != null) {
 				throw new ApplicationException();
@@ -100,6 +102,7 @@ namespace DbCode.Query {
 		/// WHERE句の式を登録する
 		/// </summary>
 		/// <param name="expression">WHEREの式</param>
+		[SqlMethod]
 		public void Where(Expression expression) {
 			this.Where(new Where(this, expression));
 		}

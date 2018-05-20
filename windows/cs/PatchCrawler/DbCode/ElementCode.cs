@@ -71,7 +71,7 @@ namespace DbCode {
 		#region フィールド
 		Core _Core = new Core();
 		Stack<Core> _CoreStack = new Stack<Core>();
-		//Dictionary<object, List<Action<WorkingBuffer>>> _HandlersOnBuild = new Dictionary<object, List<Action<WorkingBuffer>>>();
+		Dictionary<object, List<Action<object, WorkingBuffer>>> _HandlersOnBuild = new Dictionary<object, List<Action<object, WorkingBuffer>>>();
 		Typewise _Typewise;
 		#endregion
 
@@ -240,7 +240,7 @@ namespace DbCode {
 		/// オブジェクトを追加する、型が対応しているものの場合のみ追加される
 		/// </summary>
 		/// <param name="value">オブジェクト</param>
-		public void Add(object value) {
+		public void AddObject(object value) {
 			if (!TypewiseExecutor.Do(_Typewise, value)) {
 				throw new ApplicationException($"The type '{value.GetType().FullName}' can not be included in an expression.");
 			}
@@ -360,6 +360,19 @@ namespace DbCode {
 		}
 
 		/// <summary>
+		/// 指定アイテムをビルド時に処理する際のハンドラを登録する
+		/// </summary>
+		/// <param name="item"><see cref="AddObject(object)"/>などで追加するアイテム</param>
+		/// <param name="handler">アイテムを処理するハンドラ、<see cref="Build(WorkingBuffer)"/>内から呼び出される</param>
+		public void RegisterBuildHandler(object item, Action<object, WorkingBuffer> handler) {
+			List<Action<object, WorkingBuffer>> handlers;
+			if (!_HandlersOnBuild.TryGetValue(item, out handlers)) {
+				_HandlersOnBuild[item] = handlers = new List<Action<object, WorkingBuffer>>();
+			}
+			handlers.Add(handler);
+		}
+
+		/// <summary>
 		/// <see cref="IDbCodeCommand"/>に渡して実行可能な形式にビルドする
 		/// </summary>
 		/// <returns>実行可能SQL</returns>
@@ -380,31 +393,39 @@ namespace DbCode {
 		public void Build(WorkingBuffer work) {
 			foreach (var item in this.Items) {
 				StringBuilder buffer;
-				ElementCode ec;
-				ITableDef tableDef;
-				ITable table;
-				Column column;
-				Type type;
-				IDelayedCode dc;
-
 				if ((buffer = item as StringBuilder) != null) {
 					work.Concat(buffer.ToString());
-				} else if ((ec = item as ElementCode) != null) {
-					ec.Build(work);
-				} else if ((tableDef = item as ITableDef) != null) {
-					work.Concat(work.GetTableAlias(tableDef));
-				} else if ((table = item as ITable) != null) {
-					work.Concat(work.GetTableAlias(table));
-				} else if ((column = item as Column) != null) {
-					work.Concat(work.GetTableAlias(column.Table));
-					work.Concat(".");
-					work.Concat(column.Name);
-				} else if ((dc = item as IDelayedCode) != null) {
-					work.Add(dc);
-				} else if ((type = item as Type) != null) {
-					// 型をマーキングしてあるだけなので何もする事はない
 				} else {
-					work.Concat(work.GetParameterName(item));
+					if (_HandlersOnBuild.TryGetValue(item, out List<Action<object, WorkingBuffer>> handlers)) {
+						foreach (var handler in handlers) {
+							handler(item, work);
+						}
+					} else {
+						ElementCode ec;
+						ITableDef tableDef;
+						ITable table;
+						Column column;
+						Type type;
+						IDelayedCode dc;
+						if ((ec = item as ElementCode) != null) {
+							ec.Build(work);
+						} else if ((tableDef = item as ITableDef) != null) {
+							work.Concat(work.GetTableAlias(tableDef));
+						} else if ((table = item as ITable) != null) {
+							work.Concat(work.GetTableAlias(table));
+						} else if ((column = item as Column) != null) {
+							work.Concat(work.GetTableAlias(column.Table));
+							work.Concat(".");
+							work.Concat(column.Name);
+						} else if ((dc = item as IDelayedCode) != null) {
+							work.Add(dc);
+						} else if ((type = item as Type) != null) {
+							// 型をマーキングしてあるだけなので何もする事はない
+						} else {
+							// 上記に引っかからないものはSQL実行時にパラメータとして渡される
+							work.Concat(work.GetParameterName(item));
+						}
+					}
 				}
 			}
 		}

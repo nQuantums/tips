@@ -41,7 +41,7 @@ namespace DbCode {
 		/// <param name="select">SELECT句ノード、これにより列挙するレコード型が推論される</param>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<TResult> BuildSelectFunc<TResult>(ISelect<TResult> @select) {
+		public FuncCmd<TResult> BuildFuncFromSelect<TResult>(ISelect<TResult> @select) {
 			return new FuncCmd<TResult>(this.Build(), this.Environment.CreateRecordReader<TResult>((from c in @select.ColumnMap select c.Property).ToArray()));
 		}
 <#
@@ -122,7 +122,7 @@ for (int n = 1; n <= 10; n++) {
 <#	}#>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<<#=tparams#>, TResult> BuildSelectFunc<<#=tparams#>, TResult>(ISelect<TResult> select, <#=tparamArgs#>) {
+		public FuncCmd<<#=tparams#>, TResult> BuildFuncFromSelect<<#=tparams#>, TResult>(ISelect<TResult> select, <#=tparamArgs#>) {
 			var commandable = this.Build();
 			var piPrmValue = typeof(Parameter).GetProperty("Value");
 			var piArgValue = typeof(Argument).GetProperty("Value");

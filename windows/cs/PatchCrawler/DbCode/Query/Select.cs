@@ -62,6 +62,7 @@ namespace DbCode.Query {
 		/// <param name="parent">親ノード</param>
 		/// <param name="properties">列に対応するプロパティ</param>
 		/// <param name="values">列の値の式</param>
+		[SqlMethod]
 		public Select(IQueryNode parent, PropertyInfo[] properties, ElementCode[] values) {
 			if (properties.Length != values.Length) {
 				throw new ApplicationException();
@@ -84,6 +85,7 @@ namespace DbCode.Query {
 		/// <param name="parent">親ノード</param>
 		/// <param name="properties">列に対応するプロパティ</param>
 		/// <param name="values">列の値の式</param>
+		[SqlMethod]
 		public Select(IQueryNode parent, PropertyInfo[] properties, Expression[] values) {
 			if (properties.Length != values.Length) {
 				throw new ApplicationException();
@@ -105,6 +107,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="parent">親ノード</param>
 		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { Name = "test", ID = 1 } の様な式</param>
+		[SqlMethod]
 		public Select(IQueryNode parent, Expression<Func<TColumns>> columnsExpression) {
 			this.Parent = parent;
 
@@ -219,6 +222,7 @@ namespace DbCode.Query {
 		/// WHERE句のノードを登録する
 		/// </summary>
 		/// <param name="where">WHERE句ノード</param>
+		[SqlMethod]
 		public Select<TColumns> Where(IWhere where) {
 			if (this.WhereNode != null) {
 				throw new ApplicationException();
@@ -232,6 +236,7 @@ namespace DbCode.Query {
 		/// WHERE句の式を登録する
 		/// </summary>
 		/// <param name="expression">式</param>
+		[SqlMethod]
 		public Where Where(Expression<Func<bool>> expression) {
 			var where = new Where(this, expression);
 			this.WhereNode = where;

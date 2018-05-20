@@ -100,6 +100,7 @@ namespace DbCode {
 		/// </summary>
 		/// <param name="code">コード</param>
 		/// <returns>ノード</returns>
+		[SqlMethod]
 		public CodeNode Code(ElementCode code) {
 			var node = new CodeNode(this, code);
 			this.AddChild(node);
@@ -111,6 +112,7 @@ namespace DbCode {
 		/// </summary>
 		/// <param name="code">コード</param>
 		/// <returns>ノード</returns>
+		[SqlMethod]
 		public CodeNode Code(string code) {
 			var node = new CodeNode(this, new ElementCode(code));
 			this.AddChild(node);
@@ -123,6 +125,7 @@ namespace DbCode {
 		/// <param name="funcName">ストアドプロシージャ名</param>
 		/// <param name="arguments">ストアドプロシージャへの引数列</param>
 		/// <returns>ノード</returns>
+		[SqlMethod]
 		public CodeNode CallFunc(string funcName, params Argument[] arguments) {
 			var code = new ElementCode();
 			code.Add(SqlKeyword.Select);
@@ -143,6 +146,7 @@ namespace DbCode {
 		/// </summary>
 		/// <param name="table">テーブル定義</param>
 		/// <returns>DROP TABLE句ノード</returns>
+		[SqlMethod]
 		public DropTable DropTable(ITableDef table) {
 			var node = new DropTable(this, table);
 			this.AddChild(node);
@@ -155,6 +159,7 @@ namespace DbCode {
 		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { Name = "test", ID = 1 } の様な式</param>
 		/// <returns>VALUESノード</returns>
+		[SqlMethod]
 		public ListAsValues<TColumns> Values<TColumns>(Expression<Func<TColumns>> columnsExpression) {
 			var node = new ListAsValues<TColumns>(this, columnsExpression);
 			this.AddChild(node);
@@ -191,9 +196,25 @@ namespace DbCode {
 		/// 値をテーブルへ挿入する
 		/// </summary>
 		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
+		/// <typeparam name="TColumnsOrder"><typeparamref name="TColumns"/>を継承し同じプロパティ構成のクラス</typeparam>
+		/// <param name="table">挿入先テーブル</param>
+		/// <param name="select">挿入する値のSELECTノード</param>
+		/// <returns>INSERT INTO句ノード</returns>
+		[SqlMethod]
+		public InsertInto<TColumns, TColumnsOrder> InsertInto<TColumns, TColumnsOrder>(TableDef<TColumns> table, ISelect<TColumnsOrder> select) where TColumnsOrder : TColumns {
+			var node = new InsertInto<TColumns, TColumnsOrder>(this, table, select);
+			this.AddChild(node);
+			return node;
+		}
+
+		/// <summary>
+		/// 値をテーブルへ挿入する
+		/// </summary>
+		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 		/// <param name="table">挿入先テーブル</param>
 		/// <param name="columnsExpression">列と設定値を指定する t => new[] { t.A == a, t.B == b } の様な式</param>
 		/// <returns>INSERT INTO句ノード</returns>
+		[SqlMethod]
 		public InsertInto<TColumns> InsertInto<TColumns>(TableDef<TColumns> table, Expression<Func<TColumns, bool[]>> columnsExpression) {
 			var node = new InsertInto<TColumns>(this, table, columnsExpression);
 			this.AddChild(node);
@@ -208,6 +229,7 @@ namespace DbCode {
 		/// <param name="columnsExpression">列と設定値を指定する t => new[] { t.A == a, t.B == b } の様な式</param>
 		/// <param name="columnCountToWhere">NOT EXISTS (SELECT * FROM t WHERE t.Name = "test") の部分で判定に使用する列数、0が指定されたら全て使用する</param>
 		/// <returns>INSERT INTO句ノード</returns>
+		[SqlMethod]
 		public InsertInto<TColumns> InsertIntoIfNotExists<TColumns>(TableDef<TColumns> table, Expression<Func<TColumns, bool[]>> columnsExpression, int columnCountToWhere = 0) {
 			var node = new InsertInto<TColumns>(this, table, columnsExpression);
 			node.IfNotExists(columnCountToWhere);
@@ -239,15 +261,17 @@ namespace DbCode {
 			return context.Build();
 		}
 
-
+		[SqlMethod]
 		public static bool Like(string text, string pattern) {
 			return default(bool);
 		}
 
+		[SqlMethod]
 		public static bool Exists(ISelect select) {
 			return default(bool);
 		}
 
+		[SqlMethod]
 		public static bool NotExists(ISelect select) {
 			return default(bool);
 		}

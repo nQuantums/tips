@@ -110,7 +110,7 @@ namespace DbCode.Internal {
 		}
 
 		protected override Expression VisitConstant(ConstantExpression node) {
-			_Code.Add(Evaluate(node));
+			_Code.AddObject(Evaluate(node));
 			return node;
 		}
 
@@ -149,7 +149,7 @@ namespace DbCode.Internal {
 			}
 
 			// ※評価時のメンバアクセス結果の値が登録される
-			_Code.Add(value);
+			_Code.AddObject(value);
 			return node;
 		}
 
@@ -201,7 +201,7 @@ namespace DbCode.Internal {
 		}
 
 		protected override Expression VisitNew(NewExpression node) {
-			_Code.Add(Evaluate(node));
+			_Code.AddObject(Evaluate(node));
 			return node;
 		}
 

@@ -51,6 +51,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="parent">親ノード</param>
 		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { Name = "test", ID = 1 } の様な式</param>
+		[SqlMethod]
 		public ListAsValues(IQueryNode parent, Expression<Func<TColumns>> columnsExpression) {
 			this.Parent = parent;
 
@@ -64,18 +65,11 @@ namespace DbCode.Query {
 				throw new ApplicationException();
 			}
 
-			// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
-			var newexpr = body as NewExpression;
-			var args = newexpr.Arguments;
+			// プロパティと列定義を結びつける
 			var properties = typeof(TColumns).GetProperties();
-			if (args.Count != properties.Length) {
-				throw new ApplicationException();
-			}
-
-			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
 			var environment = this.Owner.Environment;
 			for (int i = 0; i < properties.Length; i++) {
-				BindColumn(properties[i], new ElementCode(args[i], null));
+				BindColumn(properties[i], null);
 			}
 		}
 		#endregion
@@ -182,6 +176,9 @@ namespace DbCode.Query {
 			});
 
 			context.Add(delayedCode);
+			context.RegisterBuildHandler(this, (item, wb) => {
+				// delayedCode 内でエイリアス名付与するので、既存の処理をオーバーライドし何もしないようにする
+			});
 		}
 		#endregion
 

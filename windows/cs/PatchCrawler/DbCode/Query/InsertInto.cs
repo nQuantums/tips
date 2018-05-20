@@ -148,6 +148,7 @@ namespace DbCode.Query {
 		/// 同一値が存在しない場合のみ挿入するように判定を追加する
 		/// </summary>
 		/// <param name="columnCountToWhere">NOT EXISTS (SELECT * FROM t WHERE t.Name = "test") の部分で判定に使用する列数、0が指定されたら全て使用する</param>
+		[SqlMethod]
 		public void IfNotExists(int columnCountToWhere = 0) {
 			var valueSetter = this.ValueNode as ValueSetter;
 			if (valueSetter != null) {
@@ -161,6 +162,7 @@ namespace DbCode.Query {
 				notExistsSelectFrom.Add(SqlKeyword.NotExists);
 				notExistsSelectFrom.BeginParenthesize();
 				notExistsSelectFrom.Add(SqlKeyword.Select, SqlKeyword.Asterisk, SqlKeyword.From);
+				this.Table.ToElementCode(notExistsSelectFrom);
 				notExistsSelectFrom.Add(this.Table);
 				notExistsSelectFrom.Add(SqlKeyword.Where);
 				for (int i = 0; i < columnCountToWhere; i++) {
@@ -204,7 +206,7 @@ namespace DbCode.Query {
 	/// INSERT INTO句
 	/// </summary>
 	/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
-	/// <typeparam name="TColumnsOrder">列の並びを指定する t => new { t.A, t.B } の様な式で生成される匿名クラス</typeparam>
+	/// <typeparam name="TColumnsOrder">列の並びを指定する t => new { t.A, t.B } の様な式で生成されるクラス</typeparam>
 	public class InsertInto<TColumns, TColumnsOrder> : IInsertInto<TColumns> {
 		#region プロパティ
 		/// <summary>
@@ -247,6 +249,40 @@ namespace DbCode.Query {
 		#endregion
 
 		#region コンストラクタ
+		/// <summary>
+		/// コンストラクタ、親ノード、挿入先テーブルとSELECTノードを指定して初期化する
+		/// </summary>
+		/// <param name="parent">親ノード</param>
+		/// <param name="table">挿入先テーブル</param>
+		/// <param name="select">SELECTノード</param>
+		public InsertInto(IQueryNode parent, TableDef<TColumns> table, ISelect<TColumnsOrder> select) {
+			this.Parent = parent;
+
+			// 登録
+			var owner = this.Owner;
+			owner.RegisterTable(table);
+			owner.RegisterTable(select);
+
+			// 匿名クラスのプロパティを取得、さらに各プロパティ初期化用の式を取得する
+			var availableColumns = owner.AllColumns;
+			var columnMap = table.ColumnMap;
+			var columnsOrder = new ColumnMap();
+			foreach (var sourceColumn in select.ColumnMap) {
+				if (!availableColumns.Contains(sourceColumn)) {
+					throw new ApplicationException();
+				}
+				var column = columnMap.TryGetByPropertyName(sourceColumn.Property.Name);
+				if (column == null) {
+					throw new ApplicationException();
+				}
+				columnsOrder.Add(column);
+			}
+
+			this.Table = table;
+			this.ColumnMap = columnsOrder;
+			this.Value(select);
+		}
+
 		/// <summary>
 		/// コンストラクタ、親ノード、挿入先テーブルと列の並びを指定して初期化する
 		/// </summary>
@@ -336,10 +372,25 @@ namespace DbCode.Query {
 		}
 
 		/// <summary>
+		/// 挿入する値を指定する
+		/// </summary>
+		/// <param name="select">SELECTノード</param>
+		/// <returns>自分</returns>
+		public InsertInto<TColumns, TColumnsOrder> Value(ISelect<TColumnsOrder> select) {
+			if (this.ValueNode != null) {
+				throw new ApplicationException();
+			}
+			QueryNodeHelper.SwitchParent(select, this);
+			this.ValueNode = select;
+			return this;
+		}
+
+		/// <summary>
 		/// 列選択部を生成する
 		/// </summary>
 		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { t1.A, t1.B } の様な式</param>
 		/// <returns>SELECT句</returns>
+		[SqlMethod]
 		public Select<TColumnsOrder> Select(Expression<Func<TColumnsOrder>> columnsExpression) {
 			var select = new Select<TColumnsOrder>(this, columnsExpression);
 			this.ValueNode = select;
@@ -351,6 +402,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="columnsAssignExpression">列への値代入を示す t => new { Name = "test", ID = 1 } の様な式、入力の t は列名参考用に使うのみ</param>
 		/// <returns>SELECT句</returns>
+		[SqlMethod]
 		public Select<TColumnsOrder> Select(Expression<Func<TColumns, TColumnsOrder>> columnsAssignExpression) {
 			// new 演算子でクラスを生成するもの以外はエラーとする
 			var body = columnsAssignExpression.Body;
@@ -379,6 +431,7 @@ namespace DbCode.Query {
 		/// <param name="columnsAssignExpression">列への値代入を示す t => new { Name = "test", ID = 1 } の様な式、入力の t は列名参考用に使うのみ</param>
 		/// <param name="columnCountToWhere">NOT EXISTS (SELECT * FROM t WHERE t.Name = "test") の部分で判定に使用する列数、0が指定されたら全て使用する</param>
 		/// <returns>SELECT句</returns>
+		[SqlMethod]
 		public Select<TColumnsOrder> SelectIfNotExists(Expression<Func<TColumns, TColumnsOrder>> columnsAssignExpression, int columnCountToWhere = 0) {
 			// new 演算子でクラスを生成するもの以外はエラーとする
 			var body = columnsAssignExpression.Body;
@@ -439,18 +492,16 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
 		public void ToElementCode(ElementCode context) {
+			if (this.ValueNode is null) {
+				throw new ApplicationException();
+			}
+
 			var environment = this.Table.Environment;
 			context.Add(SqlKeyword.InsertInto);
 			context.Concat(this.Table.Name);
 			context.AddColumnDefs(this.ColumnMap);
 
-			var valueNode = this.ValueNode;
-			if (valueNode != null) {
-				valueNode.ToElementCode(context);
-				return;
-			}
-
-			throw new ApplicationException();
+			this.ValueNode.ToElementCode(context);
 		}
 		#endregion
 	}

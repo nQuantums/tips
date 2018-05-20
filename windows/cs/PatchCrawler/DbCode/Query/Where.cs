@@ -39,6 +39,7 @@ namespace DbCode.Query {
 		/// コンストラクタ、親ノードを指定して初期化する
 		/// </summary>
 		/// <param name="parent">親ノード</param>
+		[SqlMethod]
 		public Where(IQueryNode parent) {
 			this.Parent = parent;
 		}
@@ -48,6 +49,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="parent">親ノード</param>
 		/// <param name="expression">式</param>
+		[SqlMethod]
 		public Where(IQueryNode parent, Expression expression) {
 			this.Parent = parent;
 			this.Expression = new ElementCode(expression, this.Owner.AllColumns, n => this.AddChild(n));
@@ -82,6 +84,7 @@ namespace DbCode.Query {
 			this.Parent = parent;
 		}
 
+		[SqlMethod]
 		public void NotExistsSelect<TColumns>(TColumns columns, Expression<Func<TColumns, bool>> selectWhereExpression) {
 			var expression = new ElementCode(selectWhereExpression, this.Owner.AllColumns, columns);
 			var table = expression.FindTables().FirstOrDefault();

@@ -91,11 +91,6 @@ namespace DbCode.Query {
 		/// LIMIT句のノード
 		/// </summary>
 		public ILimit LimitNode { get; private set; }
-
-		/// <summary>
-		/// SELECT句のノード
-		/// </summary>
-		public ISelect SelectNode { get; private set; }
 		#endregion
 
 		#region コンストラクタ
@@ -104,6 +99,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="parent">親ノード</param>
 		/// <param name="tableDef">テーブル定義</param>
+		[SqlMethod]
 		public From(IQueryNode parent, ITable<TColumns> tableDef) {
 			this.Parent = parent;
 
@@ -119,6 +115,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="parent">親ノード</param>
 		/// <param name="select">SELECTノード</param>
+		[SqlMethod]
 		public From(IQueryNode parent, ISelect<TColumns> select) {
 			this.Parent = parent;
 
@@ -142,7 +139,6 @@ namespace DbCode.Query {
 			IGroupBy groupby;
 			IOrderBy orderby;
 			ILimit limit;
-			ISelect select;
 
 			if ((join = child as IJoin) != null) {
 				this.Join(join);
@@ -154,8 +150,6 @@ namespace DbCode.Query {
 				this.OrderBy(orderby);
 			} else if ((limit = child as ILimit) != null) {
 				this.Limit(limit);
-			} else if ((select = child as ISelect) != null) {
-				this.Select(select);
 			} else {
 				throw new ApplicationException();
 			}
@@ -184,9 +178,6 @@ namespace DbCode.Query {
 			if (this.LimitNode == child) {
 				this.LimitNode = null;
 			}
-			if (this.SelectNode == child) {
-				this.SelectNode = null;
-			}
 		}
 
 		/// <summary>
@@ -202,6 +193,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="join">JOIN句ノード</param>
 		/// <returns>自分</returns>
+		[SqlMethod]
 		public From<TColumns> Join(IJoin join) {
 			if (this.JoinNodes == null) {
 				this.JoinNodes = new List<IJoin>();
@@ -216,6 +208,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="where">WHERE句ノード</param>
 		/// <returns>自分</returns>
+		[SqlMethod]
 		public From<TColumns> Where(IWhere where) {
 			if (this.WhereNode != null) {
 				throw new ApplicationException();
@@ -230,6 +223,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="groupBy">GROUP BY句ノード</param>
 		/// <returns>自分</returns>
+		[SqlMethod]
 		public From<TColumns> GroupBy(IGroupBy groupBy) {
 			if (this.GroupByNode != null) {
 				throw new ApplicationException();
@@ -244,6 +238,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="orderBy">ORDER BY句ノード</param>
 		/// <returns>自分</returns>
+		[SqlMethod]
 		public From<TColumns> OrderBy(IOrderBy orderBy) {
 			if (this.OrderByNode != null) {
 				throw new ApplicationException();
@@ -258,6 +253,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="limit">LIMIT句ノード</param>
 		/// <returns>自分</returns>
+		[SqlMethod]
 		public From<TColumns> Limit(ILimit limit) {
 			if (this.LimitNode != null) {
 				throw new ApplicationException();
@@ -268,26 +264,13 @@ namespace DbCode.Query {
 		}
 
 		/// <summary>
-		/// SELECT句のノードを登録する
-		/// </summary>
-		/// <param name="select">SELECT句ノード</param>
-		/// <returns>自分</returns>
-		public From<TColumns> Select(ISelect select) {
-			if (this.SelectNode != null) {
-				throw new ApplicationException();
-			}
-			QueryNodeHelper.SwitchParent(select, this);
-			this.SelectNode = select;
-			return this;
-		}
-
-		/// <summary>
 		/// 内部結合の<see cref="Join{TColumns}"/>を生成し登録する
 		/// </summary>
 		/// <typeparam name="TColumns1">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
 		/// <returns>内部結合の<see cref="Join{TColumns}"></see></returns>
+		[SqlMethod]
 		public IJoin<TColumns1> InnerJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Inner, table, on);
 
 		/// <summary>
@@ -297,6 +280,7 @@ namespace DbCode.Query {
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
 		/// <returns>左外部結合の<see cref="Join{TColumns}"/></returns>
+		[SqlMethod]
 		public IJoin<TColumns1> LeftJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Left, table, on);
 
 		/// <summary>
@@ -306,6 +290,7 @@ namespace DbCode.Query {
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
 		/// <returns>右外部結合の<see cref="Join{TColumns}"/></returns>
+		[SqlMethod]
 		public IJoin<TColumns1> RightJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Right, table, on);
 
 		/// <summary>
@@ -325,6 +310,7 @@ namespace DbCode.Query {
 		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
 		/// <returns>自分</returns>
+		[SqlMethod]
 		public From<TColumns> GroupBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
 			return this.GroupBy(new GroupBy<TColumns1>(this, columnsExpression));
 		}
@@ -335,6 +321,7 @@ namespace DbCode.Query {
 		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
 		/// <returns>自分</returns>
+		[SqlMethod]
 		public From<TColumns> OrderBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
 			return this.OrderBy(new OrderBy<TColumns1>(this, columnsExpression));
 		}
@@ -344,6 +331,7 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="count">制限値</param>
 		/// <returns>自分</returns>
+		[SqlMethod]
 		public From<TColumns> Limit(object count) {
 			return this.Limit(new Limit(this, count));
 		}
@@ -354,9 +342,7 @@ namespace DbCode.Query {
 		/// <returns>SELECT句ノード</returns>
 		[SqlMethod]
 		public SelectFrom<TColumns> Select() {
-			var node = new SelectFrom<TColumns>(this, null);
-			this.Select(node);
-			return node;
+			return new SelectFrom<TColumns>(this, null);
 		}
 
 		/// <summary>
@@ -365,11 +351,10 @@ namespace DbCode.Query {
 		/// <typeparam name="TSelectedColumns">列をプロパティとして持つクラス</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する t => new { t.A, t1.B, t3.C } の様な式、<c>t</c>はFROM元のテーブルの列</param>
 		/// <returns>SELECT句ノード</returns>
+		[SqlMethod]
 		public SelectFrom<TSelectedColumns> Select<TSelectedColumns>(Expression<Func<TColumns, TSelectedColumns>> columnsExpression) {
 			var expr = ParameterReplacer.Replace(columnsExpression.Body, new Dictionary<Expression, object> { { columnsExpression.Parameters[0], this.Columns } });
-			var node = new SelectFrom<TSelectedColumns>(this, expr);
-			this.Select(node);
-			return node;
+			return new SelectFrom<TSelectedColumns>(this, expr);
 		}
 
 		/// <summary>
@@ -377,12 +362,6 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
 		public void ToElementCode(ElementCode context) {
-			if (this.SelectNode == null) {
-				throw new ApplicationException();
-			}
-
-			this.SelectNode.ToElementCode(context);
-
 			if (this.Table != null) {
 				context.Add(SqlKeyword.From);
 				this.Table.ToElementCode(context);

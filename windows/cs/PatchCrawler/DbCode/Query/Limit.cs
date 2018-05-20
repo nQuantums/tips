@@ -73,7 +73,7 @@ namespace DbCode.Query {
 		/// <param name="context">生成先のコンテキスト</param>
 		public void ToElementCode(ElementCode context) {
 			context.Add(SqlKeyword.Limit);
-			context.Add(this.Value);
+			context.AddObject(this.Value);
 		}
 		#endregion
 	}

@@ -72,33 +72,6 @@ namespace PatchCrawler {
 		}
 
 		static void Main(string[] args) {
-			{
-				var sql = Db.E.NewSql();
-				var values = sql.Values(() => new { UrlID = 0, KeywordID = 0, KeywordCount = 0 });
-				var f = sql.From(values).Where(t => Sql.NotExists(sql.From(Db.UrlKeyword).Where(t2 => t2.UrlID == t.UrlID && t2.KeywordID == t.KeywordID).Select())).Select();
-
-				values.ValueList.Add(new { UrlID = 0, KeywordID = 1, KeywordCount = 1 });
-				values.ValueList.Add(new { UrlID = 0, KeywordID = 2, KeywordCount = 2 });
-				var c = sql.Build();
-				var (commandText, parameters) = c.CommandTextAndParameters;
-
-				//values.ValueList.Add(new { A = 1, B = 4 });
-				//values.ValueList.Add(new { A = 2, B = 5 });
-				//values.ValueList.Add(new { A = 3, B = 6 });
-				//Console.WriteLine(commandText);
-				//values.ValueList.Add(new { A = 1, B = 4 });
-				//values.ValueList.Add(new { A = 2, B = 5 });
-				//values.ValueList.Add(new { A = 3, B = 6 });
-				//(commandText, parameters) = c.CommandTextAndParameters;
-				//Console.WriteLine(commandText);
-				//values.ValueList.Add(new { A = 1, B = 4 });
-				//values.ValueList.Add(new { A = 2, B = 5 });
-				//values.ValueList.Add(new { A = 3, B = 6 });
-				//(commandText, parameters) = c.CommandTextAndParameters;
-				Console.WriteLine(commandText);
-				return;
-			}
-
 			// 形態素解析のMeCabを初期化
 			var mecabPara = new MeCabParam();
 			mecabPara.DicDir = @"c:\dic\mecab-ipadic-neologd";
@@ -156,20 +129,24 @@ namespace PatchCrawler {
 							Db.AddUrlTitle(Cmd, urlID, title);
 							Db.AddUrlContent(Cmd, urlID, content);
 
-							foreach (var kvp in DetectKeywords(url)) {
-								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-								Db.AddUrlKeyword(Cmd, urlID, keywordID, kvp.Value);
-							}
+							Db.AddUrlKeywords(Cmd, from kvp in DetectKeywords(url) select new Db.TbUrlKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
+							Db.AddTitleKeywords(Cmd, from kvp in DetectKeywords(title) select new Db.TbTitleKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
+							Db.AddContentKeywords(Cmd, from kvp in DetectKeywords(content) select new Db.TbContentKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
 
-							foreach (var kvp in DetectKeywords(title)) {
-								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-								Db.AddTitleKeyword(Cmd, urlID, keywordID, kvp.Value);
-							}
+							//foreach (var kvp in DetectKeywords(url)) {
+							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+							//	Db.AddUrlKeyword(Cmd, urlID, keywordID, kvp.Value);
+							//}
 
-							foreach (var kvp in DetectKeywords(text)) {
-								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-								Db.AddContentKeyword(Cmd, urlID, keywordID, kvp.Value);
-							}
+							//foreach (var kvp in DetectKeywords(title)) {
+							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+							//	Db.AddTitleKeyword(Cmd, urlID, keywordID, kvp.Value);
+							//}
+
+							//foreach (var kvp in DetectKeywords(text)) {
+							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+							//	Db.AddContentKeyword(Cmd, urlID, keywordID, kvp.Value);
+							//}
 							Console.WriteLine("----after init end----");
 						}
 					});

@@ -120,6 +120,18 @@ namespace PatchCrawler {
 				public int KeywordID => As(() => C.KeywordID);
 				public int KeywordCount => As(() => C.KeywordCount);
 			}
+			public class R : D {
+				new public int UrlID { get; set; }
+				new public int KeywordID { get; set; }
+				new public int KeywordCount { get; set; }
+
+				public R() { }
+				public R(int urlID, int keywordID, int keywordCount) {
+					this.UrlID = urlID;
+					this.KeywordID = keywordID;
+					this.KeywordCount = keywordCount;
+				}
+			}
 
 			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID, () => _.KeywordID);
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
@@ -139,6 +151,18 @@ namespace PatchCrawler {
 				public int KeywordID => As(() => C.KeywordID);
 				public int KeywordCount => As(() => C.KeywordCount);
 			}
+			public class R : D {
+				new public int UrlID { get; private set; }
+				new public int KeywordID { get; private set; }
+				new public int KeywordCount { get; private set; }
+
+				public R() { }
+				public R(int urlID, int keywordID, int keywordCount) {
+					this.UrlID = urlID;
+					this.KeywordID = keywordID;
+					this.KeywordCount = keywordCount;
+				}
+			}
 
 			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID, () => _.KeywordID);
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
@@ -157,6 +181,18 @@ namespace PatchCrawler {
 				public int UrlID => As(() => C.UrlID);
 				public int KeywordID => As(() => C.KeywordID);
 				public int KeywordCount => As(() => C.KeywordCount);
+			}
+			public class R : D {
+				new public int UrlID { get; private set; }
+				new public int KeywordID { get; private set; }
+				new public int KeywordCount { get; private set; }
+
+				public R() { }
+				public R(int urlID, int keywordID, int keywordCount) {
+					this.UrlID = urlID;
+					this.KeywordID = keywordID;
+					this.KeywordCount = keywordCount;
+				}
 			}
 
 			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID, () => _.KeywordID);
@@ -374,71 +410,167 @@ $$ LANGUAGE plpgsql;
 		}
 		static Action<IDbCodeCommand, int, string> _AddUrlContent;
 
+		///// <summary>
+		///// 可能ならURLに含まれるキーワードのIDを追加する
+		///// </summary>
+		//public static Action<IDbCodeCommand, int, int, int> AddUrlKeyword {
+		//	get {
+		//		if (_AddUrlKeyword == null) {
+		//			var argUrlId = new Argument(0);
+		//			var argKeywordId = new Argument(0);
+		//			var argKeywordCount = new Argument(0);
+		//			var sql = E.NewSql();
+		//			sql.InsertIntoIfNotExists(UrlKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
+
+		//			var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
+		//			_AddUrlKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
+		//				action.Execute(cmd, urlID, keywordID, keywordCount);
+		//			});
+		//		}
+		//		return _AddUrlKeyword;
+		//	}
+		//}
+		//static Action<IDbCodeCommand, int, int, int> _AddUrlKeyword;
+
+		///// <summary>
+		///// 可能ならタイトルに含まれるキーワードのIDを追加する
+		///// </summary>
+		//public static Action<IDbCodeCommand, int, int, int> AddTitleKeyword {
+		//	get {
+		//		if (_AddTitleKeyword == null) {
+		//			var argUrlId = new Argument(0);
+		//			var argKeywordId = new Argument(0);
+		//			var argKeywordCount = new Argument(0);
+		//			var sql = E.NewSql();
+		//			sql.InsertIntoIfNotExists(TitleKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
+
+		//			var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
+		//			_AddTitleKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
+		//				action.Execute(cmd, urlID, keywordID, keywordCount);
+		//			});
+		//		}
+		//		return _AddTitleKeyword;
+		//	}
+		//}
+		//static Action<IDbCodeCommand, int, int, int> _AddTitleKeyword;
+
+		///// <summary>
+		///// 可能なら内容に含まれるキーワードのIDを追加する
+		///// </summary>
+		//public static Action<IDbCodeCommand, int, int, int> AddContentKeyword {
+		//	get {
+		//		if (_AddContentKeyword == null) {
+		//			var argUrlId = new Argument(0);
+		//			var argKeywordId = new Argument(0);
+		//			var argKeywordCount = new Argument(0);
+		//			var sql = E.NewSql();
+		//			sql.InsertIntoIfNotExists(ContentKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
+
+		//			var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
+		//			_AddContentKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
+		//				action.Execute(cmd, urlID, keywordID, keywordCount);
+		//			});
+		//		}
+		//		return _AddContentKeyword;
+		//	}
+		//}
+		//static Action<IDbCodeCommand, int, int, int> _AddContentKeyword;
+
 		/// <summary>
 		/// 可能ならURLに含まれるキーワードのIDを追加する
 		/// </summary>
-		public static Action<IDbCodeCommand, int, int, int> AddUrlKeyword {
+		public static Action<IDbCodeCommand, IEnumerable<TbUrlKeyword.R>> AddUrlKeywords {
 			get {
-				if (_AddUrlKeyword == null) {
-					var argUrlId = new Argument(0);
-					var argKeywordId = new Argument(0);
-					var argKeywordCount = new Argument(0);
+				if (_AddUrlKeywords == null) {
 					var sql = E.NewSql();
-					sql.InsertIntoIfNotExists(UrlKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
+					var values = sql.Values(() => new TbUrlKeyword.R());
+					var select =
+						sql.From(values)
+						.Where(
+							value => Sql.NotExists(
+								sql.From(UrlKeyword)
+								.Where(uk => uk.UrlID == value.UrlID && uk.KeywordID == value.KeywordID)
+								.Select(t => new { t.UrlID })
+							)
+						).Select();
 
-					var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
-					_AddUrlKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
-						action.Execute(cmd, urlID, keywordID, keywordCount);
+					sql.InsertInto(UrlKeyword, select);
+
+					var action = sql.BuildAction();
+					_AddUrlKeywords = new Action<IDbCodeCommand, IEnumerable<TbUrlKeyword.R>>((cmd, records) => {
+						values.ValueList.Clear();
+						values.ValueList.AddRange(records);
+						action.Execute(cmd);
 					});
 				}
-				return _AddUrlKeyword;
+				return _AddUrlKeywords;
 			}
 		}
-		static Action<IDbCodeCommand, int, int, int> _AddUrlKeyword;
+		public static Action<IDbCodeCommand, IEnumerable<TbUrlKeyword.R>> _AddUrlKeywords;
 
 		/// <summary>
-		/// 可能ならタイトルに含まれるキーワードのIDを追加する
+		/// 可能ならTitleに含まれるキーワードのIDを追加する
 		/// </summary>
-		public static Action<IDbCodeCommand, int, int, int> AddTitleKeyword {
+		public static Action<IDbCodeCommand, IEnumerable<TbTitleKeyword.R>> AddTitleKeywords {
 			get {
-				if (_AddTitleKeyword == null) {
-					var argUrlId = new Argument(0);
-					var argKeywordId = new Argument(0);
-					var argKeywordCount = new Argument(0);
+				if (_AddTitleKeywords == null) {
 					var sql = E.NewSql();
-					sql.InsertIntoIfNotExists(TitleKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
+					var values = sql.Values(() => new TbTitleKeyword.R());
+					var select =
+						sql.From(values)
+						.Where(
+							value => Sql.NotExists(
+								sql.From(TitleKeyword)
+								.Where(uk => uk.UrlID == value.UrlID && uk.KeywordID == value.KeywordID)
+								.Select(t => new { t.UrlID })
+							)
+						).Select();
 
-					var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
-					_AddTitleKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
-						action.Execute(cmd, urlID, keywordID, keywordCount);
+					sql.InsertInto(TitleKeyword, select);
+
+					var action = sql.BuildAction();
+					_AddTitleKeywords = new Action<IDbCodeCommand, IEnumerable<TbTitleKeyword.R>>((cmd, records) => {
+						values.ValueList.Clear();
+						values.ValueList.AddRange(records);
+						action.Execute(cmd);
 					});
 				}
-				return _AddTitleKeyword;
+				return _AddTitleKeywords;
 			}
 		}
-		static Action<IDbCodeCommand, int, int, int> _AddTitleKeyword;
+		public static Action<IDbCodeCommand, IEnumerable<TbTitleKeyword.R>> _AddTitleKeywords;
 
 		/// <summary>
-		/// 可能なら内容に含まれるキーワードのIDを追加する
+		/// 可能ならContentに含まれるキーワードのIDを追加する
 		/// </summary>
-		public static Action<IDbCodeCommand, int, int, int> AddContentKeyword {
+		public static Action<IDbCodeCommand, IEnumerable<TbContentKeyword.R>> AddContentKeywords {
 			get {
-				if (_AddContentKeyword == null) {
-					var argUrlId = new Argument(0);
-					var argKeywordId = new Argument(0);
-					var argKeywordCount = new Argument(0);
+				if (_AddContentKeywords == null) {
 					var sql = E.NewSql();
-					sql.InsertIntoIfNotExists(ContentKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
+					var values = sql.Values(() => new TbContentKeyword.R());
+					var select =
+						sql.From(values)
+						.Where(
+							value => Sql.NotExists(
+								sql.From(ContentKeyword)
+								.Where(uk => uk.UrlID == value.UrlID && uk.KeywordID == value.KeywordID)
+								.Select(t => new { t.UrlID })
+							)
+						).Select();
 
-					var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
-					_AddContentKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
-						action.Execute(cmd, urlID, keywordID, keywordCount);
+					sql.InsertInto(ContentKeyword, select);
+
+					var action = sql.BuildAction();
+					_AddContentKeywords = new Action<IDbCodeCommand, IEnumerable<TbContentKeyword.R>>((cmd, records) => {
+						values.ValueList.Clear();
+						values.ValueList.AddRange(records);
+						action.Execute(cmd);
 					});
 				}
-				return _AddContentKeyword;
+				return _AddContentKeywords;
 			}
 		}
-		static Action<IDbCodeCommand, int, int, int> _AddContentKeyword;
+		public static Action<IDbCodeCommand, IEnumerable<TbContentKeyword.R>> _AddContentKeywords;
 
 		/// <summary>
 		/// 可能ならリンク情報を追加する
