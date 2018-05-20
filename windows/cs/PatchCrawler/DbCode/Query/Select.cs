@@ -69,7 +69,7 @@ namespace DbCode.Query {
 
 			this.Parent = parent;
 			this.ColumnMap = new ColumnMap();
-			this.Columns = TypeWiseCache<TColumns>.Creator();
+			this.Columns = TypewiseCache<TColumns>.Creator();
 
 			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
 			var environment = this.Owner.Environment;
@@ -91,7 +91,7 @@ namespace DbCode.Query {
 
 			this.Parent = parent;
 			this.ColumnMap = new ColumnMap();
-			this.Columns = TypeWiseCache<TColumns>.Creator();
+			this.Columns = TypewiseCache<TColumns>.Creator();
 
 			// プロパティと列定義を結びつけその生成元としてコンストラクタ引数を指定する
 			var environment = this.Owner.Environment;
@@ -109,7 +109,7 @@ namespace DbCode.Query {
 			this.Parent = parent;
 
 			this.ColumnMap = new ColumnMap();
-			this.Columns = TypeWiseCache<TColumns>.Creator();
+			this.Columns = TypewiseCache<TColumns>.Creator();
 
 			// new 演算子でクラスを生成するもの以外はエラーとする
 			var body = columnsExpression.Body;
@@ -134,6 +134,37 @@ namespace DbCode.Query {
 		#endregion
 
 		#region 公開メソッド
+		/// <summary>
+		/// 指定ノードを子とする、既存の親は<see cref="RemoveChild(IQueryNode)"/>で切り離す必要がある
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void AddChild(IQueryNode child) {
+			var where = child as IWhere;
+			if (where != null) {
+				this.Where(where);
+			} else {
+				throw new ApplicationException();
+			}
+		}
+
+		/// <summary>
+		/// 指定の子ノードを取り除く
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void RemoveChild(IQueryNode child) {
+			if (this.WhereNode == child) {
+				this.WhereNode = null;
+			}
+		}
+
+		/// <summary>
+		/// 親ノードが変更された際に呼び出される
+		/// </summary>
+		/// <param name="parent">新しい親ノード</param>
+		public void ChangeParent(IQueryNode parent) {
+			this.Parent = parent;
+		}
+
 		/// <summary>
 		/// プロパティに列定義をバインドして取得する、バインド済みなら取得のみ行われる
 		/// </summary>
@@ -185,30 +216,24 @@ namespace DbCode.Query {
 		}
 
 		/// <summary>
+		/// WHERE句のノードを登録する
+		/// </summary>
+		/// <param name="where">WHERE句ノード</param>
+		public Select<TColumns> Where(IWhere where) {
+			if (this.WhereNode != null) {
+				throw new ApplicationException();
+			}
+			QueryNodeHelper.SwitchParent(where, this);
+			this.WhereNode = where;
+			return this;
+		}
+
+		/// <summary>
 		/// WHERE句の式を登録する
 		/// </summary>
 		/// <param name="expression">式</param>
 		public Where Where(Expression<Func<bool>> expression) {
 			var where = new Where(this, expression);
-			this.WhereNode = where;
-			return where;
-		}
-
-		/// <summary>
-		/// WHERE句の式を登録する
-		/// </summary>
-		/// <param name="expression">式</param>
-		public Where Where(ElementCode expression) {
-			var where = new Where(this, expression);
-			this.WhereNode = where;
-			return where;
-		}
-
-		/// <summary>
-		/// WHERE句のノードを新規作成する
-		/// </summary>
-		public Where Where() {
-			var where = new Where(this);
 			this.WhereNode = where;
 			return where;
 		}
@@ -229,6 +254,8 @@ namespace DbCode.Query {
 			if (this.WhereNode != null) {
 				this.WhereNode.ToElementCode(context);
 			}
+
+			context.Add(this);
 		}
 		#endregion
 

@@ -25,9 +25,9 @@ using System.Collections.Generic;
 using System.Text;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using CodeDb.Query;
+using DbCode.Query;
 
-namespace CodeDb {
+namespace DbCode {
 	/// <summary>
 	/// 列配列基本クラス
 	/// </summary>

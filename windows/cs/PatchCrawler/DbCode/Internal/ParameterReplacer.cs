@@ -13,7 +13,11 @@ namespace DbCode.Internal {
 		}
 
 		protected override Expression VisitParameter(ParameterExpression node) {
-			return Expression.Constant(_ParamMap[node]);
+			if (_ParamMap.TryGetValue(node, out object value)) {
+				return Expression.Constant(value);
+			} else {
+				return node;
+			}
 		}
 
 		public static Expression Replace(Expression node, Dictionary<Expression, object> map) {

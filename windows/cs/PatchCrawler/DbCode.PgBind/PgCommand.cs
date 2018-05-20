@@ -37,12 +37,12 @@ namespace DbCode.PgBind {
 		}
 		public int ExecuteNonQuery(Commandable program) {
 			try {
-				_Core.CommandText = program.CommandText;
+				var (commandText, parameters) = program.CommandTextAndParameters;
+				_Core.CommandText = commandText;
 				var destParams = _Core.Parameters;
-				var srcParams = program.Parameters;
+				var srcParams = parameters;
 				destParams.Clear();
-				for (int i = 0; i < srcParams.Length; i++) {
-					var p = srcParams[i];
+				foreach (var p in srcParams) {
 					destParams.AddWithValue(p.Name, p.IsArgument ? (p.Value as Argument).Value : p.Value);
 				}
 				return _Core.ExecuteNonQuery();
@@ -59,12 +59,12 @@ namespace DbCode.PgBind {
 		}
 		public IDbCodeDataReader ExecuteReader(Commandable program) {
 			try {
-				_Core.CommandText = program.CommandText;
+				var (commandText, parameters) = program.CommandTextAndParameters;
+				_Core.CommandText = commandText;
 				var destParams = _Core.Parameters;
-				var srcParams = program.Parameters;
+				var srcParams = parameters;
 				destParams.Clear();
-				for (int i = 0; i < srcParams.Length; i++) {
-					var p = srcParams[i];
+				foreach (var p in srcParams) {
 					destParams.AddWithValue(p.Name, p.IsArgument ? (p.Value as Argument).Value : p.Value);
 				}
 				return new PgDataReader(_Core.ExecuteReader());

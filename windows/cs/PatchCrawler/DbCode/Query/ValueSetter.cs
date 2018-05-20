@@ -1,19 +1,45 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Linq.Expressions;
+using DbCode.Internal;
 
 namespace DbCode.Query {
 	public class ValueSetter : ISelect {
-		public ColumnMap ColumnMap { get; private set; } = new ColumnMap();
-
+		#region プロパティ
+		/// <summary>
+		/// ノードが属するSQLオブジェクト
+		/// </summary>
 		public Sql Owner => this.Parent.Owner;
 
+		/// <summary>
+		/// 親ノード
+		/// </summary>
 		public IQueryNode Parent { get; private set; }
 
-		public IEnumerable<IQueryNode> Children => null;
+		/// <summary>
+		/// 子ノード一覧
+		/// </summary>
+		public IEnumerable<IQueryNode> Children {
+			get {
+				if (this.WhereNode != null) {
+					yield return this.WhereNode;
+				}
+			}
+		}
 
+		/// <summary>
+		/// テーブルが直接保持する列定義の取得
+		/// </summary>
+		public ColumnMap ColumnMap { get; private set; } = new ColumnMap();
+
+		/// <summary>
+		/// WHERE句のノード
+		/// </summary>
 		public IWhere WhereNode { get; private set; }
+		#endregion
 
+		#region コンストラクタ
 		public ValueSetter(IQueryNode parent, ColumnMap columns, ElementCode[] values) {
 			if (columns.Count != values.Length) {
 				throw new ApplicationException();
@@ -23,9 +49,59 @@ namespace DbCode.Query {
 				this.ColumnMap.Add(columns[i].Clone(values[i]));
 			}
 		}
+		#endregion
 
-		public void Where(ElementCode expression) {
-			this.WhereNode = new Where(this, expression);
+		#region 公開メソッド
+		/// <summary>
+		/// 指定ノードを子とする、既存の親は<see cref="RemoveChild(IQueryNode)"/>で切り離す必要がある
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void AddChild(IQueryNode child) {
+			var where = child as IWhere;
+			if (where != null) {
+				this.Where(where);
+			} else {
+				throw new ApplicationException();
+			}
+		}
+
+		/// <summary>
+		/// 指定の子ノードを取り除く
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void RemoveChild(IQueryNode child) {
+			if (this.WhereNode == child) {
+				this.WhereNode = null;
+			}
+		}
+
+		/// <summary>
+		/// 親ノードが変更された際に呼び出される
+		/// </summary>
+		/// <param name="parent">新しい親ノード</param>
+		public void ChangeParent(IQueryNode parent) {
+			this.Parent = parent;
+		}
+
+		/// <summary>
+		/// WHERE句のノードを登録する
+		/// </summary>
+		/// <param name="where">WHERE句ノード</param>
+		public ValueSetter Where(IWhere where) {
+			if (this.WhereNode != null) {
+				throw new ApplicationException();
+			}
+			QueryNodeHelper.SwitchParent(where, this);
+			this.WhereNode = where;
+			return this;
+		}
+
+		/// <summary>
+		/// WHERE句の式を登録する
+		/// </summary>
+		/// <param name="expression">WHEREの式</param>
+		public void Where(Expression expression) {
+			this.Where(new Where(this, expression));
 		}
 
 		public ITable AliasedClone() {
@@ -51,5 +127,6 @@ namespace DbCode.Query {
 				this.WhereNode.ToElementCode(context);
 			}
 		}
+		#endregion
 	}
 }

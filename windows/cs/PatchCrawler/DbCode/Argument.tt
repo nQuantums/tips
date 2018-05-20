@@ -40,7 +40,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace CodeDb {
+namespace DbCode {
 	/// <summary>
 	/// コマンドに対する引数として扱う事をマークするためのオブジェクト
 	/// </summary>
@@ -58,15 +58,6 @@ namespace CodeDb {
 			} else {
 				return value.ToString();
 			}
-		}
-
-		public override bool Equals(object obj) {
-			return object.ReferenceEquals(this, obj);
-		}
-
-		public override int GetHashCode() {
-			var value = this.Value;
-			return value != null ? value.GetHashCode() : 0;
 		}
 
 		// 明示的キャスト

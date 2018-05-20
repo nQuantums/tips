@@ -82,7 +82,7 @@ namespace DbCode {
 			// プロパティと列をバインドする
 			Mediator.Table = this;
 			try {
-				this.Columns = TypeWiseCache<TColumns>.Creator();
+				this.Columns = TypewiseCache<TColumns>.Creator();
 
 				// 全プロパティを一度呼び出す事でバインドされる
 				AllColumnsBinder(this.Columns);
@@ -143,7 +143,7 @@ namespace DbCode {
 			ColumnMap map;
 			TColumns columns;
 			c.ColumnMap = map = new ColumnMap();
-			c.Columns = columns = TypeWiseCache<TColumns>.Creator();
+			c.Columns = columns = TypewiseCache<TColumns>.Creator();
 			foreach (var column in this.ColumnMap) {
 				map.Add(column.Clone(columns, c));
 			}

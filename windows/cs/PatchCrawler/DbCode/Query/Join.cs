@@ -70,7 +70,7 @@ namespace DbCode.Query {
 			this.Table = clone;
 			this.Columns = clone.Columns;
 
-			this.Owner.Register(clone);
+			this.Owner.RegisterTable(clone);
 
 			this.On = new ElementCode(
 				ParameterReplacer.Replace(
@@ -83,6 +83,30 @@ namespace DbCode.Query {
 		#endregion
 
 		#region 公開メソッド
+		/// <summary>
+		/// 指定ノードを子とする、既存の親は<see cref="RemoveChild(IQueryNode)"/>で切り離す必要がある
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void AddChild(IQueryNode child) {
+			throw new NotImplementedException();
+		}
+
+		/// <summary>
+		/// 指定の子ノードを取り除く
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void RemoveChild(IQueryNode child) {
+			throw new NotImplementedException();
+		}
+
+		/// <summary>
+		/// 親ノードが変更された際に呼び出される
+		/// </summary>
+		/// <param name="parent">新しい親ノード</param>
+		public void ChangeParent(IQueryNode parent) {
+			this.Parent = parent;
+		}
+
 		/// <summary>
 		/// SQL文を生成する
 		/// </summary>
@@ -99,6 +123,7 @@ namespace DbCode.Query {
 				context.Add(SqlKeyword.RightJoin);
 				break;
 			}
+			this.Table.ToElementCode(context);
 			context.Add(this.Table);
 			context.Add(SqlKeyword.On);
 			context.Add(this.On);

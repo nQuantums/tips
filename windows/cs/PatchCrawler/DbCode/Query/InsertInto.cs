@@ -68,7 +68,7 @@ namespace DbCode.Query {
 
 			// 登録
 			var owner = this.Owner;
-			owner.Register(table);
+			owner.RegisterTable(table);
 
 			// bool[] の各要素初期化式を取得する
 			var newexpr = body as NewArrayExpression;
@@ -110,6 +110,41 @@ namespace DbCode.Query {
 
 		#region 公開メソッド
 		/// <summary>
+		/// 指定ノードを子とする、既存の親は<see cref="RemoveChild(IQueryNode)"/>で切り離す必要がある
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void AddChild(IQueryNode child) {
+			var select = child as ISelect;
+			if (select != null) {
+				if (this.ValueNode != null) {
+					throw new ApplicationException();
+				}
+				QueryNodeHelper.SwitchParent(select, this);
+				this.ValueNode = select;
+			} else {
+				throw new ApplicationException();
+			}
+		}
+
+		/// <summary>
+		/// 指定の子ノードを取り除く
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void RemoveChild(IQueryNode child) {
+			if(this.ValueNode == child) {
+				this.ValueNode = null;
+			}
+		}
+
+		/// <summary>
+		/// 親ノードが変更された際に呼び出される
+		/// </summary>
+		/// <param name="parent">新しい親ノード</param>
+		public void ChangeParent(IQueryNode parent) {
+			this.Parent = parent;
+		}
+
+		/// <summary>
 		/// 同一値が存在しない場合のみ挿入するように判定を追加する
 		/// </summary>
 		/// <param name="columnCountToWhere">NOT EXISTS (SELECT * FROM t WHERE t.Name = "test") の部分で判定に使用する列数、0が指定されたら全て使用する</param>
@@ -137,7 +172,10 @@ namespace DbCode.Query {
 					notExistsSelectFrom.Add(valueSetter.ColumnMap[i].Source);
 				}
 				notExistsSelectFrom.EndParenthesize();
-				valueSetter.Where(notExistsSelectFrom);
+
+				var where = new Where(this);
+				where.Expression = notExistsSelectFrom;
+				valueSetter.Where(where);
 			}
 		}
 
@@ -229,7 +267,7 @@ namespace DbCode.Query {
 
 			// 登録
 			var owner = this.Owner;
-			owner.Register(table);
+			owner.RegisterTable(table);
 
 			// 匿名クラスのプロパティを取得、さらに各プロパティ初期化用の式を取得する
 			var newexpr = body as NewExpression;
@@ -262,6 +300,41 @@ namespace DbCode.Query {
 		#endregion
 
 		#region 公開メソッド
+		/// <summary>
+		/// 指定ノードを子とする、既存の親は<see cref="RemoveChild(IQueryNode)"/>で切り離す必要がある
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void AddChild(IQueryNode child) {
+			var select = child as ISelect<TColumnsOrder>;
+			if (select != null) {
+				if (this.ValueNode != null) {
+					throw new ApplicationException();
+				}
+				QueryNodeHelper.SwitchParent(select, this);
+				this.ValueNode = select;
+			} else {
+				throw new ApplicationException();
+			}
+		}
+
+		/// <summary>
+		/// 指定の子ノードを取り除く
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void RemoveChild(IQueryNode child) {
+			if (this.ValueNode == child) {
+				this.ValueNode = null;
+			}
+		}
+
+		/// <summary>
+		/// 親ノードが変更された際に呼び出される
+		/// </summary>
+		/// <param name="parent">新しい親ノード</param>
+		public void ChangeParent(IQueryNode parent) {
+			this.Parent = parent;
+		}
+
 		/// <summary>
 		/// 列選択部を生成する
 		/// </summary>
@@ -353,7 +426,10 @@ namespace DbCode.Query {
 				notExistsSelectFrom.Add(args[i], allColumns);
 			}
 			notExistsSelectFrom.EndParenthesize();
-			select.Where(notExistsSelectFrom);
+
+			var where = new Where(this);
+			where.Expression = notExistsSelectFrom;
+			select.Where(where);
 
 			return select;
 		}

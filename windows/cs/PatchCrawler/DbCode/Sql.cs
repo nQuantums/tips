@@ -59,10 +59,37 @@ namespace DbCode {
 
 		#region 公開メソッド
 		/// <summary>
+		/// 指定ノードを子とする、既存の親は<see cref="RemoveChild(IQueryNode)"/>で切り離す必要がある
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void AddChild(IQueryNode child) {
+			var parent = child.Parent;
+			if(parent != null) {
+				parent.RemoveChild(child);
+			}
+			this.Children.Add(child);
+		}
+
+		/// <summary>
+		/// 指定の子ノードを取り除く
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void RemoveChild(IQueryNode child) {
+			this.Children.Remove(child);
+		}
+
+		/// <summary>
+		/// 親ノードが変更された際に呼び出される
+		/// </summary>
+		/// <param name="parent">新しい親ノード</param>
+		public void ChangeParent(IQueryNode parent) {
+		}
+
+		/// <summary>
 		/// テーブルを使用できるよう登録する
 		/// </summary>
 		/// <param name="table">テーブル</param>
-		public void Register(ITable table) {
+		public void RegisterTable(ITable table) {
 			if (!this.AllTables.Contains(table)) {
 				this.AllColumns.Include(table.ColumnMap);
 			}
@@ -75,7 +102,7 @@ namespace DbCode {
 		/// <returns>ノード</returns>
 		public CodeNode Code(ElementCode code) {
 			var node = new CodeNode(this, code);
-			this.Children.Add(node);
+			this.AddChild(node);
 			return node;
 		}
 
@@ -86,7 +113,7 @@ namespace DbCode {
 		/// <returns>ノード</returns>
 		public CodeNode Code(string code) {
 			var node = new CodeNode(this, new ElementCode(code));
-			this.Children.Add(node);
+			this.AddChild(node);
 			return node;
 		}
 
@@ -118,7 +145,19 @@ namespace DbCode {
 		/// <returns>DROP TABLE句ノード</returns>
 		public DropTable DropTable(ITableDef table) {
 			var node = new DropTable(this, table);
-			this.Children.Add(node);
+			this.AddChild(node);
+			return node;
+		}
+
+		/// <summary>
+		/// テーブルを指定してFROM句ノードを作成する
+		/// </summary>
+		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
+		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する () => new { Name = "test", ID = 1 } の様な式</param>
+		/// <returns>VALUESノード</returns>
+		public ListAsValues<TColumns> Values<TColumns>(Expression<Func<TColumns>> columnsExpression) {
+			var node = new ListAsValues<TColumns>(this, columnsExpression);
+			this.AddChild(node);
 			return node;
 		}
 
@@ -128,9 +167,10 @@ namespace DbCode {
 		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 		/// <param name="table">入力テーブル</param>
 		/// <returns>FROM句ノード</returns>
+		[SqlMethod]
 		public From<TColumns> From<TColumns>(TableDef<TColumns> table) {
 			var node = new From<TColumns>(this, table);
-			this.Children.Add(node);
+			this.AddChild(node);
 			return node;
 		}
 
@@ -140,9 +180,10 @@ namespace DbCode {
 		/// <typeparam name="TColumns">プロパティを列として扱う<see cref="TableDef{TColumns}"/>のTColumnsに該当するクラス</typeparam>
 		/// <param name="select">入力元のSELECTノード</param>
 		/// <returns>FROM句ノード</returns>
+		[SqlMethod]
 		public From<TColumns> From<TColumns>(ISelect<TColumns> select) {
 			var node = new From<TColumns>(this, select);
-			this.Children.Add(node);
+			this.AddChild(node);
 			return node;
 		}
 
@@ -155,7 +196,7 @@ namespace DbCode {
 		/// <returns>INSERT INTO句ノード</returns>
 		public InsertInto<TColumns> InsertInto<TColumns>(TableDef<TColumns> table, Expression<Func<TColumns, bool[]>> columnsExpression) {
 			var node = new InsertInto<TColumns>(this, table, columnsExpression);
-			this.Children.Add(node);
+			this.AddChild(node);
 			return node;
 		}
 
@@ -170,7 +211,7 @@ namespace DbCode {
 		public InsertInto<TColumns> InsertIntoIfNotExists<TColumns>(TableDef<TColumns> table, Expression<Func<TColumns, bool[]>> columnsExpression, int columnCountToWhere = 0) {
 			var node = new InsertInto<TColumns>(this, table, columnsExpression);
 			node.IfNotExists(columnCountToWhere);
-			this.Children.Add(node);
+			this.AddChild(node);
 			return node;
 		}
 
@@ -209,10 +250,6 @@ namespace DbCode {
 
 		public static bool NotExists(ISelect select) {
 			return default(bool);
-		}
-
-		public static bool Set(object l, object r) {
-			return true;
 		}
 		#endregion
 	}

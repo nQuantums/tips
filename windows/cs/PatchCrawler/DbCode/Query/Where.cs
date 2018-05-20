@@ -25,12 +25,13 @@ namespace DbCode.Query {
 		/// <summary>
 		/// 子ノード一覧
 		/// </summary>
-		public IEnumerable<IQueryNode> Children => null;
+		public List<IQueryNode> Children { get; private set; } = new List<IQueryNode>();
+		IEnumerable<IQueryNode> IQueryNode.Children => this.Children;
 
 		/// <summary>
 		/// 式
 		/// </summary>
-		public ElementCode Expression { get; private set; }
+		public ElementCode Expression { get; set; }
 		#endregion
 
 		#region コンストラクタ
@@ -47,23 +48,40 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="parent">親ノード</param>
 		/// <param name="expression">式</param>
-		public Where(IQueryNode parent, Expression<Func<bool>> expression) {
+		public Where(IQueryNode parent, Expression expression) {
 			this.Parent = parent;
-			this.Expression = new ElementCode(expression, this.Owner.AllColumns);
-		}
-
-		/// <summary>
-		/// コンストラクタ、親ノードと式を指定して初期化する
-		/// </summary>
-		/// <param name="parent">親ノード</param>
-		/// <param name="expression">式</param>
-		public Where(IQueryNode parent, ElementCode expression) {
-			this.Parent = parent;
-			this.Expression = expression;
+			this.Expression = new ElementCode(expression, this.Owner.AllColumns, n => this.AddChild(n));
 		}
 		#endregion
 
 		#region 公開メソッド
+		/// <summary>
+		/// 指定ノードを子とする、既存の親は<see cref="RemoveChild(IQueryNode)"/>で切り離す必要がある
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void AddChild(IQueryNode child) {
+			if (!this.Children.Contains(child)) {
+				QueryNodeHelper.SwitchParent(child, this);
+				this.Children.Add(child);
+			}
+		}
+
+		/// <summary>
+		/// 指定の子ノードを取り除く
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void RemoveChild(IQueryNode child) {
+			this.Children.Remove(child);
+		}
+
+		/// <summary>
+		/// 親ノードが変更された際に呼び出される
+		/// </summary>
+		/// <param name="parent">新しい親ノード</param>
+		public void ChangeParent(IQueryNode parent) {
+			this.Parent = parent;
+		}
+
 		public void NotExistsSelect<TColumns>(TColumns columns, Expression<Func<TColumns, bool>> selectWhereExpression) {
 			var expression = new ElementCode(selectWhereExpression, this.Owner.AllColumns, columns);
 			var table = expression.FindTables().FirstOrDefault();

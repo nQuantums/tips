@@ -63,7 +63,7 @@ namespace DbCode {
 		/// <param name="arg1">引数1</param>
 		/// <returns>影響を受けた行の数</returns>
 		public int Execute(IDbCodeCommand command, T1 arg1) {
-			this.ArgSetter(this.Commandable.Parameters, arg1);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1);
 			return this.Commandable.Execute(command);
 		}
 	}
@@ -102,7 +102,7 @@ namespace DbCode {
 		/// <param name="arg2">引数2</param>
 		/// <returns>影響を受けた行の数</returns>
 		public int Execute(IDbCodeCommand command, T1 arg1, T2 arg2) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2);
 			return this.Commandable.Execute(command);
 		}
 	}
@@ -143,7 +143,7 @@ namespace DbCode {
 		/// <param name="arg3">引数3</param>
 		/// <returns>影響を受けた行の数</returns>
 		public int Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3);
 			return this.Commandable.Execute(command);
 		}
 	}
@@ -186,7 +186,7 @@ namespace DbCode {
 		/// <param name="arg4">引数4</param>
 		/// <returns>影響を受けた行の数</returns>
 		public int Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4);
 			return this.Commandable.Execute(command);
 		}
 	}
@@ -231,7 +231,7 @@ namespace DbCode {
 		/// <param name="arg5">引数5</param>
 		/// <returns>影響を受けた行の数</returns>
 		public int Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5);
 			return this.Commandable.Execute(command);
 		}
 	}
@@ -278,7 +278,7 @@ namespace DbCode {
 		/// <param name="arg6">引数6</param>
 		/// <returns>影響を受けた行の数</returns>
 		public int Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5, arg6);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5, arg6);
 			return this.Commandable.Execute(command);
 		}
 	}
@@ -327,7 +327,7 @@ namespace DbCode {
 		/// <param name="arg7">引数7</param>
 		/// <returns>影響を受けた行の数</returns>
 		public int Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, T7 arg7) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 			return this.Commandable.Execute(command);
 		}
 	}
@@ -378,7 +378,7 @@ namespace DbCode {
 		/// <param name="arg8">引数8</param>
 		/// <returns>影響を受けた行の数</returns>
 		public int Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, T7 arg7, T8 arg8) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 			return this.Commandable.Execute(command);
 		}
 	}
@@ -431,7 +431,7 @@ namespace DbCode {
 		/// <param name="arg9">引数9</param>
 		/// <returns>影響を受けた行の数</returns>
 		public int Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, T7 arg7, T8 arg8, T9 arg9) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
 			return this.Commandable.Execute(command);
 		}
 	}
@@ -486,7 +486,7 @@ namespace DbCode {
 		/// <param name="arg10">引数10</param>
 		/// <returns>影響を受けた行の数</returns>
 		public int Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, T7 arg7, T8 arg8, T9 arg9, T10 arg10) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 			return this.Commandable.Execute(command);
 		}
 	}

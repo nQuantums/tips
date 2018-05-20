@@ -5,7 +5,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace DbCode {
+namespace CodeDb {
 	/// <summary>
 	/// コマンドに対する引数として扱う事をマークするためのオブジェクト
 	/// </summary>

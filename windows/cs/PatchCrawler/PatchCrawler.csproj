@@ -74,22 +74,46 @@
     <Compile Include="DbCode.PgBind\PgDatabaseDelta.cs" />
     <Compile Include="DbCode.PgBind\PgDataReader.cs" />
     <Compile Include="DbCode.PgBind\PgDbType.cs" />
-    <Compile Include="DbCode.PgBind\PgEnvironment.cs" />
+    <Compile Include="DbCode.PgBind\PgEnvironment.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>PgEnvironment.tt</DependentUpon>
+    </Compile>
     <Compile Include="DbCode.PgBind\PgEnvironmentBase.cs" />
     <Compile Include="DbCode.PgBind\PgEnvironmentException.cs" />
     <Compile Include="DbCode.PgBind\PgRecordReader.cs" />
     <Compile Include="DbCode.PgBind\PgTableDef.cs" />
     <Compile Include="DbCode.PgBind\PgTableDelta.cs" />
-    <Compile Include="DbCode\ActionCmd.cs" />
-    <Compile Include="DbCode\Argument.cs" />
+    <Compile Include="DbCode\ActionCmd.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>ActionCmd.tt</DependentUpon>
+    </Compile>
+    <Compile Include="DbCode\Argument.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Argument.tt</DependentUpon>
+    </Compile>
     <Compile Include="DbCode\Column.cs" />
     <Compile Include="DbCode\ColumnMap.cs" />
-    <Compile Include="DbCode\ColumnsBase.cs" />
+    <Compile Include="DbCode\ColumnsBase.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>ColumnsBase.tt</DependentUpon>
+    </Compile>
     <Compile Include="DbCode\Commandable.cs" />
     <Compile Include="DbCode\DbCodeException.cs" />
-    <Compile Include="DbCode\DbEnvironment.cs" />
+    <Compile Include="DbCode\DbEnvironment.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>DbEnvironment.tt</DependentUpon>
+    </Compile>
     <Compile Include="DbCode\ElementCode.cs" />
-    <Compile Include="DbCode\FuncCmd.cs" />
+    <Compile Include="DbCode\FuncCmd.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>FuncCmd.tt</DependentUpon>
+    </Compile>
     <Compile Include="DbCode\ICodeDbCommand.cs" />
     <Compile Include="DbCode\ICodeDbConnection.cs" />
     <Compile Include="DbCode\ICodeDbDataReader.cs" />
@@ -97,17 +121,22 @@
     <Compile Include="DbCode\IDatabaseDef.cs" />
     <Compile Include="DbCode\IDatabaseDelta.cs" />
     <Compile Include="DbCode\IDbType.cs" />
+    <Compile Include="DbCode\IDelayedCode.cs" />
     <Compile Include="DbCode\IElementizable.cs" />
     <Compile Include="DbCode\IIndexDef.cs" />
     <Compile Include="DbCode\IndexDef.cs" />
     <Compile Include="DbCode\Internal\ITypeWise.cs" />
     <Compile Include="DbCode\Internal\Mediator.cs" />
     <Compile Include="DbCode\Internal\ParameterReplacer.cs" />
+    <Compile Include="DbCode\Internal\QueryNodeHelper.cs" />
     <Compile Include="DbCode\Internal\TypeSystem.cs" />
-    <Compile Include="DbCode\Internal\TypeWiseCache.cs" />
-    <Compile Include="DbCode\Internal\TypeWiseExecutor.cs" />
+    <Compile Include="DbCode\Internal\TypewiseCache.cs" />
+    <Compile Include="DbCode\Internal\TypewiseExecutor.cs" />
+    <Compile Include="DbCode\Internal\VisitorForElementCode.cs" />
+    <Compile Include="DbCode\Internal\WorkingBuffer.cs" />
     <Compile Include="DbCode\IPrimaryKeyDef.cs" />
     <Compile Include="DbCode\IRecordReader.cs" />
+    <Compile Include="DbCode\SqlMethodAttribute.cs" />
     <Compile Include="DbCode\ITable.cs" />
     <Compile Include="DbCode\ITableDef.cs" />
     <Compile Include="DbCode\ITableDelta.cs" />
@@ -129,7 +158,6 @@
     <Compile Include="DbCode\Query\IOrderBy.cs" />
     <Compile Include="DbCode\Query\IQueryNode.cs" />
     <Compile Include="DbCode\Query\ISelect.cs" />
-    <Compile Include="DbCode\Query\IValues.cs" />
     <Compile Include="DbCode\Query\IWhere.cs" />
     <Compile Include="DbCode\Query\Join.cs" />
     <Compile Include="DbCode\Query\Limit.cs" />
@@ -140,7 +168,11 @@
     <Compile Include="DbCode\Query\ValueSetter.cs" />
     <Compile Include="DbCode\Query\Where.cs" />
     <Compile Include="DbCode\RecordEnumerator.cs" />
-    <Compile Include="DbCode\Sql.Build.cs" />
+    <Compile Include="DbCode\Sql.Build.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Sql.Build.tt</DependentUpon>
+    </Compile>
     <Compile Include="DbCode\Sql.cs" />
     <Compile Include="DbCode\SqlKeyword.cs" />
     <Compile Include="DbCode\TableDef.cs" />
@@ -185,31 +217,31 @@
   <ItemGroup>
     <Content Include="DbCode.PgBind\PgEnvironment.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>PgEnvironment1.cs</LastGenOutput>
+      <LastGenOutput>PgEnvironment.cs</LastGenOutput>
     </Content>
     <Content Include="DbCode\ActionCmd.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>ActionCmd1.cs</LastGenOutput>
+      <LastGenOutput>ActionCmd.cs</LastGenOutput>
     </Content>
     <Content Include="DbCode\Argument.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>Argument1.cs</LastGenOutput>
+      <LastGenOutput>Argument.cs</LastGenOutput>
     </Content>
     <Content Include="DbCode\ColumnsBase.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>ColumnsBase1.cs</LastGenOutput>
+      <LastGenOutput>ColumnsBase.cs</LastGenOutput>
     </Content>
     <Content Include="DbCode\DbEnvironment.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>DbEnvironment1.cs</LastGenOutput>
+      <LastGenOutput>DbEnvironment.cs</LastGenOutput>
     </Content>
     <Content Include="DbCode\FuncCmd.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>FuncCmd1.cs</LastGenOutput>
+      <LastGenOutput>FuncCmd.cs</LastGenOutput>
     </Content>
     <Content Include="DbCode\Sql.Build.tt">
       <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>Sql.Build1.cs</LastGenOutput>
+      <LastGenOutput>Sql.Build.cs</LastGenOutput>
     </Content>
   </ItemGroup>
   <ItemGroup>
