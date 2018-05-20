@@ -328,6 +328,7 @@ $$ LANGUAGE plpgsql;
 
 					var func = sql.BuildFunc<string, int>(argUrl);
 					_AddUrl = new Func<IDbCodeCommand, string, int>((cmd, url) => {
+						Console.WriteLine($"AddUrl({url})");
 						using (var reader = func.Execute(cmd, url)) {
 							int result = 0;
 							foreach (var r in reader.Records) {
@@ -353,8 +354,9 @@ $$ LANGUAGE plpgsql;
 					sql.CallFunc(SpAddKeyword, argKeyword);
 
 					var func = sql.BuildFunc<string, int>(argKeyword);
-					_AddKeyword = new Func<IDbCodeCommand, string, int>((cmd, url) => {
-						using (var reader = func.Execute(cmd, url)) {
+					_AddKeyword = new Func<IDbCodeCommand, string, int>((cmd, keyword) => {
+						Console.WriteLine($"AddKeyword({keyword})");
+						using (var reader = func.Execute(cmd, keyword)) {
 							int result = 0;
 							foreach (var r in reader.Records) {
 								result = r;
@@ -381,6 +383,7 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction<int, string>(argUrlId, argTitle);
 					_AddUrlTitle = new Action<IDbCodeCommand, int, string>((cmd, urlID, urlTitle) => {
+						Console.WriteLine($"AddUrlTitle({urlTitle})");
 						action.Execute(cmd, urlID, urlTitle);
 					});
 				}
@@ -410,71 +413,71 @@ $$ LANGUAGE plpgsql;
 		}
 		static Action<IDbCodeCommand, int, string> _AddUrlContent;
 
-		///// <summary>
-		///// 可能ならURLに含まれるキーワードのIDを追加する
-		///// </summary>
-		//public static Action<IDbCodeCommand, int, int, int> AddUrlKeyword {
-		//	get {
-		//		if (_AddUrlKeyword == null) {
-		//			var argUrlId = new Argument(0);
-		//			var argKeywordId = new Argument(0);
-		//			var argKeywordCount = new Argument(0);
-		//			var sql = E.NewSql();
-		//			sql.InsertIntoIfNotExists(UrlKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
+		/// <summary>
+		/// 可能ならURLに含まれるキーワードのIDを追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, int, int, int> AddUrlKeyword {
+			get {
+				if (_AddUrlKeyword == null) {
+					var argUrlId = new Argument(0);
+					var argKeywordId = new Argument(0);
+					var argKeywordCount = new Argument(0);
+					var sql = E.NewSql();
+					sql.InsertIntoIfNotExists(UrlKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
 
-		//			var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
-		//			_AddUrlKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
-		//				action.Execute(cmd, urlID, keywordID, keywordCount);
-		//			});
-		//		}
-		//		return _AddUrlKeyword;
-		//	}
-		//}
-		//static Action<IDbCodeCommand, int, int, int> _AddUrlKeyword;
+					var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
+					_AddUrlKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
+						action.Execute(cmd, urlID, keywordID, keywordCount);
+					});
+				}
+				return _AddUrlKeyword;
+			}
+		}
+		static Action<IDbCodeCommand, int, int, int> _AddUrlKeyword;
 
-		///// <summary>
-		///// 可能ならタイトルに含まれるキーワードのIDを追加する
-		///// </summary>
-		//public static Action<IDbCodeCommand, int, int, int> AddTitleKeyword {
-		//	get {
-		//		if (_AddTitleKeyword == null) {
-		//			var argUrlId = new Argument(0);
-		//			var argKeywordId = new Argument(0);
-		//			var argKeywordCount = new Argument(0);
-		//			var sql = E.NewSql();
-		//			sql.InsertIntoIfNotExists(TitleKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
+		/// <summary>
+		/// 可能ならタイトルに含まれるキーワードのIDを追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, int, int, int> AddTitleKeyword {
+			get {
+				if (_AddTitleKeyword == null) {
+					var argUrlId = new Argument(0);
+					var argKeywordId = new Argument(0);
+					var argKeywordCount = new Argument(0);
+					var sql = E.NewSql();
+					sql.InsertIntoIfNotExists(TitleKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
 
-		//			var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
-		//			_AddTitleKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
-		//				action.Execute(cmd, urlID, keywordID, keywordCount);
-		//			});
-		//		}
-		//		return _AddTitleKeyword;
-		//	}
-		//}
-		//static Action<IDbCodeCommand, int, int, int> _AddTitleKeyword;
+					var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
+					_AddTitleKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
+						action.Execute(cmd, urlID, keywordID, keywordCount);
+					});
+				}
+				return _AddTitleKeyword;
+			}
+		}
+		static Action<IDbCodeCommand, int, int, int> _AddTitleKeyword;
 
-		///// <summary>
-		///// 可能なら内容に含まれるキーワードのIDを追加する
-		///// </summary>
-		//public static Action<IDbCodeCommand, int, int, int> AddContentKeyword {
-		//	get {
-		//		if (_AddContentKeyword == null) {
-		//			var argUrlId = new Argument(0);
-		//			var argKeywordId = new Argument(0);
-		//			var argKeywordCount = new Argument(0);
-		//			var sql = E.NewSql();
-		//			sql.InsertIntoIfNotExists(ContentKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
+		/// <summary>
+		/// 可能なら内容に含まれるキーワードのIDを追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, int, int, int> AddContentKeyword {
+			get {
+				if (_AddContentKeyword == null) {
+					var argUrlId = new Argument(0);
+					var argKeywordId = new Argument(0);
+					var argKeywordCount = new Argument(0);
+					var sql = E.NewSql();
+					sql.InsertIntoIfNotExists(ContentKeyword, t => new[] { t.UrlID == argUrlId, t.KeywordID == argKeywordId, t.KeywordCount == argKeywordCount }, 2);
 
-		//			var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
-		//			_AddContentKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
-		//				action.Execute(cmd, urlID, keywordID, keywordCount);
-		//			});
-		//		}
-		//		return _AddContentKeyword;
-		//	}
-		//}
-		//static Action<IDbCodeCommand, int, int, int> _AddContentKeyword;
+					var action = sql.BuildAction<int, int, int>(argUrlId, argKeywordId, argKeywordCount);
+					_AddContentKeyword = new Action<IDbCodeCommand, int, int, int>((cmd, urlID, keywordID, keywordCount) => {
+						action.Execute(cmd, urlID, keywordID, keywordCount);
+					});
+				}
+				return _AddContentKeyword;
+			}
+		}
+		static Action<IDbCodeCommand, int, int, int> _AddContentKeyword;
 
 		/// <summary>
 		/// 可能ならURLに含まれるキーワードのIDを追加する
@@ -498,9 +501,12 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction();
 					_AddUrlKeywords = new Action<IDbCodeCommand, IEnumerable<TbUrlKeyword.R>>((cmd, records) => {
+						Console.WriteLine("AddUrlKeywords {");
 						values.ValueList.Clear();
 						values.ValueList.AddRange(records);
+						Console.WriteLine($"count: {values.ValueList.Count}");
 						action.Execute(cmd);
+						Console.WriteLine("}");
 					});
 				}
 				return _AddUrlKeywords;
@@ -530,9 +536,12 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction();
 					_AddTitleKeywords = new Action<IDbCodeCommand, IEnumerable<TbTitleKeyword.R>>((cmd, records) => {
+						Console.WriteLine("AddTitleKeywords {");
 						values.ValueList.Clear();
 						values.ValueList.AddRange(records);
+						Console.WriteLine($"count: {values.ValueList.Count}");
 						action.Execute(cmd);
+						Console.WriteLine("}");
 					});
 				}
 				return _AddTitleKeywords;
@@ -562,9 +571,12 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction();
 					_AddContentKeywords = new Action<IDbCodeCommand, IEnumerable<TbContentKeyword.R>>((cmd, records) => {
+						Console.WriteLine("AddContentKeywords {");
 						values.ValueList.Clear();
 						values.ValueList.AddRange(records);
+						Console.WriteLine($"count: {values.ValueList.Count}");
 						action.Execute(cmd);
+						Console.WriteLine("}");
 					});
 				}
 				return _AddContentKeywords;

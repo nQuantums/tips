@@ -129,24 +129,24 @@ namespace PatchCrawler {
 							Db.AddUrlTitle(Cmd, urlID, title);
 							Db.AddUrlContent(Cmd, urlID, content);
 
-							Db.AddUrlKeywords(Cmd, from kvp in DetectKeywords(url) select new Db.TbUrlKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
-							Db.AddTitleKeywords(Cmd, from kvp in DetectKeywords(title) select new Db.TbTitleKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
-							Db.AddContentKeywords(Cmd, from kvp in DetectKeywords(content) select new Db.TbContentKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
+							//Db.AddUrlKeywords(Cmd, from kvp in DetectKeywords(url) select new Db.TbUrlKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
+							//Db.AddTitleKeywords(Cmd, from kvp in DetectKeywords(title) select new Db.TbTitleKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
+							//Db.AddContentKeywords(Cmd, from kvp in DetectKeywords(content) select new Db.TbContentKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
 
-							//foreach (var kvp in DetectKeywords(url)) {
-							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-							//	Db.AddUrlKeyword(Cmd, urlID, keywordID, kvp.Value);
-							//}
+							foreach (var kvp in DetectKeywords(url)) {
+								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+								Db.AddUrlKeyword(Cmd, urlID, keywordID, kvp.Value);
+							}
 
-							//foreach (var kvp in DetectKeywords(title)) {
-							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-							//	Db.AddTitleKeyword(Cmd, urlID, keywordID, kvp.Value);
-							//}
+							foreach (var kvp in DetectKeywords(title)) {
+								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+								Db.AddTitleKeyword(Cmd, urlID, keywordID, kvp.Value);
+							}
 
-							//foreach (var kvp in DetectKeywords(text)) {
-							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-							//	Db.AddContentKeyword(Cmd, urlID, keywordID, kvp.Value);
-							//}
+							foreach (var kvp in DetectKeywords(text)) {
+								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+								Db.AddContentKeyword(Cmd, urlID, keywordID, kvp.Value);
+							}
 							Console.WriteLine("----after init end----");
 						}
 					});
