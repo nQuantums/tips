@@ -498,10 +498,9 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction();
 					_AddUrlKeywords = new Action<IDbCodeCommand, IEnumerable<TbUrlKeyword.R>>((cmd, records) => {
-						Console.WriteLine("AddUrlKeywords {");
 						values.ValueList.Clear();
 						values.ValueList.AddRange(records);
-						Console.WriteLine($"count: {values.ValueList.Count}");
+						Console.WriteLine($"AddUrlKeywords: {values.ValueList.Count} {{");
 						action.Execute(cmd);
 						Console.WriteLine("}");
 					});
@@ -533,10 +532,9 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction();
 					_AddTitleKeywords = new Action<IDbCodeCommand, IEnumerable<TbTitleKeyword.R>>((cmd, records) => {
-						Console.WriteLine("AddTitleKeywords {");
 						values.ValueList.Clear();
 						values.ValueList.AddRange(records);
-						Console.WriteLine($"count: {values.ValueList.Count}");
+						Console.WriteLine($"AddTitleKeywords: {values.ValueList.Count} {{");
 						action.Execute(cmd);
 						Console.WriteLine("}");
 					});
@@ -568,10 +566,9 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction();
 					_AddContentKeywords = new Action<IDbCodeCommand, IEnumerable<TbContentKeyword.R>>((cmd, records) => {
-						Console.WriteLine("AddContentKeywords {");
 						values.ValueList.Clear();
 						values.ValueList.AddRange(records);
-						Console.WriteLine($"count: {values.ValueList.Count}");
+						Console.WriteLine($"AddContentKeywords: {values.ValueList.Count} {{");
 						action.Execute(cmd);
 						Console.WriteLine("}");
 					});

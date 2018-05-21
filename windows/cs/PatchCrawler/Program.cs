@@ -139,7 +139,7 @@ namespace PatchCrawler {
 							foreach (var chunk in ChunkedEnumerate(DetectKeywords(title), 1000)) {
 								Db.AddTitleKeywords(Cmd, from kvp in chunk select new Db.TbTitleKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
 							}
-							foreach (var chunk in ChunkedEnumerate(DetectKeywords(content), 1000)) {
+							foreach (var chunk in ChunkedEnumerate(DetectKeywords(text), 1000)) {
 								Db.AddContentKeywords(Cmd, from kvp in chunk select new Db.TbContentKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
 							}
 
