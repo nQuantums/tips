@@ -130,6 +130,16 @@ namespace DbCode.Query {
 				this.WhereNode.ToElementCode(context);
 			}
 		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
+		}
 		#endregion
 	}
 }

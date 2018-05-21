@@ -180,6 +180,16 @@ namespace DbCode.Query {
 				// delayedCode 内でエイリアス名付与するので、既存の処理をオーバーライドし何もしないようにする
 			});
 		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
+		}
 		#endregion
 
 		#region 非公開メソッド

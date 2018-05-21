@@ -75,6 +75,16 @@ namespace DbCode.Query {
 			context.Add(SqlKeyword.Limit);
 			context.AddObject(this.Value);
 		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
+		}
 		#endregion
 	}
 }

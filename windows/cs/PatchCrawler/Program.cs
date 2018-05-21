@@ -24,6 +24,7 @@ namespace PatchCrawler {
 		const string LocalHttpServerUrl = "http://localhost:9999/";
 
 		static IDbCodeCommand Cmd;
+		static IDbCodeCommand CmdForSearch;
 
 		static MeCabTagger MeCab;
 
@@ -81,9 +82,12 @@ namespace PatchCrawler {
 			Db.Initialize();
 
 			// データベースへ接続しブラウザの制御を開始する
-			using (var con = Db.CreateConnection()) {
+			using (var con = Db.CreateConnection())
+			using (var conForSearch = Db.CreateConnection()) {
 				con.Open();
+				conForSearch.Open();
 				Cmd = con.CreateCommand();
+				CmdForSearch = conForSearch.CreateCommand();
 
 				var cts = new CancellationTokenSource();
 				var t = StartHttpServer(cts.Token);
@@ -129,24 +133,31 @@ namespace PatchCrawler {
 							Db.AddUrlTitle(Cmd, urlID, title);
 							Db.AddUrlContent(Cmd, urlID, content);
 
-							//Db.AddUrlKeywords(Cmd, from kvp in DetectKeywords(url) select new Db.TbUrlKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
-							//Db.AddTitleKeywords(Cmd, from kvp in DetectKeywords(title) select new Db.TbTitleKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
-							//Db.AddContentKeywords(Cmd, from kvp in DetectKeywords(content) select new Db.TbContentKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
-
-							foreach (var kvp in DetectKeywords(url)) {
-								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-								Db.AddUrlKeyword(Cmd, urlID, keywordID, kvp.Value);
+							foreach (var chunk in ChunkedEnumerate(DetectKeywords(url), 1000)) {
+								Db.AddUrlKeywords(Cmd, from kvp in chunk select new Db.TbUrlKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
+							}
+							foreach (var chunk in ChunkedEnumerate(DetectKeywords(title), 1000)) {
+								Db.AddTitleKeywords(Cmd, from kvp in chunk select new Db.TbTitleKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
+							}
+							foreach (var chunk in ChunkedEnumerate(DetectKeywords(content), 1000)) {
+								Db.AddContentKeywords(Cmd, from kvp in chunk select new Db.TbContentKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
 							}
 
-							foreach (var kvp in DetectKeywords(title)) {
-								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-								Db.AddTitleKeyword(Cmd, urlID, keywordID, kvp.Value);
-							}
 
-							foreach (var kvp in DetectKeywords(text)) {
-								var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-								Db.AddContentKeyword(Cmd, urlID, keywordID, kvp.Value);
-							}
+							//foreach (var kvp in DetectKeywords(url)) {
+							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+							//	Db.AddUrlKeyword(Cmd, urlID, keywordID, kvp.Value);
+							//}
+
+							//foreach (var kvp in DetectKeywords(title)) {
+							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+							//	Db.AddTitleKeyword(Cmd, urlID, keywordID, kvp.Value);
+							//}
+
+							//foreach (var kvp in DetectKeywords(text)) {
+							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
+							//	Db.AddContentKeyword(Cmd, urlID, keywordID, kvp.Value);
+							//}
 							Console.WriteLine("----after init end----");
 						}
 					});
@@ -315,6 +326,24 @@ namespace PatchCrawler {
 									Console.WriteLine(chrome.ExecuteScript(line.Substring(2)));
 								} else if (names[0] == "init") {
 									pageInitializer(chrome.CurrentWindowHandle);
+								} else if (names[0] == "s") {
+									var sql = Db.E.NewSql();
+									var f = sql.From(Db.Url);
+									for (int i = 1; i < names.Length; i++) {
+										var fs = sql.From(Db.Keyword);
+										var j = fs.InnerJoin(Db.ContentKeyword, t => t.KeywordID == fs._.KeywordID);
+										var a = new Argument(names[i] + "%");
+										fs.Where(t => Sql.Like(t.Keyword, a));
+										fs.GroupBy(() => new { j._.UrlID });
+										f.InnerJoin(fs.Select(t => new { j._.UrlID }), t => t.UrlID == f._.UrlID);
+									}
+									var jt = f.InnerJoin(Db.UrlTitle, t => t.UrlID == f._.UrlID);
+									var func = sql.BuildFuncFromSelect(f.Select(t => new { jt._.UrlTitle, t.Url }));
+									using (var reader = func.Execute(CmdForSearch)) {
+										foreach (var r in reader.Records) {
+											Console.WriteLine(r);
+										}
+									}
 								}
 							}
 						}
@@ -593,6 +622,13 @@ namespace PatchCrawler {
 			SpecialKeyword("", addToDic);
 
 			return result;
+		}
+
+		static IEnumerable<IEnumerable<T>> ChunkedEnumerate<T>(IEnumerable<T> items, int chunkSize) {
+			while (items.Any()) {
+				yield return items.Take(chunkSize);
+				items = items.Skip(chunkSize);
+			}
 		}
 	}
 }

@@ -199,6 +199,16 @@ namespace DbCode.Query {
 
 			throw new ApplicationException();
 		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
+		}
 		#endregion
 	}
 
@@ -502,6 +512,16 @@ namespace DbCode.Query {
 			context.AddColumnDefs(this.ColumnMap);
 
 			this.ValueNode.ToElementCode(context);
+		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
 		}
 		#endregion
 	}

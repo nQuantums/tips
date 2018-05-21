@@ -214,6 +214,16 @@ namespace DbCode.Query {
 			// FROM 部作成
 			this.FromNode.ToElementCode(context);
 		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
+		}
 		#endregion
 
 		#region 非公開メソッド

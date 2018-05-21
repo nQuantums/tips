@@ -74,6 +74,16 @@ namespace DbCode.Query {
 			context.Add(SqlKeyword.DropTable, SqlKeyword.IfExists);
 			context.Concat(this.Table.Name);
 		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
+		}
 		#endregion
 	}
 }

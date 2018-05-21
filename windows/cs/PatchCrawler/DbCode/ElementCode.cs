@@ -372,6 +372,15 @@ namespace DbCode {
 			handlers.Add(handler);
 		}
 
+		public override string ToString() {
+			try {
+				var cmd = Build();
+				return cmd.CommandTextAndParameters.Item1;
+			} catch {
+				return "";
+			}
+		}
+
 		/// <summary>
 		/// <see cref="IDbCodeCommand"/>に渡して実行可能な形式にビルドする
 		/// </summary>

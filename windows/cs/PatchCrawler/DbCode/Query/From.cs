@@ -98,33 +98,21 @@ namespace DbCode.Query {
 		/// コンストラクタ、親ノードと取得元のテーブル定義を指定して初期化する
 		/// </summary>
 		/// <param name="parent">親ノード</param>
-		/// <param name="tableDef">テーブル定義</param>
+		/// <param name="table">テーブル</param>
 		[SqlMethod]
-		public From(IQueryNode parent, ITable<TColumns> tableDef) {
+		public From(IQueryNode parent, ITable<TColumns> table) {
+			var select = table as ISelect<TColumns>;
+			if (select is null) {
+				table = table.AliasedClone();
+			} else {
+				QueryNodeHelper.SwitchParent(select, this);
+			}
+
 			this.Parent = parent;
+			this.Table = table;
+			this.Columns = table.Columns;
 
-			var clone = tableDef.AliasedClone();
-			this.Table = clone;
-			this.Columns = clone.Columns;
-
-			parent.Owner.RegisterTable(clone);
-		}
-
-		/// <summary>
-		/// コンストラクタ、親ノードと取得元のテーブル定義を指定して初期化する
-		/// </summary>
-		/// <param name="parent">親ノード</param>
-		/// <param name="select">SELECTノード</param>
-		[SqlMethod]
-		public From(IQueryNode parent, ISelect<TColumns> select) {
-			this.Parent = parent;
-
-			QueryNodeHelper.SwitchParent(select, this);
-
-			this.Table = select;
-			this.Columns = select.Columns;
-
-			parent.Owner.RegisterTable(select);
+			this.Owner.RegisterTable(table);
 		}
 		#endregion
 
@@ -307,23 +295,23 @@ namespace DbCode.Query {
 		/// <summary>
 		/// GROUP BYの列を登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
+		/// <typeparam name="TGroupByColumns">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
 		/// <returns>自分</returns>
 		[SqlMethod]
-		public From<TColumns> GroupBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
-			return this.GroupBy(new GroupBy<TColumns1>(this, columnsExpression));
+		public From<TColumns> GroupBy<TGroupByColumns>(Expression<Func<TGroupByColumns>> columnsExpression) {
+			return this.GroupBy(new GroupBy<TGroupByColumns>(this, columnsExpression));
 		}
 
 		/// <summary>
 		/// ORDER BYの列を登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
+		/// <typeparam name="TOrderByColumns">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
 		/// <returns>自分</returns>
 		[SqlMethod]
-		public From<TColumns> OrderBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
-			return this.OrderBy(new OrderBy<TColumns1>(this, columnsExpression));
+		public From<TColumns> OrderBy<TOrderByColumns>(Expression<Func<TOrderByColumns>> columnsExpression) {
+			return this.OrderBy(new OrderBy<TOrderByColumns>(this, columnsExpression));
 		}
 
 		/// <summary>
@@ -364,7 +352,9 @@ namespace DbCode.Query {
 		public void ToElementCode(ElementCode context) {
 			if (this.Table != null) {
 				context.Add(SqlKeyword.From);
+				context.Push();
 				this.Table.ToElementCode(context);
+				context.Pop();
 				context.Add(this.Table);
 			}
 
@@ -390,19 +380,29 @@ namespace DbCode.Query {
 				this.LimitNode.ToElementCode(context);
 			}
 		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
+		}
 		#endregion
 
 		#region 非公開メソッド
 		/// <summary>
 		/// 指定された結合種類の<see cref="Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="ITable{TColumns}.Columns"/></typeparam>
+		/// <typeparam name="TJoinTableColumns">結合するテーブルの<see cref="ITable{TColumns}.Columns"/></typeparam>
 		/// <param name="joinType">結合種類</param>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
 		/// <returns><see cref="Join{TColumns}"/></returns>
-		IJoin<TColumns1> JoinByType<TColumns1>(JoinType joinType, ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) {
-			var join = new Join<TColumns1>(this, joinType, table, on);
+		IJoin<TJoinTableColumns> JoinByType<TJoinTableColumns>(JoinType joinType, ITable<TJoinTableColumns> table, Expression<Func<TJoinTableColumns, bool>> on) {
+			var join = new Join<TJoinTableColumns>(this, joinType, table, on);
 			this.Join(join);
 			return join;
 		}

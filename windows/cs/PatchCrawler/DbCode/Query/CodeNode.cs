@@ -73,6 +73,16 @@ namespace DbCode.Query {
 		public void ToElementCode(ElementCode context) {
 			context.Add(this.Code);
 		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
+		}
 		#endregion
 	}
 }

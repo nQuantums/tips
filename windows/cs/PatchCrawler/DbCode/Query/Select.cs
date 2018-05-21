@@ -262,6 +262,16 @@ namespace DbCode.Query {
 
 			context.Add(this);
 		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
+		}
 		#endregion
 
 		#region 非公開メソッド
