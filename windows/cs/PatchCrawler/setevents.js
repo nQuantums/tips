@@ -180,7 +180,7 @@ console.log(arguments);
     document.documentElement.querySelectorAll('a[href]').forEach(a => {
         let href = a.href;
         if (href && !href.startsWith('#')) {
-            links.push(href);
+            links.push({ h: href, t: a.textContent });
         }
     });
 

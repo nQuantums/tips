@@ -178,13 +178,14 @@ namespace DbCode {
 		/// </summary>
 		/// <param name="getters"><see cref="Columns"/>のプロパティを呼び出す処理を指定する</param>
 		/// <returns>プライマリキー定義</returns>
-		protected virtual IPrimaryKeyDef MakePrimaryKey(params Func<object>[] getters) {
+		protected virtual IPrimaryKeyDef MakePrimaryKey(params Func<TColumns, object>[] getters) {
 			Mediator.Table = this;
 			Mediator.TableName = this.Name;
 			try {
 				var colDefs = new IColumnDef[getters.Length];
+				var columns = this.Columns;
 				for (int i = 0; i < getters.Length; i++) {
-					colDefs[i] = Mediator.GetFrom(getters[i]);
+					colDefs[i] = Mediator.GetFrom(getters[i], columns);
 				}
 				return new PrimaryKeyDef(colDefs);
 			} finally {
@@ -199,13 +200,14 @@ namespace DbCode {
 		/// <param name="flags">インデックスに設定するフラグ</param>
 		/// <param name="getters"><see cref="Columns"/>のプロパティを呼び出す処理を指定する</param>
 		/// <returns>インデックス定義</returns>
-		protected virtual IIndexDef MakeIndex(IndexFlags flags, params Func<object>[] getters) {
+		protected virtual IIndexDef MakeIndex(IndexFlags flags, params Func<TColumns, object>[] getters) {
 			Mediator.Table = this;
 			Mediator.TableName = this.Name;
 			try {
 				var colDefs = new IColumnDef[getters.Length];
+				var columns = this.Columns;
 				for (int i = 0; i < getters.Length; i++) {
-					colDefs[i] = Mediator.GetFrom(getters[i]);
+					colDefs[i] = Mediator.GetFrom(getters[i], columns);
 				}
 				return new IndexDef(flags, colDefs);
 			} finally {
@@ -228,13 +230,14 @@ namespace DbCode {
 		/// </summary>
 		/// <param name="getters"><see cref="Columns"/>のプロパティを呼び出す処理を指定する</param>
 		/// <returns>インデックス定義</returns>
-		protected virtual IUniqueDef MakeUnique(params Func<object>[] getters) {
+		protected virtual IUniqueDef MakeUnique(params Func<TColumns, object>[] getters) {
 			Mediator.Table = this;
 			Mediator.TableName = this.Name;
 			try {
 				var colDefs = new IColumnDef[getters.Length];
+				var columns = this.Columns;
 				for (int i = 0; i < getters.Length; i++) {
-					colDefs[i] = Mediator.GetFrom(getters[i]);
+					colDefs[i] = Mediator.GetFrom(getters[i], columns);
 				}
 				return new UniqueDef(colDefs);
 			} finally {

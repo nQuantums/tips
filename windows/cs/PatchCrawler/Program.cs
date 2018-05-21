@@ -128,6 +128,7 @@ namespace PatchCrawler {
 							var title = (string)jobj["title"];
 							var text = (string)jobj["text"];
 							var content = (string)jobj["content"];
+							var links = jobj["links"];
 
 							var urlID = Db.AddUrl(Cmd, url);
 							Db.AddUrlTitle(Cmd, urlID, title);
@@ -143,21 +144,16 @@ namespace PatchCrawler {
 								Db.AddContentKeywords(Cmd, from kvp in chunk select new Db.TbContentKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
 							}
 
+							foreach (var l in links.Children<JObject>()) {
+								var dstUrl = (string)l["h"];
+								var linkText = (string)l["t"];
+								var dstUrlID = Db.AddUrl(Cmd, dstUrl);
+								var linkID = Db.AddLink(Cmd, urlID, dstUrlID, linkText);
+								foreach (var chunk in ChunkedEnumerate(DetectKeywords(linkText), 1000)) {
+									Db.AddLinkKeywords(Cmd, from kvp in chunk select new Db.TbLinkKeyword.R(linkID, Db.AddKeyword(Cmd, kvp.Key)));
+								}
+							}
 
-							//foreach (var kvp in DetectKeywords(url)) {
-							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-							//	Db.AddUrlKeyword(Cmd, urlID, keywordID, kvp.Value);
-							//}
-
-							//foreach (var kvp in DetectKeywords(title)) {
-							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-							//	Db.AddTitleKeyword(Cmd, urlID, keywordID, kvp.Value);
-							//}
-
-							//foreach (var kvp in DetectKeywords(text)) {
-							//	var keywordID = Db.AddKeyword(Cmd, kvp.Key);
-							//	Db.AddContentKeyword(Cmd, urlID, keywordID, kvp.Value);
-							//}
 							Console.WriteLine("----after init end----");
 						}
 					});
@@ -230,18 +226,6 @@ namespace PatchCrawler {
 					}
 				});
 				VisibilityChange += visibilityChangeHandler;
-
-				// ページ内のリンクを踏んでジャンプした際の処理
-				var jumpHandler = new Action<string, string>((src, dst) => {
-					Task.Run(() => {
-						lock (Cmd) {
-							var srcUrlID = Db.AddUrl(Cmd, src);
-							var dstUrlID = Db.AddUrl(Cmd, dst);
-							Db.AddLink(Cmd, srcUrlID, dstUrlID);
-						}
-					});
-				});
-				Jump += jumpHandler;
 
 				// コマンドラインからの入力をループ
 				ReadOnlyCollection<IWebElement> elements = null;
@@ -389,7 +373,7 @@ namespace PatchCrawler {
 					res.Headers.Add("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
 					res.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
 
-					var responceBuffer = new StringBuilder();
+					var responseBuffer = new StringBuilder();
 
 					var ev = req.QueryString["event"];
 					Console.WriteLine(ev);
@@ -454,25 +438,13 @@ namespace PatchCrawler {
 						}
 						break;
 					}
-					//Console.WriteLine(req.HttpMethod);
-					//foreach (var value in req.QueryString) {
-					//	Console.WriteLine(req.QueryString[value.ToString()]);
-					//}
 
 					// レスポンス内容設定
 					res.ContentEncoding = Encoding.UTF8;
 					res.ContentType = "text/plain";
 
-					//sb.AppendLine($"{req.HttpMethod} {req.RawUrl} HTTP/{req.ProtocolVersion}");
-					//sb.AppendLine(String.Join("\r\n", req.Headers.AllKeys.Select(k => $"{k}: {req.Headers[k]}")));
-					//sb.AppendLine(req.Url.ToString());
-					//sb.AppendLine(req.RawUrl);
-					//foreach (var value in req.QueryString) {
-					//	sb.AppendLine($"{value}: {req.QueryString[value.ToString()]}");
-					//}
-
 					var sw = new StreamWriter(res.OutputStream, Encoding.UTF8);
-					sw.WriteLine(responceBuffer.ToString());
+					sw.WriteLine(responseBuffer.ToString());
 					sw.Flush();
 				}
 			}

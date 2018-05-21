@@ -22,11 +22,13 @@ namespace PatchCrawler {
 		/// </summary>
 		public static class C {
 			public static int UrlID => E.Int32("url_id");
+			public static int LinkID => E.Int32("link_id");
 			public static int SrcUrlID => E.Int32("src_url_id");
 			public static int DstUrlID => E.Int32("dst_url_id");
 			public static string Content => E.String("content");
 			public static string Url => E.String("url");
 			public static string UrlTitle => E.String("url_title");
+			public static string LinkText => E.String("link_text");
 			public static int KeywordID => E.Int32("keyword_id");
 			public static int KeywordCount => E.Int32("keyword_count");
 			public static string Keyword => E.String("keyword");
@@ -45,12 +47,12 @@ namespace PatchCrawler {
 				public string Url => As(() => C.Url);
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID);
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UrlID);
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
-				MakeIndex(0, () => _.Url)
+				MakeIndex(0, t => t.Url)
 			);
 			public override IEnumerable<IUniqueDef> GetUniques() => MakeUniques(
-				MakeUnique(() => _.Url)
+				MakeUnique(t => t.Url)
 			);
 		}
 		public static TbUrl Url { get; private set; } = new TbUrl();
@@ -66,9 +68,9 @@ namespace PatchCrawler {
 				public string UrlTitle => As(() => C.UrlTitle);
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID);
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UrlID);
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
-				MakeIndex(0, () => _.UrlTitle)
+				MakeIndex(0, t => t.UrlTitle)
 			);
 		}
 		public static TbUrlTitle UrlTitle { get; private set; } = new TbUrlTitle();
@@ -84,7 +86,7 @@ namespace PatchCrawler {
 				public string Content => As(() => C.Content);
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID);
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UrlID);
 		}
 		public static TbUrlContent UrlContent { get; private set; } = new TbUrlContent();
 
@@ -99,12 +101,12 @@ namespace PatchCrawler {
 				public string Keyword => As(() => C.Keyword);
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.KeywordID);
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.KeywordID);
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
-				MakeIndex(0, () => _.Keyword)
+				MakeIndex(0, t => t.Keyword)
 			);
 			public override IEnumerable<IUniqueDef> GetUniques() => MakeUniques(
-				MakeUnique(() => _.Keyword)
+				MakeUnique(t => t.Keyword)
 			);
 		}
 		public static TbKeyword Keyword { get; private set; } = new TbKeyword();
@@ -133,9 +135,9 @@ namespace PatchCrawler {
 				}
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID, () => _.KeywordID);
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UrlID, t => t.KeywordID);
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
-				MakeIndex(0, () => _.KeywordID)
+				MakeIndex(0, t => t.KeywordID)
 			);
 		}
 		public static TbUrlKeyword UrlKeyword { get; private set; } = new TbUrlKeyword();
@@ -164,9 +166,9 @@ namespace PatchCrawler {
 				}
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID, () => _.KeywordID);
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UrlID, t => t.KeywordID);
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
-				MakeIndex(0, () => _.KeywordID)
+				MakeIndex(0, t => t.KeywordID)
 			);
 		}
 		public static TbTitleKeyword TitleKeyword { get; private set; } = new TbTitleKeyword();
@@ -195,30 +197,79 @@ namespace PatchCrawler {
 				}
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.UrlID, () => _.KeywordID);
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UrlID, t => t.KeywordID);
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
-				MakeIndex(0, () => _.KeywordID)
+				MakeIndex(0, t => t.KeywordID)
 			);
 		}
 		public static TbContentKeyword ContentKeyword { get; private set; } = new TbContentKeyword();
 
 		/// <summary>
-		/// URLのリンク情報テーブル、リンク元URLのIDとリンク先URLのIDを持つ
+		/// URLのリンク情報テーブル、リンクID、リンク元URLと先のIDとリンクテキストを持つ
 		/// </summary>
-		public class TbUrlLink : TableDef<TbUrlLink.D> {
-			public TbUrlLink() : base(E, "tb_url_link") { }
+		public class TbLink : TableDef<TbLink.D> {
+			public TbLink() : base(E, "tb_link") { }
 
 			public class D : ColumnsBase {
+				public int LinkID => As(() => C.LinkID, ColumnFlags.Serial);
 				public int SrcUrlID => As(() => C.SrcUrlID);
 				public int DstUrlID => As(() => C.DstUrlID);
+				public string LinkText => As(() => C.LinkText);
+			}
+			public class R : D {
+				new public int LinkID { get; set; }
+				new public int SrcUrlID { get; set; }
+				new public int DstUrlID { get; set; }
+				new public string LinkText { get; set; }
+
+				public R() { }
+				public R(int linkID, int srcUrlID, int dstUrlID, string linkText) {
+					this.LinkID = linkID;
+					this.SrcUrlID = srcUrlID;
+					this.DstUrlID = dstUrlID;
+					this.LinkText = linkText;
+				}
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => _.SrcUrlID, () => _.DstUrlID);
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.LinkID);
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
-				MakeIndex(0, () => _.DstUrlID)
+				MakeIndex(0, t => t.SrcUrlID),
+				MakeIndex(0, t => t.DstUrlID),
+				MakeIndex(0, t => t.LinkText)
+			);
+			public override IEnumerable<IUniqueDef> GetUniques() => MakeUniques(
+				MakeUnique(t => t.SrcUrlID, t => t.DstUrlID)
 			);
 		}
-		public static TbUrlLink UrlLink { get; private set; } = new TbUrlLink();
+		public static TbLink Link { get; private set; } = new TbLink();
+
+		/// <summary>
+		/// リンクの関連キーワード情報、リンクIDとキーワードIDを持つ
+		/// </summary>
+		public class TbLinkKeyword : TableDef<TbLinkKeyword.D> {
+			public TbLinkKeyword() : base(E, "tb_link_keyword") { }
+
+			public class D : ColumnsBase {
+				public int LinkID => As(() => C.LinkID);
+				public int KeywordID => As(() => C.KeywordID);
+			}
+			public class R : D {
+				new public int LinkID { get; set; }
+				new public int KeywordID { get; set; }
+
+				public R() { }
+				public R(int linkID, int keywordID) {
+					this.LinkID = linkID;
+					this.KeywordID = keywordID;
+				}
+			}
+
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.LinkID, t => t.KeywordID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
+				MakeIndex(0, t => t.KeywordID)
+			);
+		}
+		public static TbLinkKeyword LinkKeyword { get; private set; } = new TbLinkKeyword();
 		#endregion
 
 		#region フィールド
@@ -226,6 +277,7 @@ namespace PatchCrawler {
 		const string DbName = "patch_crawler";
 		const string SpAddUrl = "add_url";
 		const string SpAddKeyword = "add_keyword";
+		const string SpAddLink = "add_link";
 		#endregion
 
 		#region 公開メソッド
@@ -311,6 +363,26 @@ RETURNS INT AS $$
 $$ LANGUAGE plpgsql;
 ";
 				cmd.ExecuteNonQuery();
+
+				// リンク登録ストアドを登録
+				cmd.CommandText = $@"
+DROP FUNCTION IF EXISTS {SpAddLink}(INT, INT, TEXT);
+CREATE OR REPLACE FUNCTION {SpAddLink}(src_url_id_to_add INT, dst_url_id_to_add INT, link_text_to_add TEXT)
+RETURNS INT AS $$
+	DECLARE
+		id INT := 0;
+	BEGIN
+		SELECT {Db.Link.ColumnName(nameof(Db.Link._.LinkID))} INTO id FROM {Db.Link.Name} WHERE {Db.Link.ColumnName(nameof(Db.Link._.SrcUrlID))}=src_url_id_to_add AND {Db.Link.ColumnName(nameof(Db.Link._.DstUrlID))}=dst_url_id_to_add;
+		IF id <> 0 THEN
+			RETURN id;
+		ELSE
+			INSERT INTO {Db.Link.Name}({Db.Link.ColumnName(nameof(Db.Link._.SrcUrlID))}, {Db.Link.ColumnName(nameof(Db.Link._.DstUrlID))}, {Db.Link.ColumnName(nameof(Db.Link._.LinkText))}) VALUES (src_url_id_to_add, dst_url_id_to_add, link_text_to_add);
+			RETURN lastval();
+		END IF;
+	END;
+$$ LANGUAGE plpgsql;
+";
+				cmd.ExecuteNonQuery();
 			}
 		}
 		#endregion
@@ -367,6 +439,34 @@ $$ LANGUAGE plpgsql;
 			}
 		}
 		static Func<IDbCodeCommand, string, int> _AddKeyword;
+
+		/// <summary>
+		/// 可能ならリンクを追加しリンクのIDを取得する
+		/// </summary>
+		public static Func<IDbCodeCommand, int, int, string, int> AddLink {
+			get {
+				if (_AddLink == null) {
+					var argSrcUrlID = new Argument(0);
+					var argDstUrlID = new Argument(0);
+					var argKeyword = new Argument("");
+					var sql = E.NewSql();
+					sql.CallFunc(SpAddLink, argSrcUrlID, argDstUrlID, argKeyword);
+
+					var func = sql.BuildFunc<int, int, string, int>(argSrcUrlID, argDstUrlID, argKeyword);
+					_AddLink = new Func<IDbCodeCommand, int, int, string, int>((cmd, srcUrlID, dstUrlID, linkText) => {
+						using (var reader = func.Execute(cmd, srcUrlID, dstUrlID, linkText)) {
+							int result = 0;
+							foreach (var r in reader.Records) {
+								result = r;
+							}
+							return result;
+						}
+					});
+				}
+				return _AddLink;
+			}
+		}
+		static Func<IDbCodeCommand, int, int, string, int> _AddLink;
 
 		/// <summary>
 		/// 可能ならURLに対応するタイトルを追加する
@@ -579,25 +679,38 @@ $$ LANGUAGE plpgsql;
 		public static Action<IDbCodeCommand, IEnumerable<TbContentKeyword.R>> _AddContentKeywords;
 
 		/// <summary>
-		/// 可能ならリンク情報を追加する
+		/// 可能ならリンクに関連するキーワードを追加する
 		/// </summary>
-		public static Action<IDbCodeCommand, int, int> AddLink {
+		public static Action<IDbCodeCommand, IEnumerable<TbLinkKeyword.R>> AddLinkKeywords {
 			get {
-				if (_AddLink == null) {
-					var argSrcUrlID = new Argument(0);
-					var argDstUrlID = new Argument(0);
+				if (_AddLinkKeywords == null) {
 					var sql = E.NewSql();
-					sql.InsertIntoIfNotExists(UrlLink, t => new[] { t.SrcUrlID == argSrcUrlID, t.DstUrlID == argDstUrlID });
+					var values = sql.Values(() => new TbLinkKeyword.R());
+					var select =
+						sql.From(values)
+						.Where(
+							value => Sql.NotExists(
+								sql.From(LinkKeyword)
+								.Where(lk => lk.LinkID == value.LinkID && lk.KeywordID == value.KeywordID)
+								.Select(t => new { t.LinkID })
+							)
+						).Select();
 
-					var action = sql.BuildAction<int, int>(argSrcUrlID, argDstUrlID);
-					_AddLink = new Action<IDbCodeCommand, int, int>((cmd, srcUrlID, dstUrlID) => {
-						action.Execute(cmd, srcUrlID, dstUrlID);
+					sql.InsertInto(LinkKeyword, select);
+
+					var action = sql.BuildAction();
+					_AddLinkKeywords = new Action<IDbCodeCommand, IEnumerable<TbLinkKeyword.R>>((cmd, records) => {
+						values.ValueList.Clear();
+						values.ValueList.AddRange(records);
+						Console.WriteLine($"AddLinkKeywords: {values.ValueList.Count} {{");
+						action.Execute(cmd);
+						Console.WriteLine("}");
 					});
 				}
-				return _AddLink;
+				return _AddLinkKeywords;
 			}
 		}
-		static Action<IDbCodeCommand, int, int> _AddLink;
+		static Action<IDbCodeCommand, IEnumerable<TbLinkKeyword.R>> _AddLinkKeywords;
 		#endregion
 	}
 }
