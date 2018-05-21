@@ -328,7 +328,6 @@ $$ LANGUAGE plpgsql;
 
 					var func = sql.BuildFunc<string, int>(argUrl);
 					_AddUrl = new Func<IDbCodeCommand, string, int>((cmd, url) => {
-						Console.WriteLine($"AddUrl({url})");
 						using (var reader = func.Execute(cmd, url)) {
 							int result = 0;
 							foreach (var r in reader.Records) {
@@ -355,7 +354,6 @@ $$ LANGUAGE plpgsql;
 
 					var func = sql.BuildFunc<string, int>(argKeyword);
 					_AddKeyword = new Func<IDbCodeCommand, string, int>((cmd, keyword) => {
-						Console.WriteLine($"AddKeyword({keyword})");
 						using (var reader = func.Execute(cmd, keyword)) {
 							int result = 0;
 							foreach (var r in reader.Records) {
@@ -383,7 +381,6 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction<int, string>(argUrlId, argTitle);
 					_AddUrlTitle = new Action<IDbCodeCommand, int, string>((cmd, urlID, urlTitle) => {
-						Console.WriteLine($"AddUrlTitle({urlTitle})");
 						action.Execute(cmd, urlID, urlTitle);
 					});
 				}

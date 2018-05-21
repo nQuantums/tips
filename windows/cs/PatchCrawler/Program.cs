@@ -327,18 +327,34 @@ namespace PatchCrawler {
 								} else if (names[0] == "init") {
 									pageInitializer(chrome.CurrentWindowHandle);
 								} else if (names[0] == "s") {
-									var sql = Db.E.NewSql();
-									var f = sql.From(Db.Url);
+									// s 以降のスペース区切りの文字列を and 条件で検索する
+
+									// 先ず検索のキーワードを正規化
+									var keywords = new List<string>();
 									for (int i = 1; i < names.Length; i++) {
-										var fs = sql.From(Db.Keyword);
-										var j = fs.InnerJoin(Db.ContentKeyword, t => t.KeywordID == fs._.KeywordID);
-										var a = new Argument(names[i] + "%");
-										fs.Where(t => Sql.Like(t.Keyword, a));
-										fs.GroupBy(() => new { j._.UrlID });
-										f.InnerJoin(fs.Select(t => new { j._.UrlID }), t => t.UrlID == f._.UrlID);
+										foreach (var kvp in DetectKeywords(names[i])) {
+											keywords.Add(kvp.Key);
+										}
 									}
-									var jt = f.InnerJoin(Db.UrlTitle, t => t.UrlID == f._.UrlID);
-									var func = sql.BuildFuncFromSelect(f.Select(t => new { jt._.UrlTitle, t.Url }));
+
+									// キーワード分解結果表示
+									Console.WriteLine(string.Join(" & ", keywords));
+
+									// SQL組み立て
+									var sql = Db.E.NewSql();
+									var fmain = sql.From(Db.Url);
+									foreach (var keyword in keywords) {
+										var fsub = sql.From(Db.Keyword);
+										var j = fsub.InnerJoin(Db.ContentKeyword, t => t.KeywordID == fsub._.KeywordID);
+										var a = new Argument(keyword + "%"); // キーワード指定
+										fsub.Where(t => Sql.Like(t.Keyword, a));
+										fsub.GroupBy(t => new { j._.UrlID });
+										fmain.InnerJoin(fsub.Select(t => new { j._.UrlID }), t => t.UrlID == fmain._.UrlID);
+									}
+									var jt = fmain.InnerJoin(Db.UrlTitle, t => t.UrlID == fmain._.UrlID);
+
+									// 実行
+									var func = sql.BuildFuncFromSelect(fmain.Select(t => new { jt._.UrlTitle }));
 									using (var reader = func.Execute(CmdForSearch)) {
 										foreach (var r in reader.Records) {
 											Console.WriteLine(r);

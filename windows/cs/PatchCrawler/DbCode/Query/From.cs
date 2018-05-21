@@ -296,22 +296,78 @@ namespace DbCode.Query {
 		/// GROUP BYの列を登録する
 		/// </summary>
 		/// <typeparam name="TGroupByColumns">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
-		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
+		/// <param name="columnsExpression">t => new { t.A, t.B } の様な式を指定する、プロパティが列指定として扱われる</param>
 		/// <returns>自分</returns>
 		[SqlMethod]
-		public From<TColumns> GroupBy<TGroupByColumns>(Expression<Func<TGroupByColumns>> columnsExpression) {
-			return this.GroupBy(new GroupBy<TGroupByColumns>(this, columnsExpression));
+		public From<TColumns> GroupBy<TGroupByColumns>(Expression<Func<TColumns, TGroupByColumns>> columnsExpression) {
+			// new 演算子で匿名クラスを生成するもの以外はエラーとする
+			var body = columnsExpression.Body;
+			if (body.NodeType != ExpressionType.New) {
+				throw new ApplicationException();
+			}
+			if (!TypeSystem.IsAnonymousType(body.Type)) {
+				throw new ApplicationException();
+			}
+
+			body = ParameterReplacer.Replace(body, new Dictionary<Expression, object> { { columnsExpression.Parameters[0], this.Columns } });
+
+			// 匿名クラスのプロパティをグルーピング用の列として取得する
+			var newexpr = body as NewExpression;
+			var args = newexpr.Arguments;
+			var columns = new Column[args.Count];
+			for (int i = 0; i < columns.Length; i++) {
+				var context = new ElementCode(args[i], this.Owner.AllColumns);
+				if (context.Items.Count != 1) {
+					throw new ApplicationException();
+				}
+				var column = context.Items[0] as Column;
+				if (column == null) {
+					throw new ApplicationException();
+				}
+
+				columns[i] = column;
+			}
+
+			return this.GroupBy(new GroupBy<TGroupByColumns>(this, columns));
 		}
 
 		/// <summary>
 		/// ORDER BYの列を登録する
 		/// </summary>
 		/// <typeparam name="TOrderByColumns">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
-		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
+		/// <param name="columnsExpression">t => new { t.A, t.B } の様な式を指定する、プロパティが列指定として扱われる</param>
 		/// <returns>自分</returns>
 		[SqlMethod]
-		public From<TColumns> OrderBy<TOrderByColumns>(Expression<Func<TOrderByColumns>> columnsExpression) {
-			return this.OrderBy(new OrderBy<TOrderByColumns>(this, columnsExpression));
+		public From<TColumns> OrderBy<TOrderByColumns>(Expression<Func<TColumns, TOrderByColumns>> columnsExpression) {
+			// new 演算子で匿名クラスを生成するもの以外はエラーとする
+			var body = columnsExpression.Body;
+			if (body.NodeType != ExpressionType.New) {
+				throw new ApplicationException();
+			}
+			if (!TypeSystem.IsAnonymousType(body.Type)) {
+				throw new ApplicationException();
+			}
+
+			body = ParameterReplacer.Replace(body, new Dictionary<Expression, object> { { columnsExpression.Parameters[0], this.Columns } });
+
+			// 匿名クラスのプロパティをグルーピング用の列として取得する
+			var newexpr = body as NewExpression;
+			var args = newexpr.Arguments;
+			var columns = new Column[args.Count];
+			for (int i = 0; i < columns.Length; i++) {
+				var context = new ElementCode(args[i], this.Owner.AllColumns);
+				if (context.Items.Count != 1) {
+					throw new ApplicationException();
+				}
+				var column = context.Items[0] as Column;
+				if (column == null) {
+					throw new ApplicationException();
+				}
+
+				columns[i] = column;
+			}
+
+			return this.OrderBy(new OrderBy<TOrderByColumns>(this, columns));
 		}
 
 		/// <summary>
