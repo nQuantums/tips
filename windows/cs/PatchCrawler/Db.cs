@@ -480,14 +480,14 @@ $$ LANGUAGE plpgsql;
 						if (_UrlMap.TryGetValue(url, out int id)) {
 							return id;
 						} else {
+							int result = 0;
 							using (var reader = func.Execute(cmd, url)) {
-								int result = 0;
 								foreach (var r in reader.Records) {
 									result = r;
 								}
-								_UrlMap[url] = result;
-								return result;
 							}
+							_UrlMap[url] = result;
+							return result;
 						}
 					});
 				}
@@ -512,14 +512,14 @@ $$ LANGUAGE plpgsql;
 						if (_KeywordMap.TryGetValue(keyword, out int id)) {
 							return id;
 						} else {
+							int result = 0;
 							using (var reader = func.Execute(cmd, keyword)) {
-								int result = 0;
 								foreach (var r in reader.Records) {
 									result = r;
 								}
-								_KeywordMap[keyword] = result;
-								return result;
 							}
+							_KeywordMap[keyword] = result;
+							return result;
 						}
 					});
 				}
@@ -543,11 +543,17 @@ $$ LANGUAGE plpgsql;
 
 					var func = sql.BuildFunc<int, int, string, int>(argSrcUrlID, argDstUrlID, argKeyword);
 					_AddLink = new Func<IDbCodeCommand, int, int, string, int>((cmd, srcUrlID, dstUrlID, linkText) => {
-						using (var reader = func.Execute(cmd, srcUrlID, dstUrlID, linkText)) {
+						var tup = new Tuple<int, int>(srcUrlID, dstUrlID);
+						if (_LinkMap.TryGetValue(tup, out int id)) {
+							return id;
+						} else {
 							int result = 0;
-							foreach (var r in reader.Records) {
-								result = r;
+							using (var reader = func.Execute(cmd, srcUrlID, dstUrlID, linkText)) {
+								foreach (var r in reader.Records) {
+									result = r;
+								}
 							}
+							_LinkMap[tup] = result;
 							return result;
 						}
 					});
@@ -556,6 +562,7 @@ $$ LANGUAGE plpgsql;
 			}
 		}
 		static Func<IDbCodeCommand, int, int, string, int> _AddLink;
+		static readonly Dictionary<Tuple<int, int>, int> _LinkMap = new Dictionary<Tuple<int, int>, int>();
 
 		/// <summary>
 		/// 可能ならURLに対応するタイトルを追加する

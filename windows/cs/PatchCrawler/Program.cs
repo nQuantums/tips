@@ -120,57 +120,68 @@ namespace PatchCrawler {
 				});
 
 				// ページ初期化後の処理
+				var knownUrls = new HashSet<string>();
 				PageAfterInit += new Action<JObject>(jobj => {
 					Task.Run(() => {
 						lock (Cmd) {
 							Console.WriteLine("----after init start----");
 							var url = (string)jobj["url"];
-							var title = (string)jobj["title"];
-							var text = (string)jobj["text"];
-							var content = (string)jobj["content"];
-							var links = jobj["links"];
+							if (!knownUrls.Contains(url)) {
+								knownUrls.Add(url);
 
-							var urlID = Db.AddUrl(Cmd, url);
-							Db.AddUrlTitle(Cmd, urlID, title);
-							Db.AddUrlContent(Cmd, urlID, content);
+								var title = (string)jobj["title"];
+								var text = (string)jobj["text"];
+								var content = (string)jobj["content"];
+								var links = jobj["links"];
 
-							foreach (var chunk in ChunkedEnumerate(DetectKeywords(url), 1000)) {
-								Db.AddUrlKeywords(Cmd, from kvp in chunk select new Db.TbUrlKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
-							}
-							foreach (var chunk in ChunkedEnumerate(DetectKeywords(title), 1000)) {
-								Db.AddTitleKeywords(Cmd, from kvp in chunk select new Db.TbTitleKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
-							}
-							foreach (var chunk in ChunkedEnumerate(DetectKeywords(text), 1000)) {
-								Db.AddContentKeywords(Cmd, from kvp in chunk select new Db.TbContentKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
-							}
+								var urlID = Db.AddUrl(Cmd, url);
+								Db.AddUrlTitle(Cmd, urlID, title);
+								Db.AddUrlContent(Cmd, urlID, content);
 
-							foreach (var l in links.Children<JObject>()) {
-								var dstUrl = (string)l["h"];
-								var linkText = (string)l["t"];
-								var dstUrlID = Db.AddUrl(Cmd, dstUrl);
-								var linkID = Db.AddLink(Cmd, urlID, dstUrlID, linkText);
-								foreach (var chunk in ChunkedEnumerate(DetectKeywords(linkText), 1000)) {
-									Db.AddLinkKeywords(Cmd, from kvp in chunk select new Db.TbLinkKeyword.R(linkID, Db.AddKeyword(Cmd, kvp.Key)));
+								foreach (var chunk in ChunkedEnumerate(DetectKeywords(url), 1000)) {
+									Db.AddUrlKeywords(Cmd, from kvp in chunk select new Db.TbUrlKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
+								}
+								foreach (var chunk in ChunkedEnumerate(DetectKeywords(title), 1000)) {
+									Db.AddTitleKeywords(Cmd, from kvp in chunk select new Db.TbTitleKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
+								}
+								foreach (var chunk in ChunkedEnumerate(DetectKeywords(text), 1000)) {
+									Db.AddContentKeywords(Cmd, from kvp in chunk select new Db.TbContentKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));
+								}
+
+								foreach (var l in links.Children<JObject>()) {
+									var dstUrl = (string)l["h"];
+									var linkText = (string)l["t"];
+									var dstUrlID = Db.AddUrl(Cmd, dstUrl);
+									var linkID = Db.AddLink(Cmd, urlID, dstUrlID, linkText);
+									foreach (var chunk in ChunkedEnumerate(DetectKeywords(linkText), 1000)) {
+										Db.AddLinkKeywords(Cmd, from kvp in chunk select new Db.TbLinkKeyword.R(linkID, Db.AddKeyword(Cmd, kvp.Key)));
+									}
 								}
 							}
-
 							Console.WriteLine("----after init end----");
 						}
 					});
 				});
 
 				// ジャンプ時の処理
+				var knownLink = new HashSet<int>();
 				Jump += new Action<string, string, string, string>((src, dst, linkText, aroundText) => {
 					Task.Run(() => {
 						lock (Cmd) {
+							Console.WriteLine("----jump start----");
 							var srcUrlID = Db.AddUrl(Cmd, src);
 							var dstUrlID = Db.AddUrl(Cmd, dst);
 							var linkID = Db.AddLink(Cmd, srcUrlID, dstUrlID, linkText);
-							Db.AddLinkAroundText(Cmd, linkID, aroundText);
-							foreach (var chunk in ChunkedEnumerate(DetectKeywords(aroundText), 1000)) {
-								Db.AddLinkAroundKeywords(Cmd, from kvp in chunk select new Db.TbLinkAroundKeyword.R(linkID, Db.AddKeyword(Cmd, kvp.Key)));
+							if (!knownLink.Contains(linkID)) {
+								knownLink.Add(linkID);
+
+								Db.AddLinkAroundText(Cmd, linkID, aroundText);
+								foreach (var chunk in ChunkedEnumerate(DetectKeywords(aroundText), 1000)) {
+									Db.AddLinkAroundKeywords(Cmd, from kvp in chunk select new Db.TbLinkAroundKeyword.R(linkID, Db.AddKeyword(Cmd, kvp.Key)));
+								}
+								Db.AddJump(Cmd, linkID);
 							}
-							Db.AddJump(Cmd, linkID);
+							Console.WriteLine("----jump end----");
 						}
 					});
 				});
