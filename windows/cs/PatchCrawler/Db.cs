@@ -32,6 +32,9 @@ namespace PatchCrawler {
 			public static int KeywordID => E.Int32("keyword_id");
 			public static int KeywordCount => E.Int32("keyword_count");
 			public static string Keyword => E.String("keyword");
+			public static int JumpID => E.Int32("jump_id");
+			public static DateTime JumpTimestamp => E.DateTime("jump_timestamp");
+			public static string AroundText => E.String("around_text");
 		}
 		#endregion
 
@@ -270,6 +273,80 @@ namespace PatchCrawler {
 			);
 		}
 		public static TbLinkKeyword LinkKeyword { get; private set; } = new TbLinkKeyword();
+
+		/// <summary>
+		/// リンク周辺のテキスト情報、リンクIDとテキストを持つ
+		/// </summary>
+		public class TbLinkAroundText : TableDef<TbLinkAroundText.D> {
+			public TbLinkAroundText() : base(E, "tb_link_around_text") { }
+
+			public class D : ColumnsBase {
+				public int LinkID => As(() => C.LinkID);
+				public string AroundText => As(() => C.AroundText);
+			}
+			public class R : D {
+				new public int LinkID { get; set; }
+				new public string AroundText { get; set; }
+
+				public R() { }
+				public R(int linkID, string aroundText) {
+					this.LinkID = linkID;
+					this.AroundText = aroundText;
+				}
+			}
+
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.LinkID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
+				MakeIndex(0, t => t.AroundText)
+			);
+		}
+		public static TbLinkAroundText LinkAroundText { get; private set; } = new TbLinkAroundText();
+
+		/// <summary>
+		/// リンク周辺のキーワード情報、リンクIDとキーワードIDを持つ
+		/// </summary>
+		public class TbLinkAroundKeyword : TableDef<TbLinkAroundKeyword.D> {
+			public TbLinkAroundKeyword() : base(E, "tb_link_around_keyword") { }
+
+			public class D : ColumnsBase {
+				public int LinkID => As(() => C.LinkID);
+				public int KeywordID => As(() => C.KeywordID);
+			}
+			public class R : D {
+				new public int LinkID { get; set; }
+				new public int KeywordID { get; set; }
+
+				public R() { }
+				public R(int linkID, int keywordID) {
+					this.LinkID = linkID;
+					this.KeywordID = keywordID;
+				}
+			}
+
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.LinkID, t => t.KeywordID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
+				MakeIndex(0, t => t.KeywordID)
+			);
+		}
+		public static TbLinkAroundKeyword LinkAroundKeyword { get; private set; } = new TbLinkAroundKeyword();
+
+		/// <summary>
+		/// リンククリックでジャンプした履歴情報、リンクIDとタイムスタンプを持つ
+		/// </summary>
+		public class TbJump : TableDef<TbJump.D> {
+			public TbJump() : base(E, "tb_jump") { }
+
+			public class D : ColumnsBase {
+				public int LinkID => As(() => C.LinkID);
+				public DateTime JumpTimestamp => As(() => C.JumpTimestamp, ColumnFlags.DefaultCurrentTimestamp);
+			}
+
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
+				MakeIndex(0, t => t.LinkID),
+				MakeIndex(0, t => t.JumpTimestamp)
+			);
+		}
+		public static TbJump Jump { get; private set; } = new TbJump();
 		#endregion
 
 		#region フィールド
@@ -400,12 +477,17 @@ $$ LANGUAGE plpgsql;
 
 					var func = sql.BuildFunc<string, int>(argUrl);
 					_AddUrl = new Func<IDbCodeCommand, string, int>((cmd, url) => {
-						using (var reader = func.Execute(cmd, url)) {
-							int result = 0;
-							foreach (var r in reader.Records) {
-								result = r;
+						if (_UrlMap.TryGetValue(url, out int id)) {
+							return id;
+						} else {
+							using (var reader = func.Execute(cmd, url)) {
+								int result = 0;
+								foreach (var r in reader.Records) {
+									result = r;
+								}
+								_UrlMap[url] = result;
+								return result;
 							}
-							return result;
 						}
 					});
 				}
@@ -413,6 +495,7 @@ $$ LANGUAGE plpgsql;
 			}
 		}
 		static Func<IDbCodeCommand, string, int> _AddUrl;
+		static readonly Dictionary<string, int> _UrlMap = new Dictionary<string, int>();
 
 		/// <summary>
 		/// 可能ならキーワード追加しキーワードのIDを取得する
@@ -426,12 +509,17 @@ $$ LANGUAGE plpgsql;
 
 					var func = sql.BuildFunc<string, int>(argKeyword);
 					_AddKeyword = new Func<IDbCodeCommand, string, int>((cmd, keyword) => {
-						using (var reader = func.Execute(cmd, keyword)) {
-							int result = 0;
-							foreach (var r in reader.Records) {
-								result = r;
+						if (_KeywordMap.TryGetValue(keyword, out int id)) {
+							return id;
+						} else {
+							using (var reader = func.Execute(cmd, keyword)) {
+								int result = 0;
+								foreach (var r in reader.Records) {
+									result = r;
+								}
+								_KeywordMap[keyword] = result;
+								return result;
 							}
-							return result;
 						}
 					});
 				}
@@ -439,6 +527,7 @@ $$ LANGUAGE plpgsql;
 			}
 		}
 		static Func<IDbCodeCommand, string, int> _AddKeyword;
+		static readonly Dictionary<string, int> _KeywordMap = new Dictionary<string, int>();
 
 		/// <summary>
 		/// 可能ならリンクを追加しリンクのIDを取得する
@@ -598,9 +687,9 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction();
 					_AddUrlKeywords = new Action<IDbCodeCommand, IEnumerable<TbUrlKeyword.R>>((cmd, records) => {
-						values.ValueList.Clear();
-						values.ValueList.AddRange(records);
-						Console.WriteLine($"AddUrlKeywords: {values.ValueList.Count} {{");
+						values.List.Clear();
+						values.List.AddRange(records);
+						Console.WriteLine($"AddUrlKeywords: {values.List.Count} {{");
 						action.Execute(cmd);
 						Console.WriteLine("}");
 					});
@@ -632,9 +721,9 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction();
 					_AddTitleKeywords = new Action<IDbCodeCommand, IEnumerable<TbTitleKeyword.R>>((cmd, records) => {
-						values.ValueList.Clear();
-						values.ValueList.AddRange(records);
-						Console.WriteLine($"AddTitleKeywords: {values.ValueList.Count} {{");
+						values.List.Clear();
+						values.List.AddRange(records);
+						Console.WriteLine($"AddTitleKeywords: {values.List.Count} {{");
 						action.Execute(cmd);
 						Console.WriteLine("}");
 					});
@@ -666,9 +755,9 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction();
 					_AddContentKeywords = new Action<IDbCodeCommand, IEnumerable<TbContentKeyword.R>>((cmd, records) => {
-						values.ValueList.Clear();
-						values.ValueList.AddRange(records);
-						Console.WriteLine($"AddContentKeywords: {values.ValueList.Count} {{");
+						values.List.Clear();
+						values.List.AddRange(records);
+						Console.WriteLine($"AddContentKeywords: {values.List.Count} {{");
 						action.Execute(cmd);
 						Console.WriteLine("}");
 					});
@@ -700,9 +789,9 @@ $$ LANGUAGE plpgsql;
 
 					var action = sql.BuildAction();
 					_AddLinkKeywords = new Action<IDbCodeCommand, IEnumerable<TbLinkKeyword.R>>((cmd, records) => {
-						values.ValueList.Clear();
-						values.ValueList.AddRange(records);
-						Console.WriteLine($"AddLinkKeywords: {values.ValueList.Count} {{");
+						values.List.Clear();
+						values.List.AddRange(records);
+						Console.WriteLine($"AddLinkKeywords: {values.List.Count} {{");
 						action.Execute(cmd);
 						Console.WriteLine("}");
 					});
@@ -711,6 +800,81 @@ $$ LANGUAGE plpgsql;
 			}
 		}
 		static Action<IDbCodeCommand, IEnumerable<TbLinkKeyword.R>> _AddLinkKeywords;
+
+		/// <summary>
+		/// 可能ならリンク周辺のテキストを追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, int, string> AddLinkAroundText {
+			get {
+				if (_AddLinkAroundText == null) {
+					var argLinkID = new Argument(0);
+					var argAroundText = new Argument("");
+					var sql = E.NewSql();
+					sql.InsertIntoIfNotExists(LinkAroundText, t => new[] { t.LinkID == argLinkID, t.AroundText == argAroundText }, 1);
+
+					var action = sql.BuildAction<int, string>(argLinkID, argAroundText);
+					_AddLinkAroundText = new Action<IDbCodeCommand, int, string>((cmd, linkID, aroundText) => {
+						action.Execute(cmd, linkID, aroundText);
+					});
+				}
+				return _AddLinkAroundText;
+			}
+		}
+		static Action<IDbCodeCommand, int, string> _AddLinkAroundText;
+
+		/// <summary>
+		/// 可能ならリンク周辺のキーワードを追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, IEnumerable<TbLinkAroundKeyword.R>> AddLinkAroundKeywords {
+			get {
+				if (_AddLinkAroundKeywords == null) {
+					var sql = E.NewSql();
+					var values = sql.Values(() => new TbLinkAroundKeyword.R());
+					var select =
+						sql.From(values)
+						.Where(
+							value => Sql.NotExists(
+								sql.From(LinkAroundKeyword)
+								.Where(lk => lk.LinkID == value.LinkID && lk.KeywordID == value.KeywordID)
+								.Select(t => new { t.LinkID })
+							)
+						).Select();
+
+					sql.InsertInto(LinkAroundKeyword, select);
+
+					var action = sql.BuildAction();
+					_AddLinkAroundKeywords = new Action<IDbCodeCommand, IEnumerable<TbLinkAroundKeyword.R>>((cmd, records) => {
+						values.List.Clear();
+						values.List.AddRange(records);
+						Console.WriteLine($"AddLinkAroundKeywords: {values.List.Count} {{");
+						action.Execute(cmd);
+						Console.WriteLine("}");
+					});
+				}
+				return _AddLinkAroundKeywords;
+			}
+		}
+		static Action<IDbCodeCommand, IEnumerable<TbLinkAroundKeyword.R>> _AddLinkAroundKeywords;
+
+		/// <summary>
+		/// ジャンプ履歴を追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, int> AddJump {
+			get {
+				if (_AddJump == null) {
+					var argLinkID = new Argument(0);
+					var sql = E.NewSql();
+					sql.InsertInto(Jump, t => new[] { t.LinkID == argLinkID });
+
+					var action = sql.BuildAction<int>(argLinkID);
+					_AddJump = new Action<IDbCodeCommand, int>((cmd, linkID) => {
+						action.Execute(cmd, linkID);
+					});
+				}
+				return _AddJump;
+			}
+		}
+		static Action<IDbCodeCommand, int> _AddJump;
 		#endregion
 	}
 }

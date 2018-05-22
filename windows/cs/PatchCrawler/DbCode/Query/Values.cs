@@ -37,7 +37,7 @@ namespace DbCode.Query {
 		/// <summary>
 		/// VALUES に置き換わるリスト
 		/// </summary>
-		public List<TColumns> ValueList { get; private set; }
+		public List<TColumns> List { get; private set; }
 
 		/// <summary>
 		/// テーブルが直接保持する列定義の取得
@@ -57,7 +57,7 @@ namespace DbCode.Query {
 
 			this.ColumnMap = new ColumnMap();
 			this.Columns = TypewiseCache<TColumns>.Creator();
-			this.ValueList = new List<TColumns>();
+			this.List = new List<TColumns>();
 
 			// new 演算子でクラスを生成するもの以外はエラーとする
 			var body = columnsExpression.Body;
@@ -158,7 +158,7 @@ namespace DbCode.Query {
 				var ec = new ElementCode();
 				ec.BeginParenthesize();
 				ec.Add(SqlKeyword.Values);
-				var list = this.ValueList;
+				var list = this.List;
 				for (int i = 0, n = list.Count; i < n; i++) {
 					if (i != 0) {
 						ec.AddComma();

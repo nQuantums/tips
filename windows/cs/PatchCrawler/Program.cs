@@ -162,10 +162,16 @@ namespace PatchCrawler {
 				// ジャンプ時の処理
 				Jump += new Action<string, string, string, string>((src, dst, linkText, aroundText) => {
 					Task.Run(() => {
-						Console.WriteLine(src);
-						Console.WriteLine(dst);
-						Console.WriteLine(linkText);
-						Console.WriteLine(aroundText);
+						lock (Cmd) {
+							var srcUrlID = Db.AddUrl(Cmd, src);
+							var dstUrlID = Db.AddUrl(Cmd, dst);
+							var linkID = Db.AddLink(Cmd, srcUrlID, dstUrlID, linkText);
+							Db.AddLinkAroundText(Cmd, linkID, aroundText);
+							foreach (var chunk in ChunkedEnumerate(DetectKeywords(aroundText), 1000)) {
+								Db.AddLinkAroundKeywords(Cmd, from kvp in chunk select new Db.TbLinkAroundKeyword.R(linkID, Db.AddKeyword(Cmd, kvp.Key)));
+							}
+							Db.AddJump(Cmd, linkID);
+						}
 					});
 				});
 
