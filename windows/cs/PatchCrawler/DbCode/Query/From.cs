@@ -252,34 +252,49 @@ namespace DbCode.Query {
 		}
 
 		/// <summary>
-		/// 内部結合の<see cref="Join{TColumns}"/>を生成し登録する
+		/// 指定された結合種類の<see cref="Query.Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
+		/// <typeparam name="TColumnsOfJoinTable">結合するテーブルの<see cref="ITable{TColumns}.Columns"/></typeparam>
+		/// <param name="joinType">結合種類</param>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
-		/// <returns>内部結合の<see cref="Join{TColumns}"></see></returns>
+		/// <returns><see cref="Query.Join{TColumns}"/></returns>
 		[SqlMethod]
-		public IJoin<TColumns1> InnerJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Inner, table, on);
+		public IJoin<TColumnsOfJoinTable> Join<TColumnsOfJoinTable>(JoinType joinType, ITable<TColumnsOfJoinTable> table, Expression<Func<TColumnsOfJoinTable, bool>> on) {
+			var join = new Join<TColumnsOfJoinTable>(this, joinType, table, on);
+			this.Join(join);
+			return join;
+		}
 
 		/// <summary>
-		/// 左外部結合の<see cref="Join{TColumns}"/>を生成し登録する
+		/// 内部結合の<see cref="Query.Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
+		/// <typeparam name="TColumnsOfJoinTable">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
-		/// <returns>左外部結合の<see cref="Join{TColumns}"/></returns>
+		/// <returns>内部結合の<see cref="Query.Join{TColumns}"></see></returns>
 		[SqlMethod]
-		public IJoin<TColumns1> LeftJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Left, table, on);
+		public IJoin<TColumnsOfJoinTable> InnerJoin<TColumnsOfJoinTable>(ITable<TColumnsOfJoinTable> table, Expression<Func<TColumnsOfJoinTable, bool>> on) => Join(JoinType.Inner, table, on);
 
 		/// <summary>
-		/// 右外部結合の<see cref="Join{TColumns}"/>を生成し登録する
+		/// 左外部結合の<see cref="Query.Join{TColumns}"/>を生成し登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
+		/// <typeparam name="TColumnsOfJoinTable">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
-		/// <returns>右外部結合の<see cref="Join{TColumns}"/></returns>
+		/// <returns>左外部結合の<see cref="Query.Join{TColumns}"/></returns>
 		[SqlMethod]
-		public IJoin<TColumns1> RightJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Right, table, on);
+		public IJoin<TColumnsOfJoinTable> LeftJoin<TColumnsOfJoinTable>(ITable<TColumnsOfJoinTable> table, Expression<Func<TColumnsOfJoinTable, bool>> on) => Join(JoinType.Left, table, on);
+
+		/// <summary>
+		/// 右外部結合の<see cref="Query.Join{TColumns}"/>を生成し登録する
+		/// </summary>
+		/// <typeparam name="TColumnsOfJoinTable">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
+		/// <param name="table">結合するテーブル</param>
+		/// <param name="on">結合式</param>
+		/// <returns>右外部結合の<see cref="Query.Join{TColumns}"/></returns>
+		[SqlMethod]
+		public IJoin<TColumnsOfJoinTable> RightJoin<TColumnsOfJoinTable>(ITable<TColumnsOfJoinTable> table, Expression<Func<TColumnsOfJoinTable, bool>> on) => Join(JoinType.Right, table, on);
 
 		/// <summary>
 		/// WHERE句の式を登録する
@@ -445,22 +460,6 @@ namespace DbCode.Query {
 			} catch {
 				return "";
 			}
-		}
-		#endregion
-
-		#region 非公開メソッド
-		/// <summary>
-		/// 指定された結合種類の<see cref="Join{TColumns}"/>を生成し登録する
-		/// </summary>
-		/// <typeparam name="TJoinTableColumns">結合するテーブルの<see cref="ITable{TColumns}.Columns"/></typeparam>
-		/// <param name="joinType">結合種類</param>
-		/// <param name="table">結合するテーブル</param>
-		/// <param name="on">結合式</param>
-		/// <returns><see cref="Join{TColumns}"/></returns>
-		IJoin<TJoinTableColumns> JoinByType<TJoinTableColumns>(JoinType joinType, ITable<TJoinTableColumns> table, Expression<Func<TJoinTableColumns, bool>> on) {
-			var join = new Join<TJoinTableColumns>(this, joinType, table, on);
-			this.Join(join);
-			return join;
 		}
 		#endregion
 	}

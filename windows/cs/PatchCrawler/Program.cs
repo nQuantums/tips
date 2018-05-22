@@ -328,9 +328,9 @@ namespace PatchCrawler {
 									var sql = Db.E.NewSql();
 									var fmain = sql.From(Db.Url);
 									foreach (var keyword in keywords) {
+										var a = new Argument(keyword + "%"); // キーワード指定
 										var fsub = sql.From(Db.Keyword);
 										var j = fsub.InnerJoin(Db.ContentKeyword, t => t.KeywordID == fsub._.KeywordID);
-										var a = new Argument(keyword + "%"); // キーワード指定
 										fsub.Where(t => Sql.Like(t.Keyword, a));
 										fsub.GroupBy(t => new { j._.UrlID });
 										fmain.InnerJoin(fsub.Select(t => new { j._.UrlID }), t => t.UrlID == fmain._.UrlID);
@@ -339,6 +339,40 @@ namespace PatchCrawler {
 
 									// 実行
 									var func = sql.BuildFuncFromSelect(fmain.Select(t => new { jt._.UrlTitle }));
+									using (var reader = func.Execute(CmdForSearch)) {
+										foreach (var r in reader.Records) {
+											Console.WriteLine(r);
+										}
+									}
+								} else if (names[0] == "l") {
+									// l 以降のスペース区切りの文字列を and 条件で検索する
+
+									// 先ず検索のキーワードを正規化
+									var keywords = new List<string>();
+									for (int i = 1; i < names.Length; i++) {
+										foreach (var kvp in DetectKeywords(names[i])) {
+											keywords.Add(kvp.Key);
+										}
+									}
+
+									// キーワード分解結果表示
+									Console.WriteLine(string.Join(" & ", keywords));
+
+									// SQL組み立て
+									var sql = Db.E.NewSql();
+									var fmain = sql.From(Db.Link);
+									foreach (var keyword in keywords) {
+										var a = new Argument(keyword + "%"); // キーワード指定
+										var fsub = sql.From(Db.Keyword);
+										var j = fsub.InnerJoin(Db.LinkKeyword, t => t.KeywordID == fsub._.KeywordID);
+										fsub.Where(t => Sql.Like(t.Keyword, a));
+										fsub.GroupBy(t => new { j._.LinkID });
+										fmain.InnerJoin(fsub.Select(t => new { j._.LinkID }), t => t.LinkID == fmain._.LinkID);
+									}
+									var jt = fmain.InnerJoin(Db.UrlTitle, t => t.UrlID == fmain._.SrcUrlID);
+
+									// 実行
+									var func = sql.BuildFuncFromSelect(fmain.Select(t => new { jt._.UrlTitle, fmain._.LinkText }));
 									using (var reader = func.Execute(CmdForSearch)) {
 										foreach (var r in reader.Records) {
 											Console.WriteLine(r);
