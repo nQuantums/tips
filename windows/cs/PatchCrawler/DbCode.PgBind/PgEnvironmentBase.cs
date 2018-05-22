@@ -126,9 +126,11 @@ namespace DbCode.PgBind {
 					} else if (pka == null && pkt != null) {
 						tableDelta.PrimaryKeyToAdd = pkt;
 					} else {
-						if (pka.Name != pkt.Name || !EqualColumnDefs(pka.Columns, pkt.Columns)) {
-							tableDelta.PrimaryKeyToDrop = pka;
-							tableDelta.PrimaryKeyToAdd = pkt;
+						if (pka != null) {
+							if (pka.Name != pkt.Name || !EqualColumnDefs(pka.Columns, pkt.Columns)) {
+								tableDelta.PrimaryKeyToDrop = pka;
+								tableDelta.PrimaryKeyToAdd = pkt;
+							}
 						}
 					}
 
