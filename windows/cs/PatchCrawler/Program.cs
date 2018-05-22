@@ -33,7 +33,7 @@ namespace PatchCrawler {
 		static event Action<string> Focus;
 		static event Action<string> Blur;
 		static event Action<string, string> VisibilityChange;
-		static event Action<string, string> Jump;
+		static event Action<string, string, string, string> Jump;
 
 		/// <summary>
 		/// XPath指定部分取得用の正規表現
@@ -120,7 +120,7 @@ namespace PatchCrawler {
 				});
 
 				// ページ初期化後の処理
-				var pageAfterInit = new Action<JObject>(jobj => {
+				PageAfterInit += new Action<JObject>(jobj => {
 					Task.Run(() => {
 						lock (Cmd) {
 							Console.WriteLine("----after init start----");
@@ -158,9 +158,18 @@ namespace PatchCrawler {
 						}
 					});
 				});
-				PageAfterInit += pageAfterInit;
 
-				// 新規ウィンドウ検出し初期化する
+				// ジャンプ時の処理
+				Jump += new Action<string, string, string, string>((src, dst, linkText, aroundText) => {
+					Task.Run(() => {
+						Console.WriteLine(src);
+						Console.WriteLine(dst);
+						Console.WriteLine(linkText);
+						Console.WriteLine(aroundText);
+					});
+				});
+
+				// 新規ウィンドウ検出し初期化する処理
 				var newWindowDetector = new Action(() => {
 					lock (chrome) {
 						var curHandles = new HashSet<string>();
@@ -185,28 +194,25 @@ namespace PatchCrawler {
 
 
 				// ページ終了した後のページで初期化する
-				var unloadHandler = new Action<string>((handle) => {
+				Unload += new Action<string>((handle) => {
 					Task.Run(() => {
 						Console.WriteLine(chrome.Url);
 						pageInitializer(chrome.CurrentWindowHandle);
 					});
 				});
-				Unload += unloadHandler;
 
-				var focusHandler = new Action<string>(handle => {
+				Focus += new Action<string>(handle => {
 				});
-				Focus += focusHandler;
 
 				// ウィンドウのフォーカスが移ったなら新しいウィンドウを探し出す
-				var blurHandler = new Action<string>(handle => {
+				Blur += new Action<string>(handle => {
 					Task.Run(() => {
 						newWindowDetector();
 					});
 				});
-				Blur += blurHandler;
 
 				// ページの可視状態の切り替わりにより新しいウィンドウを探したりカレントのウィンドウを操作対象とする
-				var visibilityChangeHandler = new Action<string, string>((handle, visibilityState) => {
+				VisibilityChange += new Action<string, string>((handle, visibilityState) => {
 					if (visibilityState == "hidden") {
 						Task.Run(() => {
 							newWindowDetector();
@@ -225,7 +231,6 @@ namespace PatchCrawler {
 						});
 					}
 				});
-				VisibilityChange += visibilityChangeHandler;
 
 				// コマンドラインからの入力をループ
 				ReadOnlyCollection<IWebElement> elements = null;
@@ -459,15 +464,17 @@ namespace PatchCrawler {
 						}
 						break;
 					case "jump": {
-							string src, dst;
+							string src, dst, linkText, aroundText;
 							using (var sr = new StreamReader(req.InputStream, req.ContentEncoding)) {
 								var jobj = JObject.Parse(sr.ReadToEnd());
 								src = (string)jobj["src"];
 								dst = (string)jobj["dst"];
+								linkText = (string)jobj["linkText"];
+								aroundText = (string)jobj["aroundText"];
 							}
 							var d = Jump;
 							if (d != null) {
-								d(src, dst);
+								d(src, dst, linkText, aroundText);
 							}
 						}
 						break;
