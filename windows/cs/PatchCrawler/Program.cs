@@ -18,6 +18,7 @@ using DbCode;
 using DbCode.PgBind;
 using Newtonsoft.Json.Linq;
 using NMeCab;
+using System.Web;
 
 namespace PatchCrawler {
 	class Program {
@@ -129,14 +130,35 @@ namespace PatchCrawler {
 							if (!knownUrls.Contains(url)) {
 								knownUrls.Add(url);
 
+								// Google検索によるURLなら時間などの毎回変わるパラメータを除いたURLに再構築する
+								if (url.StartsWith("https://www.google.co.jp/search") || url.StartsWith("https://www.google.com/search")) {
+									var uri = new Uri(url);
+									var path = uri.GetComponents(UriComponents.SchemeAndServer | UriComponents.Path, UriFormat.UriEscaped);
+									var dic = HttpUtility.ParseQueryString(uri.Query);
+									var list = new List<Tuple<string, string>>();
+									foreach (string param in dic) {
+										switch (param) {
+										case "q":
+										case "oq":
+											list.Add(new Tuple<string, string>(param, dic[param]));
+											break;
+										}
+									}
+									url = path + "?" + string.Join("&", from i in list select HttpUtility.UrlEncode(i.Item1) + HttpUtility.UrlEncode(i.Item2));
+								}
+
 								var title = (string)jobj["title"];
 								var text = (string)jobj["text"];
 								var content = (string)jobj["content"];
 								var links = jobj["links"];
+								var searchWord = (string)jobj["searchWord"];
 
 								var urlID = Db.AddUrl(Cmd, url);
 								Db.AddUrlTitle(Cmd, urlID, title);
 								Db.AddUrlContent(Cmd, urlID, content);
+								if (!string.IsNullOrEmpty(searchWord)) {
+									Db.AddUrlSearchWord(Cmd, urlID, searchWord);
+								}
 
 								foreach (var chunk in ChunkedEnumerate(DetectKeywords(url), 1000)) {
 									Db.AddUrlKeywords(Cmd, from kvp in chunk select new Db.TbUrlKeyword.R(urlID, Db.AddKeyword(Cmd, kvp.Key), kvp.Value));

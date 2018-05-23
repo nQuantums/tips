@@ -35,6 +35,7 @@ namespace PatchCrawler {
 			public static int JumpID => E.Int32("jump_id");
 			public static DateTime JumpTimestamp => E.DateTime("jump_timestamp");
 			public static string AroundText => E.String("around_text");
+			public static string SearchWord => E.String("search_word");
 		}
 		#endregion
 
@@ -92,6 +93,21 @@ namespace PatchCrawler {
 			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UrlID);
 		}
 		public static TbUrlContent UrlContent { get; private set; } = new TbUrlContent();
+
+		/// <summary>
+		/// URLがGoogle検索結果の際の検索ワード、URLのIDと検索ワードを持つ
+		/// </summary>
+		public class TbUrlSearchWord : TableDef<TbUrlSearchWord.D> {
+			public TbUrlSearchWord() : base(E, "tb_url_searchword") { }
+
+			public class D : ColumnsBase {
+				public int UrlID => As(() => C.UrlID);
+				public string SearchWord => As(() => C.SearchWord);
+			}
+
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UrlID);
+		}
+		public static TbUrlSearchWord UrlSearchWord { get; private set; } = new TbUrlSearchWord();
 
 		/// <summary>
 		/// キーワード情報メインテーブル、キーワードIDとキーワード文字列を持つ
@@ -605,6 +621,27 @@ $$ LANGUAGE plpgsql;
 			}
 		}
 		static Action<IDbCodeCommand, int, string> _AddUrlContent;
+
+		/// <summary>
+		/// 可能ならURLに対応する検索ワードを追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, int, string> AddUrlSearchWord {
+			get {
+				if (_AddUrlSearchWord == null) {
+					var argUrlId = new Argument(0);
+					var argSearchWord = new Argument("");
+					var sql = E.NewSql();
+					sql.InsertIntoIfNotExists(UrlSearchWord, t => new[] { t.UrlID == argUrlId, t.SearchWord == argSearchWord }, 1);
+
+					var action = sql.BuildAction<int, string>(argUrlId, argSearchWord);
+					_AddUrlSearchWord = new Action<IDbCodeCommand, int, string>((cmd, urlID, content) => {
+						action.Execute(cmd, urlID, content);
+					});
+				}
+				return _AddUrlSearchWord;
+			}
+		}
+		static Action<IDbCodeCommand, int, string> _AddUrlSearchWord;
 
 		/// <summary>
 		/// 可能ならURLに含まれるキーワードのIDを追加する
