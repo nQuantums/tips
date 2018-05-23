@@ -144,7 +144,7 @@ namespace PatchCrawler {
 											break;
 										}
 									}
-									url = path + "?" + string.Join("&", from i in list select HttpUtility.UrlEncode(i.Item1) + HttpUtility.UrlEncode(i.Item2));
+									url = path + "?" + string.Join("&", from i in list select HttpUtility.UrlEncode(i.Item1) + "=" + HttpUtility.UrlEncode(i.Item2));
 								}
 
 								var title = (string)jobj["title"];

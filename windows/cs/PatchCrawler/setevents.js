@@ -160,11 +160,11 @@ console.log(arguments);
 			if (target.nodeName === 'A') {
 				let href = target.href;
 				if (href && !href.startsWith('#')) {
-					var linkText = target.textContent;
+					var linkText = target.innerText;
 					var parent = target.parentElement;
 					var aroundText = linkText;
 					while (parent) {
-						aroundText = parent.textContent;
+						aroundText = parent.innerText;
 						if (linkText.length < aroundText.length) {
 							break;
 						}
@@ -196,7 +196,7 @@ console.log(arguments);
 	document.documentElement.querySelectorAll('a[href]').forEach(a => {
 		let href = a.href;
 		if (href && !href.startsWith('#')) {
-			links.push({ h: href, t: a.textContent });
+			links.push({ h: href, t: a.innerText });
 		}
 	});
 
@@ -210,7 +210,7 @@ console.log(arguments);
 		fetcherPost({ event: 'page_after_init', handle: window.seleniumWindowHandle }, JSON.stringify({
 			url: document.URL,
 			title: document.title,
-			text: document.documentElement.textContent,
+			text: document.documentElement.innerText,
 			content: document.documentElement.outerHTML,
 			links: links,
 			searchWord: searchWord
