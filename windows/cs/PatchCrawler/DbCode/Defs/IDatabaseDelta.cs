@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace DbCode {
+namespace DbCode.Defs {
 	/// <summary>
 	/// データベースの変化分
 	/// </summary>

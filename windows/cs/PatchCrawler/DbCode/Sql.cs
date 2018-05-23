@@ -6,6 +6,7 @@ using System.Linq.Expressions;
 using DbCode;
 using DbCode.Query;
 using DbCode.Internal;
+using DbCode.Defs;
 
 namespace DbCode {
 	/// <summary>

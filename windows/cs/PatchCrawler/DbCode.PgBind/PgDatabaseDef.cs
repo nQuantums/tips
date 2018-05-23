@@ -3,6 +3,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Text;
 using DbCode;
+using DbCode.Defs;
 using Npgsql;
 using Npgsql.PostgresTypes;
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Runtime.CompilerServices;
 using System.Reflection;
+using DbCode.Defs;
 
 namespace DbCode {
 	/// <summary>

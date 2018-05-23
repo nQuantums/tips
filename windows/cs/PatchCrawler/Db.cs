@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using DbCode;
+using DbCode.Defs;
 using DbCode.PgBind;
 
 namespace PatchCrawler {

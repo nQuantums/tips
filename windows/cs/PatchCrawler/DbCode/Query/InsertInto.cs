@@ -4,6 +4,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using DbCode.Internal;
+using DbCode.Defs;
 
 namespace DbCode.Query {
 	/// <summary>

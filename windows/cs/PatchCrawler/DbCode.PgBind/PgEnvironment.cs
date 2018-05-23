@@ -6,6 +6,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using DbCode;
 using DbCode.Internal;
+using DbCode.Defs;
 using Npgsql;
 using NpgsqlTypes;
 

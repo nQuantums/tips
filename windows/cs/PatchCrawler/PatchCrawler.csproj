@@ -67,7 +67,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Db.cs" />
-    <Compile Include="DbCode.PgBind\Class1.cs" />
     <Compile Include="DbCode.PgBind\PgColumnDef.cs" />
     <Compile Include="DbCode.PgBind\PgCommand.cs" />
     <Compile Include="DbCode.PgBind\PgConnection.cs" />
@@ -118,14 +117,14 @@
     <Compile Include="DbCode\ICodeDbCommand.cs" />
     <Compile Include="DbCode\ICodeDbConnection.cs" />
     <Compile Include="DbCode\ICodeDbDataReader.cs" />
-    <Compile Include="DbCode\IColumnDef.cs" />
-    <Compile Include="DbCode\IDatabaseDef.cs" />
-    <Compile Include="DbCode\IDatabaseDelta.cs" />
+    <Compile Include="DbCode\Defs\IColumnDef.cs" />
+    <Compile Include="DbCode\Defs\IDatabaseDef.cs" />
+    <Compile Include="DbCode\Defs\IDatabaseDelta.cs" />
     <Compile Include="DbCode\IDbType.cs" />
     <Compile Include="DbCode\IDelayedCode.cs" />
     <Compile Include="DbCode\IElementizable.cs" />
-    <Compile Include="DbCode\IIndexDef.cs" />
-    <Compile Include="DbCode\IndexDef.cs" />
+    <Compile Include="DbCode\Defs\IIndexDef.cs" />
+    <Compile Include="DbCode\Defs\IndexDef.cs" />
     <Compile Include="DbCode\Internal\ITypeWise.cs" />
     <Compile Include="DbCode\Internal\Mediator.cs" />
     <Compile Include="DbCode\Internal\ParameterReplacer.cs" />
@@ -135,15 +134,15 @@
     <Compile Include="DbCode\Internal\TypewiseExecutor.cs" />
     <Compile Include="DbCode\Internal\VisitorForElementCode.cs" />
     <Compile Include="DbCode\Internal\WorkingBuffer.cs" />
-    <Compile Include="DbCode\IPrimaryKeyDef.cs" />
+    <Compile Include="DbCode\Defs\IPrimaryKeyDef.cs" />
     <Compile Include="DbCode\IRecordReader.cs" />
     <Compile Include="DbCode\SqlMethodAttribute.cs" />
     <Compile Include="DbCode\ITable.cs" />
-    <Compile Include="DbCode\ITableDef.cs" />
-    <Compile Include="DbCode\ITableDelta.cs" />
-    <Compile Include="DbCode\IUniqueDef.cs" />
+    <Compile Include="DbCode\Defs\ITableDef.cs" />
+    <Compile Include="DbCode\Defs\ITableDelta.cs" />
+    <Compile Include="DbCode\Defs\IUniqueDef.cs" />
     <Compile Include="DbCode\Parameter.cs" />
-    <Compile Include="DbCode\PrimaryKeyDef.cs" />
+    <Compile Include="DbCode\Defs\PrimaryKeyDef.cs" />
     <Compile Include="DbCode\Query\CodeNode.cs" />
     <Compile Include="DbCode\Query\DropTable.cs" />
     <Compile Include="DbCode\Query\From.cs" />
@@ -176,8 +175,8 @@
     </Compile>
     <Compile Include="DbCode\Sql.cs" />
     <Compile Include="DbCode\SqlKeyword.cs" />
-    <Compile Include="DbCode\TableDef.cs" />
-    <Compile Include="DbCode\UniqueDef.cs" />
+    <Compile Include="DbCode\Defs\TableDef.cs" />
+    <Compile Include="DbCode\Defs\UniqueDef.cs" />
     <Compile Include="LibNMeCab\NMeCab.Core\BitUtils.cs" />
     <Compile Include="LibNMeCab\NMeCab.Core\CharInfo.cs" />
     <Compile Include="LibNMeCab\NMeCab.Core\CharProperty.cs" />
@@ -248,6 +247,7 @@
   <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="packages\Selenium.Chrome.WebDriver.2.38\build\Selenium.Chrome.WebDriver.targets" Condition="Exists('packages\Selenium.Chrome.WebDriver.2.38\build\Selenium.Chrome.WebDriver.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">

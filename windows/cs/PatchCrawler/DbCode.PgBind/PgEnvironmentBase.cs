@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text;
 using DbCode;
 using DbCode.Internal;
+using DbCode.Defs;
 using Npgsql;
 using NpgsqlTypes;
 

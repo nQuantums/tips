@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 using DbCode.Query;
 using DbCode.Internal;
 
-namespace DbCode {
+namespace DbCode.Defs {
 	/// <summary>
 	/// テーブル定義基本クラス
 	/// </summary>
