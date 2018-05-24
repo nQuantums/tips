@@ -1,0 +1,19 @@
+{
+    "name": "Asial Blog 2014-04-15",
+    "description": "Asial blog sample",
+    "version": "1.0",
+    "app": {
+        "background": {
+            "scripts": ["background.js"]
+        }
+    },
+    "sockets": {
+        "tcp": {
+            "connect": "*"
+        },
+        "tcpServer": {
+            "listen": "*"
+        }
+    },
+    "permissions": []
+}
