@@ -27,6 +27,7 @@ namespace PatchCrawler {
 			public static int SrcUrlID => E.Int32("src_url_id");
 			public static int DstUrlID => E.Int32("dst_url_id");
 			public static string Content => E.String("content");
+			public static string InnerText => E.String("inner_text");
 			public static string Url => E.String("url");
 			public static string UrlTitle => E.String("url_title");
 			public static string LinkText => E.String("link_text");
@@ -94,6 +95,21 @@ namespace PatchCrawler {
 			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UrlID);
 		}
 		public static TbUrlContent UrlContent { get; private set; } = new TbUrlContent();
+
+		/// <summary>
+		/// URLのIDと内容の文字列を持つ
+		/// </summary>
+		public class TbUrlInnerText : TableDef<TbUrlInnerText.D> {
+			public TbUrlInnerText() : base(E, "tb_url_innertext") { }
+
+			public class D : ColumnsBase {
+				public int UrlID => As(() => C.UrlID);
+				public string InnerText => As(() => C.InnerText);
+			}
+
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UrlID);
+		}
+		public static TbUrlInnerText UrlInnerText { get; private set; } = new TbUrlInnerText();
 
 		/// <summary>
 		/// URLがGoogle検索結果の際の検索ワード、URLのIDと検索ワードを持つ
@@ -622,6 +638,27 @@ $$ LANGUAGE plpgsql;
 			}
 		}
 		static Action<IDbCodeCommand, int, string> _AddUrlContent;
+
+		/// <summary>
+		/// 可能ならURLに対応する内容文字列を追加する
+		/// </summary>
+		public static Action<IDbCodeCommand, int, string> AddUrlInnerText {
+			get {
+				if (_AddUrlInnerText == null) {
+					var argUrlId = new Argument(0);
+					var argInnerText = new Argument("");
+					var sql = E.NewSql();
+					sql.InsertIntoIfNotExists(UrlInnerText, t => new[] { t.UrlID == argUrlId, t.InnerText == argInnerText }, 1);
+
+					var action = sql.BuildAction<int, string>(argUrlId, argInnerText);
+					_AddUrlInnerText = new Action<IDbCodeCommand, int, string>((cmd, urlID, content) => {
+						action.Execute(cmd, urlID, content);
+					});
+				}
+				return _AddUrlInnerText;
+			}
+		}
+		static Action<IDbCodeCommand, int, string> _AddUrlInnerText;
 
 		/// <summary>
 		/// 可能ならURLに対応する検索ワードを追加する

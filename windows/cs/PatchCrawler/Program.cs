@@ -156,6 +156,7 @@ namespace PatchCrawler {
 								var urlID = Db.AddUrl(Cmd, url);
 								Db.AddUrlTitle(Cmd, urlID, title);
 								Db.AddUrlContent(Cmd, urlID, content);
+								Db.AddUrlInnerText(Cmd, urlID, text);
 								if (!string.IsNullOrEmpty(searchWord)) {
 									Db.AddUrlSearchWord(Cmd, urlID, searchWord);
 								}
