@@ -111,14 +111,14 @@ namespace PatchCrawler {
 				chrome.Url = @"http://www.google.com";
 				windowHandles.Add(chrome.CurrentWindowHandle);
 
-				// ページを支配下に置くための初期化、既に初期化済みの場合には処理はスキップされる
-				var pageInitializer = new Action<string>((handle) => {
-					lock (chrome) {
-						Console.WriteLine("----init start----");
-						chrome.ExecuteScript(SetEventsJs, handle, LocalHttpServerUrl);
-						Console.WriteLine("----init end----");
-					}
-				});
+				//// ページを支配下に置くための初期化、既に初期化済みの場合には処理はスキップされる
+				//var pageInitializer = new Action<string>((handle) => {
+				//	lock (chrome) {
+				//		Console.WriteLine("----init start----");
+				//		chrome.ExecuteScript(SetEventsJs, handle, LocalHttpServerUrl);
+				//		Console.WriteLine("----init end----");
+				//	}
+				//});
 
 				// ページ初期化後の処理
 				var knownUrls = new HashSet<string>();
@@ -209,68 +209,68 @@ namespace PatchCrawler {
 					});
 				});
 
-				// 新規ウィンドウ検出し初期化する処理
-				var newWindowDetector = new Action(() => {
-					lock (chrome) {
-						var curHandles = new HashSet<string>();
-						foreach (var h in chrome.WindowHandles) {
-							curHandles.Add(h);
-						}
+				//// 新規ウィンドウ検出し初期化する処理
+				//var newWindowDetector = new Action(() => {
+				//	lock (chrome) {
+				//		var curHandles = new HashSet<string>();
+				//		foreach (var h in chrome.WindowHandles) {
+				//			curHandles.Add(h);
+				//		}
 
-						windowHandles.RemoveWhere(h => !curHandles.Contains(h));
+				//		windowHandles.RemoveWhere(h => !curHandles.Contains(h));
 
-						foreach (var h in curHandles) {
-							if (!windowHandles.Contains(h)) {
-								windowHandles.Add(h);
-								chrome.SwitchTo().Window(h);
-								pageInitializer(chrome.CurrentWindowHandle);
-							}
-						}
-					}
-				});
-
-
-				pageInitializer(chrome.CurrentWindowHandle);
+				//		foreach (var h in curHandles) {
+				//			if (!windowHandles.Contains(h)) {
+				//				windowHandles.Add(h);
+				//				chrome.SwitchTo().Window(h);
+				//				pageInitializer(chrome.CurrentWindowHandle);
+				//			}
+				//		}
+				//	}
+				//});
 
 
-				// ページ終了した後のページで初期化する
-				Unload += new Action<string>((handle) => {
-					Task.Run(() => {
-						Console.WriteLine(chrome.Url);
-						pageInitializer(chrome.CurrentWindowHandle);
-					});
-				});
+				//pageInitializer(chrome.CurrentWindowHandle);
 
-				Focus += new Action<string>(handle => {
-				});
 
-				// ウィンドウのフォーカスが移ったなら新しいウィンドウを探し出す
-				Blur += new Action<string>(handle => {
-					Task.Run(() => {
-						newWindowDetector();
-					});
-				});
+				//// ページ終了した後のページで初期化する
+				//Unload += new Action<string>((handle) => {
+				//	Task.Run(() => {
+				//		Console.WriteLine(chrome.Url);
+				//		pageInitializer(chrome.CurrentWindowHandle);
+				//	});
+				//});
 
-				// ページの可視状態の切り替わりにより新しいウィンドウを探したりカレントのウィンドウを操作対象とする
-				VisibilityChange += new Action<string, string>((handle, visibilityState) => {
-					if (visibilityState == "hidden") {
-						Task.Run(() => {
-							newWindowDetector();
-						});
-					} else if (visibilityState == "visible") {
-						Task.Run(() => {
-							// 表示状態になったウィンドウを操作対象とする
-							lock (chrome) {
-								var curHandles = chrome.WindowHandles;
-								var index = curHandles.IndexOf(handle);
-								Console.WriteLine(index);
-								if (0 <= index) {
-									chrome.SwitchTo().Window(handle);
-								}
-							}
-						});
-					}
-				});
+				//Focus += new Action<string>(handle => {
+				//});
+
+				//// ウィンドウのフォーカスが移ったなら新しいウィンドウを探し出す
+				//Blur += new Action<string>(handle => {
+				//	Task.Run(() => {
+				//		newWindowDetector();
+				//	});
+				//});
+
+				//// ページの可視状態の切り替わりにより新しいウィンドウを探したりカレントのウィンドウを操作対象とする
+				//VisibilityChange += new Action<string, string>((handle, visibilityState) => {
+				//	if (visibilityState == "hidden") {
+				//		Task.Run(() => {
+				//			newWindowDetector();
+				//		});
+				//	} else if (visibilityState == "visible") {
+				//		Task.Run(() => {
+				//			// 表示状態になったウィンドウを操作対象とする
+				//			lock (chrome) {
+				//				var curHandles = chrome.WindowHandles;
+				//				var index = curHandles.IndexOf(handle);
+				//				Console.WriteLine(index);
+				//				if (0 <= index) {
+				//					chrome.SwitchTo().Window(handle);
+				//				}
+				//			}
+				//		});
+				//	}
+				//});
 
 				// コマンドラインからの入力をループ
 				ReadOnlyCollection<IWebElement> elements = null;
@@ -300,11 +300,11 @@ namespace PatchCrawler {
 										Console.WriteLine(ex.Message);
 									}
 								} else if (names[0] == "wnds") {
-									foreach (var w in chrome.WindowHandles) {
-										chrome.SwitchTo().Window(w);
-										pageInitializer(w);
-										Console.WriteLine(w);
-									}
+									//foreach (var w in chrome.WindowHandles) {
+									//	chrome.SwitchTo().Window(w);
+									//	pageInitializer(w);
+									//	Console.WriteLine(w);
+									//}
 								} else if (names[0] == "id") {
 									if (2 <= names.Length) {
 										foreach (var e in (elements = chrome.FindElementsById(names[1]))) {
@@ -354,7 +354,7 @@ namespace PatchCrawler {
 								} else if (names[0] == "js") {
 									Console.WriteLine(chrome.ExecuteScript(line.Substring(2)));
 								} else if (names[0] == "init") {
-									pageInitializer(chrome.CurrentWindowHandle);
+									//pageInitializer(chrome.CurrentWindowHandle);
 								} else if (names[0] == "s") {
 									// s 以降のスペース区切りの文字列を and 条件で検索する
 
