@@ -8,13 +8,22 @@ using System.Runtime.InteropServices;
 using System.IO;
 using System.ComponentModel;
 using System.Diagnostics;
-using SevenZip;
+using SevenZipExtractor;
 
 namespace ProductInfoExtractor {
 	class Program {
 		#region PInvoke
 		[DllImport("msi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
 		static extern uint MsiOpenDatabaseW(string szDatabasePath, IntPtr phPersist, out IntPtr phDatabase);
+		[DllImport("msi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+		static extern uint MsiDatabaseOpenViewW(IntPtr hDatabase, string szQuery, out IntPtr phView);
+		[DllImport("msi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+		static extern uint MsiViewExecute(IntPtr hView, IntPtr hRecord);
+		[DllImport("msi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+		static extern uint MsiViewFetch(IntPtr hView, out IntPtr phRecord);
+		[DllImport("msi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+		static extern uint MsiRecordGetStringW(IntPtr hRecord, uint iField, StringBuilder szValueBuf, ref uint pcchValueBuf);
+
 		[DllImport("msi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
 		static extern uint MsiOpenPackageW(string szPackagePath, out IntPtr hProduct);
 		[DllImport("msi.dll", ExactSpelling = true)]
@@ -28,7 +37,7 @@ namespace ProductInfoExtractor {
 		const string SevenZipExe = @"C:\Program Files\7-Zip\7z.exe";
 		public static string WorkDir { get; private set; }
 		static int _TmpFileCount;
-		static Semaphore Sem = new Semaphore(20, 20);
+		static Semaphore Sem = new Semaphore(32, 32);
 
 		const int MSIDBOPEN_READONLY = 0;  // database open read-only, no persistent changes
 		const int MSIDBOPEN_TRANSACT = 1;  // database read/write in transaction mode
@@ -66,16 +75,17 @@ namespace ProductInfoExtractor {
 
 			ThreadPool.SetMinThreads(100, 100);
 
-			//SevenZipBase.SetLibraryPath(@"C:\Program Files\7-Zip\7z.dll");
 			WorkDir = Path.Combine(Directory.GetCurrentDirectory(), "ProductInfoExtractorTmp");
 			DeleteTempDir();
 			CreateTempDir();
 
 			var productInfos = new List<ProductInfo>();
-			//ExtractAndGetProductInfos(args[0], productInfos);
-			ExtractAndGetProductInfosAsync(args[0], productInfos);
+			ExtractAndGetProductInfos(args[0], productInfos);
+			//ExtractAndGetProductInfosAsync(args[0], productInfos);
+			//GetProductInfos(args[0], productInfos);
 
 			foreach (var pi in productInfos) {
+				Console.WriteLine($"----------------");
 				Console.WriteLine($"ProductName: {pi.ProductName}");
 				Console.WriteLine($"ProductCode: {pi.ProductCode}");
 				Console.WriteLine($"ProductVersion: {pi.ProductVersion}");
@@ -93,26 +103,23 @@ namespace ProductInfoExtractor {
 		/// <param name="productInfos">プロダクト情報がここに追加されていく</param>
 		/// <param name="deleteFile">処理終了後に入力アーカイブファイルを削除するかどうか</param>
 		static void ExtractAndGetProductInfosAsync(string archiveFile, List<ProductInfo> productInfos) {
-			var pi = GetProductInfo(archiveFile);
+			var pi = GetProductInfoFromMsiDb(archiveFile);
 			if (pi != null) {
 				lock (productInfos) {
 					productInfos.Add(pi);
 				}
 			} else {
 				var tasks = new List<Task>();
-				foreach (var f in GetFilesInArchive(archiveFile)) {
+				Parallel.ForEach(GetFilesInArchive(archiveFile), f => {
 					Sem.WaitOne();
-					tasks.Add(Task.Run(() => {
-						try {
-							var tmpFile = ExtractFile(archiveFile, f.FileName);
-							ExtractAndGetProductInfosAsync(tmpFile, productInfos);
-							File.Delete(tmpFile);
-						} finally {
-							Sem.Release();
-						}
-					}));
-				}
-				Task.WaitAll(tasks.ToArray());
+					try {
+						var tmpFile = ExtractFile(archiveFile, f.FileName);
+						ExtractAndGetProductInfosAsync(tmpFile, productInfos);
+						File.Delete(tmpFile);
+					} finally {
+						Sem.Release();
+					}
+				});
 			}
 		}
 
@@ -122,7 +129,7 @@ namespace ProductInfoExtractor {
 		/// <param name="archiveFile">アーカイブファイルパス名</param>
 		/// <param name="productInfos">プロダクト情報がここに追加されていく</param>
 		static void ExtractAndGetProductInfos(string archiveFile, List<ProductInfo> productInfos) {
-			var pi = GetProductInfo(archiveFile);
+			var pi = GetProductInfoFromMsiDb(archiveFile);
 			if (pi != null) {
 				lock (productInfos) {
 					productInfos.Add(pi);
@@ -145,7 +152,7 @@ namespace ProductInfoExtractor {
 		static string ExtractFile(string archiveFile, string extractFile) {
 			var tmpFile = NewTmpFileName();
 			Action<StreamReader> outputProc = sr => {
-				var buffer = new byte[1024 * 1024 * 10];
+				var buffer = new byte[1024 * 1024 * 2];
 				var bs = sr.BaseStream;
 				int n;
 				using (var fs = new FileStream(tmpFile, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.ReadWrite)) {
@@ -181,12 +188,13 @@ namespace ProductInfoExtractor {
 						if (isDir != "D") {
 							var sizeStr = line.Substring(26, 12).Trim();
 							var fileName = line.Substring(53);
-							var size = long.Parse(sizeStr);
-							if (1024 * 1024 * 1 <= size) {
-								result.Add(new FileInArchiveInfo {
-									FileName = fileName,
-									Size = size
-								});
+							if (int.TryParse(sizeStr, out int size)) {
+								if (1024 * 1024 * 1 <= size) {
+									result.Add(new FileInArchiveInfo {
+										FileName = fileName,
+										Size = size
+									});
+								}
 							}
 						}
 					}
@@ -272,6 +280,78 @@ namespace ProductInfoExtractor {
 			}
 		}
 
+
+		/// <summary>
+		/// MSIデータベース形式のファイルからプロダクト情報を取得する
+		/// </summary>
+		/// <param name="fileName">MSIデータベースファイル名</param>
+		/// <returns>プロダクト情報または null</returns>
+		static ProductInfo GetProductInfoFromMsiDb(string fileName) {
+			IntPtr hMsiDb = IntPtr.Zero, hMsiView = IntPtr.Zero, hMsiRecord = IntPtr.Zero;
+			try {
+				var r = MsiOpenDatabaseW(fileName, new IntPtr(MSIDBOPEN_READONLY), out hMsiDb);
+				if (r != 0) {
+					return null;
+				}
+				r = MsiDatabaseOpenViewW(hMsiDb, "SELECT Property, Value FROM Property WHERE Property='ProductName' OR Property='ProductCode' OR Property='ProductVersion'", out hMsiView);
+				if (r != 0) {
+					return null;
+				}
+				r = MsiViewExecute(hMsiView, IntPtr.Zero);
+				if (r != 0) {
+					return null;
+				}
+
+				var sb = new StringBuilder(512);
+				uint len;
+				var pi = new ProductInfo();
+				while (MsiViewFetch(hMsiView, out hMsiRecord) == 0) {
+					sb.Length = 0;
+					len = (uint)sb.Capacity;
+					r = MsiRecordGetStringW(hMsiRecord, 1, sb, ref len);
+					if (r != 0) {
+						return null;
+					}
+					var property = sb.ToString();
+
+					sb.Length = 0;
+					len = (uint)sb.Capacity;
+					r = MsiRecordGetStringW(hMsiRecord, 2, sb, ref len);
+					if (r != 0) {
+						return null;
+					}
+					var value = sb.ToString();
+
+					switch (property) {
+					case "ProductName":
+						pi.ProductName = value;
+						break;
+					case "ProductCode":
+						pi.ProductCode = value;
+						break;
+					case "ProductVersion":
+						pi.ProductVersion = value;
+						break;
+					}
+
+					MsiCloseHandle(hMsiRecord);
+					hMsiRecord = IntPtr.Zero;
+				}
+
+				return pi;
+			} finally {
+				if (hMsiRecord != IntPtr.Zero) {
+					MsiCloseHandle(hMsiRecord);
+				}
+				if (hMsiView != IntPtr.Zero) {
+					MsiCloseHandle(hMsiView);
+				}
+				if (hMsiDb != IntPtr.Zero) {
+					MsiCloseHandle(hMsiDb);
+				}
+			}
+		}
+
 		/// <summary>
 		/// 指定のMSIファイルからプロダクト情報を取得する
 		/// </summary>
@@ -306,65 +386,53 @@ namespace ProductInfoExtractor {
 			return sb.ToString();
 		}
 
+		#region 特定のファイルでメモリアクセス違反発生
+		static void GetProductInfos(string file, List<ProductInfo> productInfos) {
+			ArchiveFile extractor = null;
+			try {
+				extractor = new ArchiveFile(file);
+				GetProductInfos(extractor, productInfos);
+			} catch(SevenZipException) {
+			} finally {
+				extractor?.Dispose();
+			}
+		}
 
+		static void GetProductInfos(Stream inputStream, List<ProductInfo> productInfos) {
+			ArchiveFile extractor = null;
+			try {
+				extractor = new ArchiveFile(inputStream);
+				GetProductInfos(extractor, productInfos);
+			} catch (SevenZipException) {
+			} finally {
+				extractor?.Dispose();
+			}
+		}
 
-		//static void GetProductInfos(SevenZipExtractor extractor, List<ProductInfo> productInfos) {
-		//	foreach (var fi in extractor.ArchiveFileData) {
-		//		if (string.Compare(Path.GetExtension(fi.FileName), ".msi", true) == 0) {
-		//			var tmpFile = Extract(extractor, fi.FileName);
-		//			var pi = GetProductInfo(tmpFile);
-		//			if (pi != null) {
-		//				productInfos.Add(pi);
-		//			}
-		//			File.Delete(tmpFile);
-		//		} else {
-		//			if (fi.Size <= 1024 * 1024 * 10) {
-		//				using (var ms = new MemoryStream()) {
-		//					extractor.ExtractFile(fi.FileName, ms);
-		//					ms.Position = 0;
-		//					GetProductInfos(ms, productInfos);
-		//				}
-		//			} else {
-		//				var tmpFile = Extract(extractor, fi.FileName);
-		//				GetProductInfos(tmpFile, productInfos);
-		//				File.Delete(tmpFile);
-		//			}
-		//		}
-		//	}
-		//}
+		static void GetProductInfos(ArchiveFile extractor, List<ProductInfo> productInfos) {
+			foreach (var entry in extractor.Entries) {
+				if (1024 * 1024 * 1 <= entry.Size) {
+					var tmpFile = Extract(entry);
+					var pi = GetProductInfo(tmpFile);
+					if (pi != null) {
+						lock (productInfos) {
+							productInfos.Add(pi);
+						}
+					} else {
+						GetProductInfos(tmpFile, productInfos);
+					}
+					File.Delete(tmpFile);
+				}
+			}
+		}
 
-
-		//static string Extract(SevenZipExtractor extractor, string extractFileName) {
-		//	var tmpFileName = NewTmpFileName();
-		//	using (var fs = new FileStream(tmpFileName, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.ReadWrite)) {
-		//		extractor.ExtractFile(extractFileName, fs);
-		//	}
-		//	return tmpFileName;
-		//}
-
-		//static void GetProductInfos(Stream inputStream, List<ProductInfo> productInfos) {
-		//	SevenZipExtractor extractor = null;
-		//	try {
-		//		extractor = new SevenZipExtractor(inputStream);
-		//		GetProductInfos(extractor, productInfos);
-		//	} catch {
-		//	} finally {
-		//		extractor?.Dispose();
-		//	}
-		//}
-
-		//static void GetProductInfos(string file, List<ProductInfo> productInfos) {
-		//	SevenZipExtractor extractor = null;
-		//	extractor = new SevenZipExtractor(file);
-		//	GetProductInfos(extractor, productInfos);
-		//	特定のファイルで SevenZipExtractor が例外発生させるため諦め
-		//	//try {
-		//	//	extractor = new SevenZipExtractor(file);
-		//	//	GetProductInfos(extractor, productInfos);
-		//	//} catch {
-		//	//} finally {
-		//	//	extractor?.Dispose();
-		//	//}
-		//}
+		static string Extract(Entry entry) {
+			var tmpFileName = NewTmpFileName();
+			using (var fs = new FileStream(tmpFileName, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.ReadWrite)) {
+				entry.Extract(fs);
+			}
+			return tmpFileName;
+		}
+		#endregion
 	}
 }
