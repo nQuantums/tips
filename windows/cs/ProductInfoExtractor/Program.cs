@@ -258,8 +258,8 @@ namespace ProductInfoExtractor {
 
 
 		static string NewTmpFileName() {
-			Interlocked.Increment(ref _TmpFileCount);
-			return Path.Combine(WorkDir, "tmp" + _TmpFileCount);
+			var i = Interlocked.Increment(ref _TmpFileCount);
+			return Path.Combine(WorkDir, "tmp" + i);
 		}
 
 		static void CreateTempDir() {
@@ -280,6 +280,7 @@ namespace ProductInfoExtractor {
 			}
 		}
 
+		static object MsiDbSync = new object();
 
 		/// <summary>
 		/// MSIデータベース形式のファイルからプロダクト情報を取得する
@@ -288,66 +289,68 @@ namespace ProductInfoExtractor {
 		/// <returns>プロダクト情報または null</returns>
 		static ProductInfo GetProductInfoFromMsiDb(string fileName) {
 			IntPtr hMsiDb = IntPtr.Zero, hMsiView = IntPtr.Zero, hMsiRecord = IntPtr.Zero;
-			try {
-				var r = MsiOpenDatabaseW(fileName, new IntPtr(MSIDBOPEN_READONLY), out hMsiDb);
-				if (r != 0) {
-					return null;
-				}
-				r = MsiDatabaseOpenViewW(hMsiDb, "SELECT Property, Value FROM Property WHERE Property='ProductName' OR Property='ProductCode' OR Property='ProductVersion'", out hMsiView);
-				if (r != 0) {
-					return null;
-				}
-				r = MsiViewExecute(hMsiView, IntPtr.Zero);
-				if (r != 0) {
-					return null;
-				}
-
-				var sb = new StringBuilder(512);
-				uint len;
-				var pi = new ProductInfo();
-				while (MsiViewFetch(hMsiView, out hMsiRecord) == 0) {
-					sb.Length = 0;
-					len = (uint)sb.Capacity;
-					r = MsiRecordGetStringW(hMsiRecord, 1, sb, ref len);
+			lock (MsiDbSync) {
+				try {
+					var r = MsiOpenDatabaseW(fileName, new IntPtr(MSIDBOPEN_READONLY), out hMsiDb);
 					if (r != 0) {
 						return null;
 					}
-					var property = sb.ToString();
-
-					sb.Length = 0;
-					len = (uint)sb.Capacity;
-					r = MsiRecordGetStringW(hMsiRecord, 2, sb, ref len);
+					r = MsiDatabaseOpenViewW(hMsiDb, "SELECT Property, Value FROM Property WHERE Property='ProductName' OR Property='ProductCode' OR Property='ProductVersion'", out hMsiView);
 					if (r != 0) {
 						return null;
 					}
-					var value = sb.ToString();
-
-					switch (property) {
-					case "ProductName":
-						pi.ProductName = value;
-						break;
-					case "ProductCode":
-						pi.ProductCode = value;
-						break;
-					case "ProductVersion":
-						pi.ProductVersion = value;
-						break;
+					r = MsiViewExecute(hMsiView, IntPtr.Zero);
+					if (r != 0) {
+						return null;
 					}
 
-					MsiCloseHandle(hMsiRecord);
-					hMsiRecord = IntPtr.Zero;
-				}
+					var sb = new StringBuilder(512);
+					uint len;
+					var pi = new ProductInfo();
+					while (MsiViewFetch(hMsiView, out hMsiRecord) == 0) {
+						sb.Length = 0;
+						len = (uint)sb.Capacity;
+						r = MsiRecordGetStringW(hMsiRecord, 1, sb, ref len);
+						if (r != 0) {
+							return null;
+						}
+						var property = sb.ToString();
 
-				return pi;
-			} finally {
-				if (hMsiRecord != IntPtr.Zero) {
-					MsiCloseHandle(hMsiRecord);
-				}
-				if (hMsiView != IntPtr.Zero) {
-					MsiCloseHandle(hMsiView);
-				}
-				if (hMsiDb != IntPtr.Zero) {
-					MsiCloseHandle(hMsiDb);
+						sb.Length = 0;
+						len = (uint)sb.Capacity;
+						r = MsiRecordGetStringW(hMsiRecord, 2, sb, ref len);
+						if (r != 0) {
+							return null;
+						}
+						var value = sb.ToString();
+
+						switch (property) {
+						case "ProductName":
+							pi.ProductName = value;
+							break;
+						case "ProductCode":
+							pi.ProductCode = value;
+							break;
+						case "ProductVersion":
+							pi.ProductVersion = value;
+							break;
+						}
+
+						MsiCloseHandle(hMsiRecord);
+						hMsiRecord = IntPtr.Zero;
+					}
+
+					return pi;
+				} finally {
+					if (hMsiRecord != IntPtr.Zero) {
+						MsiCloseHandle(hMsiRecord);
+					}
+					if (hMsiView != IntPtr.Zero) {
+						MsiCloseHandle(hMsiView);
+					}
+					if (hMsiDb != IntPtr.Zero) {
+						MsiCloseHandle(hMsiDb);
+					}
 				}
 			}
 		}
