@@ -154,15 +154,10 @@ namespace ProductInfoExtractor {
 					productInfos.Add(pi);
 				}
 			} else {
-				Parallel.ForEach(GetFilesInArchive(archiveFile), new ParallelOptions { MaxDegreeOfParallelism = 4 }, f => {
-					//Sem.WaitOne();
-					try {
-						var tmpFile = ExtractFile(archiveFile, f.FileName);
-						ExtractAndGetProductInfosAsync(tmpFile, productInfos);
-						File.Delete(tmpFile);
-					} finally {
-						//Sem.Release();
-					}
+				Parallel.ForEach(GetFilesInArchive(archiveFile), new ParallelOptions { MaxDegreeOfParallelism = 8 }, f => {
+					var tmpFile = ExtractFile(archiveFile, f.FileName);
+					ExtractAndGetProductInfosAsync(tmpFile, productInfos);
+					File.Delete(tmpFile);
 				});
 			}
 		}
@@ -175,9 +170,7 @@ namespace ProductInfoExtractor {
 		static void ExtractAndGetProductInfos(string archiveFile, List<ProductInfo> productInfos) {
 			var pi = GetProductInfoFromMsiDb(archiveFile);
 			if (pi != null) {
-				lock (productInfos) {
-					productInfos.Add(pi);
-				}
+				productInfos.Add(pi);
 			} else {
 				foreach (var f in GetFilesInArchive(archiveFile)) {
 					var tmpFile = ExtractFile(archiveFile, f.FileName);
