@@ -37,7 +37,6 @@ namespace ProductInfoExtractor {
 		const string SevenZipExe = @"C:\Program Files\7-Zip\7z.exe";
 		public static string WorkDir { get; private set; }
 		static int _TmpFileCount;
-		static Semaphore Sem = new Semaphore(32, 32);
 
 		const int MSIDBOPEN_READONLY = 0;  // database open read-only, no persistent changes
 		const int MSIDBOPEN_TRANSACT = 1;  // database read/write in transaction mode
@@ -67,21 +66,60 @@ namespace ProductInfoExtractor {
 			if (args.Length < 1) {
 				Console.WriteLine("指定ファイルからプロダクト情報を抽出し表示します。");
 				Console.WriteLine("");
-				Console.WriteLine("	udage : ProductInfoExtractor.exe <アーカイブファイル>");
+				Console.WriteLine("	udage : ProductInfoExtractor.exe [オプション] <アーカイブファイル名またはフィルタ>");
 				Console.WriteLine("");
-				Console.WriteLine("<アーカイブファイル> : *.msi, *.exe, *.cab などなんでも");
+				Console.WriteLine("[オプション]");
+				Console.WriteLine(" /r <ディレクトリ名> 指定ディレクトリ内のファイルを再帰的に処理する");
+				Console.WriteLine("");
+				Console.WriteLine("<アーカイブファイル名またはフィルタ>");
+				Console.WriteLine(" *.msi, *.exe, *.cab などなんでも");
 				return 0;
 			}
 
 			ThreadPool.SetMinThreads(100, 100);
 
 			WorkDir = Path.Combine(Directory.GetCurrentDirectory(), "ProductInfoExtractorTmp");
+
+			string archiveFile = null;
+			string recursiveDir = null;
+			for(int i = 0; i < args.Length; i++) {
+				var a = args[i];
+				if (a.StartsWith("/")) {
+					i++;
+					if (args.Length <= i) {
+						Console.Error.WriteLine("オプションに対して引数がありません。");
+						return -1;
+					}
+					switch (a) {
+					case "/r":
+						recursiveDir = args[i];
+						break;
+					}
+				} else {
+					archiveFile = a;
+				}
+			}
+			if (archiveFile == null) {
+				Console.Error.WriteLine("アーカイブファイルが指定されていません。");
+				return -1;
+			}
+
+			if (recursiveDir != null) {
+				ParseDir(recursiveDir, archiveFile);
+			} else {
+				Parse(archiveFile);
+			}
+
+			return 0;
+		}
+
+		static void Parse(string archiveFile) {
 			DeleteTempDir();
 			CreateTempDir();
 
 			var productInfos = new List<ProductInfo>();
-			ExtractAndGetProductInfos(args[0], productInfos);
-			//ExtractAndGetProductInfosAsync(args[0], productInfos);
+			//ExtractAndGetProductInfos(args[0], productInfos);
+			ExtractAndGetProductInfosAsync(archiveFile, productInfos);
 			//GetProductInfos(args[0], productInfos);
 
 			foreach (var pi in productInfos) {
@@ -92,8 +130,15 @@ namespace ProductInfoExtractor {
 			}
 
 			DeleteTempDir();
+		}
 
-			return 0;
+		static void ParseDir(string dir, string filter) {
+			foreach (var f in Directory.GetFiles(dir, filter)) {
+				Parse(f);
+			}
+			foreach (var d in Directory.GetDirectories(dir)) {
+				ParseDir(d, filter);
+			}
 		}
 
 		/// <summary>
@@ -109,15 +154,14 @@ namespace ProductInfoExtractor {
 					productInfos.Add(pi);
 				}
 			} else {
-				var tasks = new List<Task>();
-				Parallel.ForEach(GetFilesInArchive(archiveFile), f => {
-					Sem.WaitOne();
+				Parallel.ForEach(GetFilesInArchive(archiveFile), new ParallelOptions { MaxDegreeOfParallelism = 4 }, f => {
+					//Sem.WaitOne();
 					try {
 						var tmpFile = ExtractFile(archiveFile, f.FileName);
 						ExtractAndGetProductInfosAsync(tmpFile, productInfos);
 						File.Delete(tmpFile);
 					} finally {
-						Sem.Release();
+						//Sem.Release();
 					}
 				});
 			}
@@ -176,12 +220,12 @@ namespace ProductInfoExtractor {
 			Action<string> lineProc = line => {
 				switch (state) {
 				case 0:
-					if (line.StartsWith("-------------------")) {
+					if (line.StartsWith("-----")) {
 						state = 1;
 					}
 					break;
 				case 1:
-					if (line.StartsWith("-------------------")) {
+					if (line.StartsWith("-----")) {
 						state = 2;
 					} else {
 						var isDir = line.Substring(20, 1);
@@ -217,11 +261,9 @@ namespace ProductInfoExtractor {
 				process.StartInfo.CreateNoWindow = true;
 				process.StartInfo.UseShellExecute = false;
 				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.RedirectStandardInput = true;
 				process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
 				process.StartInfo.FileName = SevenZipExe;
 				process.StartInfo.Arguments = args;
-				process.EnableRaisingEvents = true;
 				process.Start();
 
 				string line;
@@ -243,11 +285,9 @@ namespace ProductInfoExtractor {
 				process.StartInfo.CreateNoWindow = true;
 				process.StartInfo.UseShellExecute = false;
 				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.RedirectStandardInput = true;
 				process.StartInfo.StandardOutputEncoding = null;
 				process.StartInfo.FileName = SevenZipExe;
 				process.StartInfo.Arguments = args;
-				process.EnableRaisingEvents = true;
 				process.Start();
 
 				outputProc(process.StandardOutput);
@@ -258,8 +298,7 @@ namespace ProductInfoExtractor {
 
 
 		static string NewTmpFileName() {
-			var i = Interlocked.Increment(ref _TmpFileCount);
-			return Path.Combine(WorkDir, "tmp" + i);
+			return Path.Combine(WorkDir, "tmp" + Interlocked.Increment(ref _TmpFileCount));
 		}
 
 		static void CreateTempDir() {
@@ -280,8 +319,6 @@ namespace ProductInfoExtractor {
 			}
 		}
 
-		static object MsiDbSync = new object();
-
 		/// <summary>
 		/// MSIデータベース形式のファイルからプロダクト情報を取得する
 		/// </summary>
@@ -289,68 +326,66 @@ namespace ProductInfoExtractor {
 		/// <returns>プロダクト情報または null</returns>
 		static ProductInfo GetProductInfoFromMsiDb(string fileName) {
 			IntPtr hMsiDb = IntPtr.Zero, hMsiView = IntPtr.Zero, hMsiRecord = IntPtr.Zero;
-			lock (MsiDbSync) {
-				try {
-					var r = MsiOpenDatabaseW(fileName, new IntPtr(MSIDBOPEN_READONLY), out hMsiDb);
+			try {
+				var r = MsiOpenDatabaseW(fileName, new IntPtr(MSIDBOPEN_READONLY), out hMsiDb);
+				if (r != 0) {
+					return null;
+				}
+				r = MsiDatabaseOpenViewW(hMsiDb, "SELECT Property, Value FROM Property WHERE Property='ProductName' OR Property='ProductCode' OR Property='ProductVersion'", out hMsiView);
+				if (r != 0) {
+					return null;
+				}
+				r = MsiViewExecute(hMsiView, IntPtr.Zero);
+				if (r != 0) {
+					return null;
+				}
+
+				var sb = new StringBuilder(512);
+				uint len;
+				var pi = new ProductInfo();
+				while (MsiViewFetch(hMsiView, out hMsiRecord) == 0) {
+					sb.Length = 0;
+					len = (uint)sb.Capacity;
+					r = MsiRecordGetStringW(hMsiRecord, 1, sb, ref len);
 					if (r != 0) {
 						return null;
 					}
-					r = MsiDatabaseOpenViewW(hMsiDb, "SELECT Property, Value FROM Property WHERE Property='ProductName' OR Property='ProductCode' OR Property='ProductVersion'", out hMsiView);
+					var property = sb.ToString();
+
+					sb.Length = 0;
+					len = (uint)sb.Capacity;
+					r = MsiRecordGetStringW(hMsiRecord, 2, sb, ref len);
 					if (r != 0) {
 						return null;
 					}
-					r = MsiViewExecute(hMsiView, IntPtr.Zero);
-					if (r != 0) {
-						return null;
+					var value = sb.ToString();
+
+					switch (property) {
+					case "ProductName":
+						pi.ProductName = value;
+						break;
+					case "ProductCode":
+						pi.ProductCode = value;
+						break;
+					case "ProductVersion":
+						pi.ProductVersion = value;
+						break;
 					}
 
-					var sb = new StringBuilder(512);
-					uint len;
-					var pi = new ProductInfo();
-					while (MsiViewFetch(hMsiView, out hMsiRecord) == 0) {
-						sb.Length = 0;
-						len = (uint)sb.Capacity;
-						r = MsiRecordGetStringW(hMsiRecord, 1, sb, ref len);
-						if (r != 0) {
-							return null;
-						}
-						var property = sb.ToString();
+					MsiCloseHandle(hMsiRecord);
+					hMsiRecord = IntPtr.Zero;
+				}
 
-						sb.Length = 0;
-						len = (uint)sb.Capacity;
-						r = MsiRecordGetStringW(hMsiRecord, 2, sb, ref len);
-						if (r != 0) {
-							return null;
-						}
-						var value = sb.ToString();
-
-						switch (property) {
-						case "ProductName":
-							pi.ProductName = value;
-							break;
-						case "ProductCode":
-							pi.ProductCode = value;
-							break;
-						case "ProductVersion":
-							pi.ProductVersion = value;
-							break;
-						}
-
-						MsiCloseHandle(hMsiRecord);
-						hMsiRecord = IntPtr.Zero;
-					}
-
-					return pi;
-				} finally {
-					if (hMsiRecord != IntPtr.Zero) {
-						MsiCloseHandle(hMsiRecord);
-					}
-					if (hMsiView != IntPtr.Zero) {
-						MsiCloseHandle(hMsiView);
-					}
-					if (hMsiDb != IntPtr.Zero) {
-						MsiCloseHandle(hMsiDb);
-					}
+				return pi;
+			} finally {
+				if (hMsiRecord != IntPtr.Zero) {
+					MsiCloseHandle(hMsiRecord);
+				}
+				if (hMsiView != IntPtr.Zero) {
+					MsiCloseHandle(hMsiView);
+				}
+				if (hMsiDb != IntPtr.Zero) {
+					MsiCloseHandle(hMsiDb);
 				}
 			}
 		}
