@@ -135,6 +135,25 @@ namespace DbCode.Defs {
 		}
 
 		/// <summary>
+		/// 指定のプロパティに紐づく<see cref="Column"/>を取得する
+		/// </summary>
+		/// <param name="getter">プロパティへアクセスする処理</param>
+		/// <returns><see cref="Column"/></returns>
+		public virtual Column GetColumn(Func<object> getter) {
+			Mediator.Table = this;
+			Mediator.TableName = this.Name;
+			Mediator.PropertyName = null;
+			try {
+				getter();
+				return this.ColumnMap.TryGetByPropertyName(Mediator.PropertyName);
+			} finally {
+				Mediator.Table = null;
+				Mediator.TableName = null;
+				Mediator.PropertyName = null;
+			}
+		}
+
+		/// <summary>
 		/// エイリアス用にクローンを作成する
 		/// </summary>
 		/// <returns>クローン</returns>
