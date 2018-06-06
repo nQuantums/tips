@@ -1,0 +1,77 @@
+﻿<#@ template  debug="true" hostSpecific="true" #>
+<#@ output extension=".cs" #>
+<#@ Assembly Name="System.Core" #>
+<#@ Assembly Name="System.Windows.Forms" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Diagnostics" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Collections" #>
+<#@ import namespace="System.Collections.Generic" #> 
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace DbCode {
+<#
+for (int n = 0; n <= 10; n++) {
+	var tparams = string.Join(", ", from i in Enumerable.Range(1, n) select "T" + i);
+	var tparamArgs = string.Join(", ", from i in Enumerable.Range(1, n) select "T" + i + " arg" + i);
+	var args = string.Join(", ", from i in Enumerable.Range(1, n) select "arg" + i);
+
+#>
+	/// <summary>
+	/// 指定された引数を<see cref="Commandable"/>に設定しコマンドを実行する
+	/// </summary>
+<#
+	for (int i = 1; i <= n; i++) {#>
+	/// <typeparam name="T<#=i#>">引数<#=i#>の型</typeparam>
+<#	}#>
+	public class ActionCmd<#=n != 0 ? "<" : ""#><#=tparams#><#=n != 0 ? ">" : ""#> {
+		/// <summary>
+		/// コマンドテキストとパラメータ
+		/// </summary>
+		public Commandable Commandable { get; private set; }
+
+<#	if (n != 0) {#>
+		/// <summary>
+		/// 引数を<see cref="Parameter"/>の配列に設定する
+		/// </summary>
+		public Action<Parameter[], <#=tparams#>> ArgSetter { get; private set; }
+
+<#	}#>
+		/// <summary>
+		/// コンストラクタ、実体となる<see cref="DbCode.Commandable"/>を指定して初期化する
+		/// </summary>
+		/// <param name="commandable">実体</param>
+<#	if (n != 0) {#>
+		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
+<#	}#>
+		public ActionCmd(Commandable commandable<#=n != 0 ? ", Action<Parameter[], " + tparams + "> argSetter": ""#>) {
+<#	if (n != 0) {#>
+			this.ArgSetter = argSetter;
+<#	}#>
+			this.Commandable = commandable;
+		}
+
+		/// <summary>
+		/// 指定の<see cref="IDbCodeCommand"/>を使用してコマンドを実行しレコード読み取りオブジェクトを取得する
+		/// </summary>
+		/// <param name="command">コマンド</param>
+<#
+	for (int i = 1; i <= n; i++) {#>
+		/// <param name="arg<#=i#>">引数<#=i#></param>
+<#	}#>
+		/// <returns>影響を受けた行の数</returns>
+		public int Execute(IDbCodeCommand command<#=n != 0 ? ", " + tparamArgs : ""#>) {
+<#	if (n != 0) {#>
+			this.ArgSetter(this.Commandable.FixedParameters, <#=args#>);
+<#	}#>
+			return this.Commandable.Execute(command);
+		}
+	}
+
+<#
+}
+#>
+}
