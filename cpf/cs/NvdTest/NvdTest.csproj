@@ -1,0 +1,86 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
+    <PackageReference Include="Npgsql" Version="4.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="DbCode.PgBind\PgEnvironment.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>PgEnvironment.cs</LastGenOutput>
+    </None>
+    <None Update="DbCode\ActionCmd.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>ActionCmd.cs</LastGenOutput>
+    </None>
+    <None Update="DbCode\Argument.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Argument.cs</LastGenOutput>
+    </None>
+    <None Update="DbCode\ColumnsBase.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>ColumnsBase.cs</LastGenOutput>
+    </None>
+    <None Update="DbCode\DbEnvironment.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>DbEnvironment.cs</LastGenOutput>
+    </None>
+    <None Update="DbCode\FuncCmd.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>FuncCmd.cs</LastGenOutput>
+    </None>
+    <None Update="DbCode\Sql.Build.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Sql.Build.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="DbCode.PgBind\PgEnvironment.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>PgEnvironment.tt</DependentUpon>
+    </Compile>
+    <Compile Update="DbCode\ActionCmd.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>ActionCmd.tt</DependentUpon>
+    </Compile>
+    <Compile Update="DbCode\Argument.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Argument.tt</DependentUpon>
+    </Compile>
+    <Compile Update="DbCode\ColumnsBase.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>ColumnsBase.tt</DependentUpon>
+    </Compile>
+    <Compile Update="DbCode\DbEnvironment.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>DbEnvironment.tt</DependentUpon>
+    </Compile>
+    <Compile Update="DbCode\FuncCmd.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>FuncCmd.tt</DependentUpon>
+    </Compile>
+    <Compile Update="DbCode\Sql.Build.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Sql.Build.tt</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+</Project>
