@@ -16,11 +16,23 @@ namespace NvdTest
 				con.Open();
 				var cmd = con.CreateCommand();
 
-				using (var fs = new FileStream(@"D:\work\cve\nvdcve-1.0-2017.json", FileMode.Open, FileAccess.Read, FileShare.Read)) {
+				using (var fs = new FileStream(@"D:\work\cve\nvdcve-1.0-2018.json", FileMode.Open, FileAccess.Read, FileShare.Read)) {
 					dynamic root = DeserializeFromStream(fs);
 					foreach (var i in root.CVE_Items) {
 						var cve = i.cve;
 						var configurations = i.configurations;
+						var description = cve.description;
+
+						var isRejected = false;
+						foreach (var dd in description.description_data) {
+							if (((string)dd.value).StartsWith("** REJECT **")) {
+								isRejected = true;
+								break;
+							}
+						}
+						if (isRejected) {
+							continue;
+						}
 
 						var cveID = Db.AddCve(cmd, (string)cve.CVE_data_meta.ID);
 
