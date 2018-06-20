@@ -84,7 +84,7 @@ namespace MyJVNApiTest {
 				//var vendorName = e.XPathSelectElement(".//vuldef:Name", MyJvnApi.NamespaceManager);
 				var productName = e.XPathSelectElement(".//vuldef:ProductName", MyJvnApi.NamespaceManager);
 				var versionNumbers = e.XPathSelectElements(".//vuldef:VersionNumber", MyJvnApi.NamespaceManager);
-				Console.WriteLine($"{productName.Value}");
+				Console.WriteLine($"{jvnid}: {productName.Value}");
 				break;
 				Console.Write("(");
 				foreach (var v in versionNumbers) {
@@ -94,9 +94,51 @@ namespace MyJVNApiTest {
 		}
 
 		static void Main(string[] args) {
-			foreach (var id in JvnIDs) {
-				GetJvnInfo(id);
+			var start = new DateTime(2017, 1, 1);
+			var now = DateTime.Now;
+			var dateRange = new MyJvnApi.TimeRange(start, now);
+
+			var startItem = 1;
+
+			for(; ; ) {
+				var result = MyJvnApi.getVulnOverviewList(
+					startItem: startItem,
+					publicDateRange: dateRange,
+					publishedDateRange: dateRange,
+					firstPublishDateRange: dateRange
+				).Result;
+
+				var doc = XDocument.Parse(result);
+				foreach (var item in doc.XPathSelectElements("/rdf:RDF/rss:item", MyJvnApi.NamespaceManager)) {
+					var title = item.XPathSelectElement("./rss:title", MyJvnApi.NamespaceManager);
+					var identifier = item.XPathSelectElement("./sec:identifier", MyJvnApi.NamespaceManager);
+					Console.WriteLine($"{identifier.Value}: {title.Value}");
+				}
+				var status = doc.XPathSelectElement("//status:Status", MyJvnApi.NamespaceManager);
+				if (status == null) {
+					break;
+				}
+				var retCd = status.Attribute("retCd");
+				if (retCd == null) {
+					break;
+				}
+				var totalRes = status.Attribute("totalRes");
+				if (totalRes == null) {
+					break;
+				}
+				if (int.TryParse(totalRes.Value, out int count)) {
+					startItem += 50;
+					if (count < startItem) {
+						break;
+					}
+				} else {
+					break;
+				}
 			}
+
+			//foreach (var id in JvnIDs) {
+			//	GetJvnInfo(id);
+			//}
 		}
 
 		///// <summary>
