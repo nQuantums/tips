@@ -9,7 +9,7 @@ namespace DbCode.Internal {
 	/// 型毎情報のキャッシュ
 	/// </summary>
 	/// <typeparam name="T">キャッシュ対象の型</typeparam>
-	public static class TypeWiseCache<T> {
+	public static class TypewiseCache<T> {
 		static Func<T> _Creator;
 		static Func<T, T> _Cloner;
 		static Action<ElementCode, T> _AddValues;
@@ -101,7 +101,11 @@ namespace DbCode.Internal {
 						if (i != 0) {
 							expressions[j++] = Expression.Call(param1, addComma);
 						}
-						expressions[j++] = Expression.Call(param1, context.GetMethod(nameof(ElementCode.Add), new[] { pi.PropertyType }), Expression.Property(param2, pi));
+						var method = context.GetMethod(nameof(ElementCode.Add), new[] { pi.PropertyType });
+						if (method is null) {
+							throw new ApplicationException();
+						}
+						expressions[j++] = Expression.Call(param1, method, Expression.Property(param2, pi));
 					}
 
 					var expr = Expression.Lambda<Action<ElementCode, T>>(Expression.Block(expressions), param1, param2);

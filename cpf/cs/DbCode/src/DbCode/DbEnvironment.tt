@@ -24,9 +24,10 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Reflection;
-using CodeDb.Query;
+using DbCode.Query;
+using DbCode.Defs;
 
-namespace CodeDb {
+namespace DbCode {
 	/// <summary>
 	/// DB接続環境基本クラス
 	/// </summary>
@@ -42,7 +43,7 @@ namespace CodeDb {
 		/// </summary>
 		/// <param name="connectionString">接続文字列</param>
 		/// <returns>コネクション</returns>
-		public abstract ICodeDbConnection CreateConnection(string connectionString);
+		public abstract IDbCodeConnection CreateConnection(string connectionString);
 
 		/// <summary>
 		/// ログインロールの作成
@@ -50,7 +51,7 @@ namespace CodeDb {
 		/// <param name="connection">コネクション</param>
 		/// <param name="roleName">ロール名</param>
 		/// <param name="password">パスワード</param>
-		public abstract void CreateRole(ICodeDbConnection connection, string roleName, string password);
+		public abstract void CreateRole(IDbCodeConnection connection, string roleName, string password);
 
 		/// <summary>
 		/// データベースの作成
@@ -58,14 +59,14 @@ namespace CodeDb {
 		/// <param name="connection">コネクション</param>
 		/// <param name="databaseName">データベース名</param>
 		/// <param name="owner">データベースの所有者ロール名</param>
-		public abstract void CreateDatabase(ICodeDbConnection connection, string databaseName, string owner);
+		public abstract void CreateDatabase(IDbCodeConnection connection, string databaseName, string owner);
 
 		/// <summary>
 		/// 指定のコネクションで接続中のデータベース情報の取得、データベースから実際に定義を読み込む
 		/// </summary>
 		/// <param name="connection">コネクション</param>
 		/// <returns>データベース定義</returns>
-		public abstract IDatabaseDef ReadDatabaseDef(ICodeDbConnection connection);
+		public abstract IDatabaseDef ReadDatabaseDef(IDbCodeConnection connection);
 
 		/// <summary>
 		/// 指定クラスからデータベース定義を生成する、<see cref="ITableDef"/>インターフェースを取得できるスタティックプロパティがテーブルとなる
@@ -121,7 +122,7 @@ foreach(var typeAndName in types) {
 #>
 
 		/// <summary>
-		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="DbCode.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="DbCode.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -129,7 +130,7 @@ foreach(var typeAndName in types) {
 		public abstract <#=type#> <#=name#>(string name, ColumnFlags flags = 0);
 
 		/// <summary>
-		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="DbCode.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="DbCode.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>
@@ -139,7 +140,7 @@ foreach(var typeAndName in types) {
 #>
 
 		/// <summary>
-		/// 列を定義する、<see cref="CodeDb.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="CodeDb.Internal.Mediator.Column"/>に代入される
+		/// 列を定義する、<see cref="DbCode.Internal.Mediator.Table"/>の<see cref="ITable.BindColumn"/>を呼び出し結果の列定義が<see cref="DbCode.Internal.Mediator.Column"/>に代入される
 		/// </summary>
 		/// <param name="name">DB上での列名</param>
 		/// <param name="flags">列に対するオプションフラグ</param>

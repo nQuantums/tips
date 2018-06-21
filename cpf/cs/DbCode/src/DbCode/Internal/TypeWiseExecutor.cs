@@ -7,7 +7,7 @@ namespace DbCode.Internal {
 	/// <summary>
 	/// 対応している型ごとに処理を振り分ける
 	/// </summary>
-	class TypeWiseExecutor {
+	class TypewiseExecutor {
 		/// <summary>
 		/// 型別の処理を行う
 		/// </summary>

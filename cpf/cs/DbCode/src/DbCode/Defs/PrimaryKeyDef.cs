@@ -5,7 +5,7 @@ using System.Linq;
 using DbCode.Query;
 using DbCode.Internal;
 
-namespace DbCode {
+namespace DbCode.Defs {
 	/// <summary>
 	/// プライマリキー定義
 	/// </summary>

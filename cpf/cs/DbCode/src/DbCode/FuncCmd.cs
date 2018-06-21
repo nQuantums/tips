@@ -15,7 +15,7 @@ namespace DbCode {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// <see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
 		/// </summary>
 		public IRecordReader<TResult> RecordReader { get; private set; }
 
@@ -23,7 +23,7 @@ namespace DbCode {
 		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
-		/// <param name="recordReader"><see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader) {
 			this.Commandable = commandable;
 			this.RecordReader = recordReader;
@@ -51,7 +51,7 @@ namespace DbCode {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// <see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
 		/// </summary>
 		public IRecordReader<TResult> RecordReader { get; private set; }
 
@@ -64,7 +64,7 @@ namespace DbCode {
 		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
-		/// <param name="recordReader"><see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
 		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader, Action<Parameter[], T1> argSetter) {
 			this.ArgSetter = argSetter;
@@ -79,7 +79,7 @@ namespace DbCode {
 		/// <param name="arg1">引数1</param>
 		/// <returns>レコード列挙オブジェクト</returns>
 		public RecordEnumerator<TResult> Execute(IDbCodeCommand command, T1 arg1) {
-			this.ArgSetter(this.Commandable.Parameters, arg1);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1);
 			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}
 	}
@@ -97,7 +97,7 @@ namespace DbCode {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// <see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
 		/// </summary>
 		public IRecordReader<TResult> RecordReader { get; private set; }
 
@@ -110,7 +110,7 @@ namespace DbCode {
 		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
-		/// <param name="recordReader"><see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
 		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader, Action<Parameter[], T1, T2> argSetter) {
 			this.ArgSetter = argSetter;
@@ -126,7 +126,7 @@ namespace DbCode {
 		/// <param name="arg2">引数2</param>
 		/// <returns>レコード列挙オブジェクト</returns>
 		public RecordEnumerator<TResult> Execute(IDbCodeCommand command, T1 arg1, T2 arg2) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2);
 			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}
 	}
@@ -145,7 +145,7 @@ namespace DbCode {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// <see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
 		/// </summary>
 		public IRecordReader<TResult> RecordReader { get; private set; }
 
@@ -158,7 +158,7 @@ namespace DbCode {
 		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
-		/// <param name="recordReader"><see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
 		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader, Action<Parameter[], T1, T2, T3> argSetter) {
 			this.ArgSetter = argSetter;
@@ -175,7 +175,7 @@ namespace DbCode {
 		/// <param name="arg3">引数3</param>
 		/// <returns>レコード列挙オブジェクト</returns>
 		public RecordEnumerator<TResult> Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3);
 			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}
 	}
@@ -195,7 +195,7 @@ namespace DbCode {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// <see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
 		/// </summary>
 		public IRecordReader<TResult> RecordReader { get; private set; }
 
@@ -208,7 +208,7 @@ namespace DbCode {
 		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
-		/// <param name="recordReader"><see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
 		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader, Action<Parameter[], T1, T2, T3, T4> argSetter) {
 			this.ArgSetter = argSetter;
@@ -226,7 +226,7 @@ namespace DbCode {
 		/// <param name="arg4">引数4</param>
 		/// <returns>レコード列挙オブジェクト</returns>
 		public RecordEnumerator<TResult> Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4);
 			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}
 	}
@@ -247,7 +247,7 @@ namespace DbCode {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// <see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
 		/// </summary>
 		public IRecordReader<TResult> RecordReader { get; private set; }
 
@@ -260,7 +260,7 @@ namespace DbCode {
 		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
-		/// <param name="recordReader"><see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
 		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader, Action<Parameter[], T1, T2, T3, T4, T5> argSetter) {
 			this.ArgSetter = argSetter;
@@ -279,7 +279,7 @@ namespace DbCode {
 		/// <param name="arg5">引数5</param>
 		/// <returns>レコード列挙オブジェクト</returns>
 		public RecordEnumerator<TResult> Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5);
 			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}
 	}
@@ -301,7 +301,7 @@ namespace DbCode {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// <see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
 		/// </summary>
 		public IRecordReader<TResult> RecordReader { get; private set; }
 
@@ -314,7 +314,7 @@ namespace DbCode {
 		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
-		/// <param name="recordReader"><see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
 		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader, Action<Parameter[], T1, T2, T3, T4, T5, T6> argSetter) {
 			this.ArgSetter = argSetter;
@@ -334,7 +334,7 @@ namespace DbCode {
 		/// <param name="arg6">引数6</param>
 		/// <returns>レコード列挙オブジェクト</returns>
 		public RecordEnumerator<TResult> Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5, arg6);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5, arg6);
 			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}
 	}
@@ -357,7 +357,7 @@ namespace DbCode {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// <see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
 		/// </summary>
 		public IRecordReader<TResult> RecordReader { get; private set; }
 
@@ -370,7 +370,7 @@ namespace DbCode {
 		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
-		/// <param name="recordReader"><see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
 		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader, Action<Parameter[], T1, T2, T3, T4, T5, T6, T7> argSetter) {
 			this.ArgSetter = argSetter;
@@ -391,7 +391,7 @@ namespace DbCode {
 		/// <param name="arg7">引数7</param>
 		/// <returns>レコード列挙オブジェクト</returns>
 		public RecordEnumerator<TResult> Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, T7 arg7) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}
 	}
@@ -415,7 +415,7 @@ namespace DbCode {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// <see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
 		/// </summary>
 		public IRecordReader<TResult> RecordReader { get; private set; }
 
@@ -428,7 +428,7 @@ namespace DbCode {
 		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
-		/// <param name="recordReader"><see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
 		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader, Action<Parameter[], T1, T2, T3, T4, T5, T6, T7, T8> argSetter) {
 			this.ArgSetter = argSetter;
@@ -450,7 +450,7 @@ namespace DbCode {
 		/// <param name="arg8">引数8</param>
 		/// <returns>レコード列挙オブジェクト</returns>
 		public RecordEnumerator<TResult> Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, T7 arg7, T8 arg8) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}
 	}
@@ -475,7 +475,7 @@ namespace DbCode {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// <see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
 		/// </summary>
 		public IRecordReader<TResult> RecordReader { get; private set; }
 
@@ -488,7 +488,7 @@ namespace DbCode {
 		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
-		/// <param name="recordReader"><see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
 		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader, Action<Parameter[], T1, T2, T3, T4, T5, T6, T7, T8, T9> argSetter) {
 			this.ArgSetter = argSetter;
@@ -511,7 +511,7 @@ namespace DbCode {
 		/// <param name="arg9">引数9</param>
 		/// <returns>レコード列挙オブジェクト</returns>
 		public RecordEnumerator<TResult> Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, T7 arg7, T8 arg8, T9 arg9) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
 			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}
 	}
@@ -537,7 +537,7 @@ namespace DbCode {
 		public Commandable Commandable { get; private set; }
 
 		/// <summary>
-		/// <see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
+		/// <see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト
 		/// </summary>
 		public IRecordReader<TResult> RecordReader { get; private set; }
 
@@ -550,7 +550,7 @@ namespace DbCode {
 		/// コンストラクタ、全要素を指定して初期化する
 		/// </summary>
 		/// <param name="commandable">実体</param>
-		/// <param name="recordReader"><see cref="IDbCodeDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
+		/// <param name="recordReader"><see cref="ICodeDbDataReader"/>から<typeparamref name="TResult"/>型のレコードを列挙するオブジェクト</param>
 		/// <param name="argSetter">引数を<see cref="Commandable"/>に設定する</param>
 		public FuncCmd(Commandable commandable, IRecordReader<TResult> recordReader, Action<Parameter[], T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> argSetter) {
 			this.ArgSetter = argSetter;
@@ -574,7 +574,7 @@ namespace DbCode {
 		/// <param name="arg10">引数10</param>
 		/// <returns>レコード列挙オブジェクト</returns>
 		public RecordEnumerator<TResult> Execute(IDbCodeCommand command, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5, T6 arg6, T7 arg7, T8 arg8, T9 arg9, T10 arg10) {
-			this.ArgSetter(this.Commandable.Parameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
+			this.ArgSetter(this.Commandable.FixedParameters, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}
 	}

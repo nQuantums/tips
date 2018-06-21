@@ -2,18 +2,18 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace DbCode {
+namespace DbCode.Defs {
 	/// <summary>
-	/// プライマリキー定義
+	/// ユニーク制約定義
 	/// </summary>
-	public interface IPrimaryKeyDef {
+	public interface IUniqueDef {
 		/// <summary>
-		/// プライマリキー名
+		/// 制約名
 		/// </summary>
 		string Name { get; }
 
 		/// <summary>
-		/// プライマリキーを構成する列定義の配列
+		/// ユニーク制約を構成する列定義の配列
 		/// </summary>
 		IEnumerable<IColumnDef> Columns { get; }
 	}

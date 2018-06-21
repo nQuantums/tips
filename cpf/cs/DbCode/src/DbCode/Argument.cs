@@ -25,15 +25,6 @@ namespace DbCode {
 			}
 		}
 
-		public override bool Equals(object obj) {
-			return object.ReferenceEquals(this, obj);
-		}
-
-		public override int GetHashCode() {
-			var value = this.Value;
-			return value != null ? value.GetHashCode() : 0;
-		}
-
 		// 明示的キャスト
 		public static bool operator true(Argument variable) => !(variable is null);
 		public static bool operator false(Argument variable) => variable is null;

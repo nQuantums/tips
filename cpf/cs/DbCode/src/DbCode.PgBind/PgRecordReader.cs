@@ -51,7 +51,7 @@ namespace DbCode.PgBind {
 			if (core == null) {
 				throw new ApplicationException();
 			}
-			if (core.FieldCount != _AssignedProperties.Length) {
+			if (core.FieldCount != (_AssignedProperties != null ? _AssignedProperties.Length : 1)) {
 				throw new ApplicationException();
 			}
 			var getter = _Getter;

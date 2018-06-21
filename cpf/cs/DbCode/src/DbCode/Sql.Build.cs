@@ -32,7 +32,7 @@ namespace DbCode {
 		/// <param name="select">SELECT句ノード、これにより列挙するレコード型が推論される</param>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<TResult> BuildSelectFunc<TResult>(ISelect<TResult> @select) {
+		public FuncCmd<TResult> BuildFuncFromSelect<TResult>(ISelect<TResult> @select) {
 			return new FuncCmd<TResult>(this.Build(), this.Environment.CreateRecordReader<TResult>((from c in @select.ColumnMap select c.Property).ToArray()));
 		}
 
@@ -81,7 +81,7 @@ namespace DbCode {
 		/// <typeparam name="T1">引数1の型</typeparam>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<T1, TResult> BuildSelectFunc<T1, TResult>(ISelect<TResult> select, Argument arg1) {
+		public FuncCmd<T1, TResult> BuildFuncFromSelect<T1, TResult>(ISelect<TResult> select, Argument arg1) {
 			var commandable = this.Build();
 			var piPrmValue = typeof(Parameter).GetProperty("Value");
 			var piArgValue = typeof(Argument).GetProperty("Value");
@@ -148,7 +148,7 @@ namespace DbCode {
 		/// <typeparam name="T2">引数2の型</typeparam>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<T1, T2, TResult> BuildSelectFunc<T1, T2, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2) {
+		public FuncCmd<T1, T2, TResult> BuildFuncFromSelect<T1, T2, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2) {
 			var commandable = this.Build();
 			var piPrmValue = typeof(Parameter).GetProperty("Value");
 			var piArgValue = typeof(Argument).GetProperty("Value");
@@ -227,7 +227,7 @@ namespace DbCode {
 		/// <typeparam name="T3">引数3の型</typeparam>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<T1, T2, T3, TResult> BuildSelectFunc<T1, T2, T3, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3) {
+		public FuncCmd<T1, T2, T3, TResult> BuildFuncFromSelect<T1, T2, T3, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3) {
 			var commandable = this.Build();
 			var piPrmValue = typeof(Parameter).GetProperty("Value");
 			var piArgValue = typeof(Argument).GetProperty("Value");
@@ -318,7 +318,7 @@ namespace DbCode {
 		/// <typeparam name="T4">引数4の型</typeparam>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<T1, T2, T3, T4, TResult> BuildSelectFunc<T1, T2, T3, T4, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4) {
+		public FuncCmd<T1, T2, T3, T4, TResult> BuildFuncFromSelect<T1, T2, T3, T4, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4) {
 			var commandable = this.Build();
 			var piPrmValue = typeof(Parameter).GetProperty("Value");
 			var piArgValue = typeof(Argument).GetProperty("Value");
@@ -421,7 +421,7 @@ namespace DbCode {
 		/// <typeparam name="T5">引数5の型</typeparam>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<T1, T2, T3, T4, T5, TResult> BuildSelectFunc<T1, T2, T3, T4, T5, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5) {
+		public FuncCmd<T1, T2, T3, T4, T5, TResult> BuildFuncFromSelect<T1, T2, T3, T4, T5, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5) {
 			var commandable = this.Build();
 			var piPrmValue = typeof(Parameter).GetProperty("Value");
 			var piArgValue = typeof(Argument).GetProperty("Value");
@@ -536,7 +536,7 @@ namespace DbCode {
 		/// <typeparam name="T6">引数6の型</typeparam>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<T1, T2, T3, T4, T5, T6, TResult> BuildSelectFunc<T1, T2, T3, T4, T5, T6, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5, Argument arg6) {
+		public FuncCmd<T1, T2, T3, T4, T5, T6, TResult> BuildFuncFromSelect<T1, T2, T3, T4, T5, T6, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5, Argument arg6) {
 			var commandable = this.Build();
 			var piPrmValue = typeof(Parameter).GetProperty("Value");
 			var piArgValue = typeof(Argument).GetProperty("Value");
@@ -663,7 +663,7 @@ namespace DbCode {
 		/// <typeparam name="T7">引数7の型</typeparam>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<T1, T2, T3, T4, T5, T6, T7, TResult> BuildSelectFunc<T1, T2, T3, T4, T5, T6, T7, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5, Argument arg6, Argument arg7) {
+		public FuncCmd<T1, T2, T3, T4, T5, T6, T7, TResult> BuildFuncFromSelect<T1, T2, T3, T4, T5, T6, T7, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5, Argument arg6, Argument arg7) {
 			var commandable = this.Build();
 			var piPrmValue = typeof(Parameter).GetProperty("Value");
 			var piArgValue = typeof(Argument).GetProperty("Value");
@@ -802,7 +802,7 @@ namespace DbCode {
 		/// <typeparam name="T8">引数8の型</typeparam>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<T1, T2, T3, T4, T5, T6, T7, T8, TResult> BuildSelectFunc<T1, T2, T3, T4, T5, T6, T7, T8, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5, Argument arg6, Argument arg7, Argument arg8) {
+		public FuncCmd<T1, T2, T3, T4, T5, T6, T7, T8, TResult> BuildFuncFromSelect<T1, T2, T3, T4, T5, T6, T7, T8, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5, Argument arg6, Argument arg7, Argument arg8) {
 			var commandable = this.Build();
 			var piPrmValue = typeof(Parameter).GetProperty("Value");
 			var piArgValue = typeof(Argument).GetProperty("Value");
@@ -953,7 +953,7 @@ namespace DbCode {
 		/// <typeparam name="T9">引数9の型</typeparam>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<T1, T2, T3, T4, T5, T6, T7, T8, T9, TResult> BuildSelectFunc<T1, T2, T3, T4, T5, T6, T7, T8, T9, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5, Argument arg6, Argument arg7, Argument arg8, Argument arg9) {
+		public FuncCmd<T1, T2, T3, T4, T5, T6, T7, T8, T9, TResult> BuildFuncFromSelect<T1, T2, T3, T4, T5, T6, T7, T8, T9, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5, Argument arg6, Argument arg7, Argument arg8, Argument arg9) {
 			var commandable = this.Build();
 			var piPrmValue = typeof(Parameter).GetProperty("Value");
 			var piArgValue = typeof(Argument).GetProperty("Value");
@@ -1116,7 +1116,7 @@ namespace DbCode {
 		/// <typeparam name="T10">引数10の型</typeparam>
 		/// <typeparam name="TResult">列挙するレコードの型</typeparam>
 		/// <returns>実行可能SQL</returns>
-		public FuncCmd<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TResult> BuildSelectFunc<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5, Argument arg6, Argument arg7, Argument arg8, Argument arg9, Argument arg10) {
+		public FuncCmd<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TResult> BuildFuncFromSelect<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TResult>(ISelect<TResult> select, Argument arg1, Argument arg2, Argument arg3, Argument arg4, Argument arg5, Argument arg6, Argument arg7, Argument arg8, Argument arg9, Argument arg10) {
 			var commandable = this.Build();
 			var piPrmValue = typeof(Parameter).GetProperty("Value");
 			var piArgValue = typeof(Argument).GetProperty("Value");

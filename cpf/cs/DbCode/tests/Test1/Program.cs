@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Linq;
 using System.Linq.Expressions;
 using DbCode;
+using DbCode.Defs;
 using DbCode.PgBind;
 
 namespace Test1 {
@@ -55,13 +56,13 @@ namespace Test1 {
 				new public DateTime CreateDateTime { get; set; }
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => Columns.UserID);
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UserID);
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
-				MakeIndex(0, () => Columns.UserID),
-				MakeIndex(0, () => Columns.CreateDateTime)
+				MakeIndex(0, t => t.UserID),
+				MakeIndex(0, t => t.CreateDateTime)
 			);
 			public override IEnumerable<IUniqueDef> GetUniques() => MakeUniques(
-				MakeUnique(() => _.UserName)
+				MakeUnique(t => t.UserName)
 			);
 		}
 
@@ -74,10 +75,10 @@ namespace Test1 {
 				public DateTime CreateDateTime => As(() => C.CreateDateTime);
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => Columns.EntityID);
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.EntityID);
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
-				MakeIndex(0, () => Columns.UserID),
-				MakeIndex(0, () => Columns.CreateDateTime)
+				MakeIndex(0, t => t.UserID),
+				MakeIndex(0, t => t.CreateDateTime)
 			);
 		}
 
@@ -91,8 +92,8 @@ namespace Test1 {
 				public DateTime CreateDateTime => As(() => C.CreateDateTime);
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => Columns.ContentRevisionID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, () => Columns.EntityID));
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.ContentRevisionID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, t => t.EntityID));
 		}
 
 		public class TblEntityTag : TableDef<TblEntityTag.Cols> {
@@ -103,8 +104,8 @@ namespace Test1 {
 				public int[] TagIDs => As(() => C.TagIDs);
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => Columns.EntityID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(IndexFlags.Gin, () => Columns.TagIDs));
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.EntityID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(IndexFlags.Gin, t => t.TagIDs));
 		}
 
 		public class TblEntityParent : TableDef<TblEntityParent.Cols> {
@@ -115,8 +116,8 @@ namespace Test1 {
 				public int ParentEntityID => As(() => C.ParentEntityID);
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => Columns.EntityID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, () => Columns.ParentEntityID));
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.EntityID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, t => t.ParentEntityID));
 		}
 
 		public class TblEntityHolder : TableDef<TblEntityHolder.Cols> {
@@ -128,8 +129,8 @@ namespace Test1 {
 				public int[] AddHolderIDs => As(() => C.AddHolderIDs);
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => Columns.EntityID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(IndexFlags.Gin, () => Columns.CachedHolderIDs));
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.EntityID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(IndexFlags.Gin, t => t.CachedHolderIDs));
 		}
 
 		public class TblEntityWatcher : TableDef<TblEntityWatcher.Cols> {
@@ -142,8 +143,8 @@ namespace Test1 {
 				public int[] DelWatcherIDs => As(() => C.DelWatcherIDs);
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => Columns.EntityID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(IndexFlags.Gin, () => Columns.CachedWatcherIDs));
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.EntityID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(IndexFlags.Gin, t => t.CachedWatcherIDs));
 		}
 
 		public class TblTag : TableDef<TblTag.Cols> {
@@ -155,8 +156,8 @@ namespace Test1 {
 				public DateTime CreateDateTime => As(() => C.CreateDateTime);
 			}
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(() => Columns.TagID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, () => Columns.TagText), MakeIndex(0, () => Columns.CreateDateTime));
+			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.TagID);
+			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, t => t.TagText), MakeIndex(0, t => t.CreateDateTime));
 		}
 
 		public static TblUser User { get; } = new TblUser();

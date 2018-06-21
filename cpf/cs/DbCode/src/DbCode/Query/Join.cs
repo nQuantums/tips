@@ -25,7 +25,14 @@ namespace DbCode.Query {
 		/// <summary>
 		/// 子ノード一覧
 		/// </summary>
-		public IEnumerable<IQueryNode> Children => null;
+		public IEnumerable<IQueryNode> Children {
+			get {
+				var select = this.Table as ISelect<TColumns>;
+				if (select != null) {
+					yield return select;
+				}
+			}
+		}
 
 		/// <summary>
 		/// 結合種類
@@ -63,19 +70,24 @@ namespace DbCode.Query {
 		/// <param name="table">結合するテーブル</param>
 		/// <param name="on">結合式</param>
 		public Join(IQueryNode parent, JoinType joinType, ITable<TColumns> table, Expression<Func<TColumns, bool>> on) {
-			var clone = table.AliasedClone();
+			var select = table as ISelect<TColumns>;
+			if (select is null) {
+				table = table.AliasedClone();
+			} else {
+				QueryNodeHelper.SwitchParent(select, this);
+			}
 
 			this.Parent = parent;
 			this.JoinType = joinType;
-			this.Table = clone;
-			this.Columns = clone.Columns;
+			this.Table = table;
+			this.Columns = table.Columns;
 
-			this.Owner.Register(clone);
+			this.Owner.RegisterTable(table);
 
 			this.On = new ElementCode(
 				ParameterReplacer.Replace(
 					on.Body,
-					new Dictionary<Expression, object> { { on.Parameters[0], clone.Columns } }
+					new Dictionary<Expression, object> { { on.Parameters[0], table.Columns } }
 				),
 				this.Owner.AllColumns
 			);
@@ -83,6 +95,30 @@ namespace DbCode.Query {
 		#endregion
 
 		#region 公開メソッド
+		/// <summary>
+		/// 指定ノードを子とする、既存の親は<see cref="RemoveChild(IQueryNode)"/>で切り離す必要がある
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void AddChild(IQueryNode child) {
+			throw new NotImplementedException();
+		}
+
+		/// <summary>
+		/// 指定の子ノードを取り除く
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void RemoveChild(IQueryNode child) {
+			throw new NotImplementedException();
+		}
+
+		/// <summary>
+		/// 親ノードが変更された際に呼び出される
+		/// </summary>
+		/// <param name="parent">新しい親ノード</param>
+		public void ChangeParent(IQueryNode parent) {
+			this.Parent = parent;
+		}
+
 		/// <summary>
 		/// SQL文を生成する
 		/// </summary>
@@ -99,9 +135,22 @@ namespace DbCode.Query {
 				context.Add(SqlKeyword.RightJoin);
 				break;
 			}
+			context.Push();
+			this.Table.ToElementCode(context);
+			context.Pop();
 			context.Add(this.Table);
 			context.Add(SqlKeyword.On);
 			context.Add(this.On);
+		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
 		}
 		#endregion
 	}
