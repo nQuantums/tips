@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 using DbCode.Query;
 using DbCode.Internal;
 
-namespace DbCode {
+namespace DbCode.Defs {
 	/// <summary>
 	/// テーブル定義基本クラス
 	/// </summary>
@@ -82,7 +82,7 @@ namespace DbCode {
 			// プロパティと列をバインドする
 			Mediator.Table = this;
 			try {
-				this.Columns = TypeWiseCache<TColumns>.Creator();
+				this.Columns = TypewiseCache<TColumns>.Creator();
 
 				// 全プロパティを一度呼び出す事でバインドされる
 				AllColumnsBinder(this.Columns);
@@ -135,6 +135,25 @@ namespace DbCode {
 		}
 
 		/// <summary>
+		/// 指定のプロパティに紐づく<see cref="Column"/>を取得する
+		/// </summary>
+		/// <param name="getter">プロパティへアクセスする処理</param>
+		/// <returns><see cref="Column"/></returns>
+		public virtual Column GetColumn(Func<object> getter) {
+			Mediator.Table = this;
+			Mediator.TableName = this.Name;
+			Mediator.PropertyName = null;
+			try {
+				getter();
+				return this.ColumnMap.TryGetByPropertyName(Mediator.PropertyName);
+			} finally {
+				Mediator.Table = null;
+				Mediator.TableName = null;
+				Mediator.PropertyName = null;
+			}
+		}
+
+		/// <summary>
 		/// エイリアス用にクローンを作成する
 		/// </summary>
 		/// <returns>クローン</returns>
@@ -143,7 +162,7 @@ namespace DbCode {
 			ColumnMap map;
 			TColumns columns;
 			c.ColumnMap = map = new ColumnMap();
-			c.Columns = columns = TypeWiseCache<TColumns>.Creator();
+			c.Columns = columns = TypewiseCache<TColumns>.Creator();
 			foreach (var column in this.ColumnMap) {
 				map.Add(column.Clone(columns, c));
 			}
@@ -178,13 +197,14 @@ namespace DbCode {
 		/// </summary>
 		/// <param name="getters"><see cref="Columns"/>のプロパティを呼び出す処理を指定する</param>
 		/// <returns>プライマリキー定義</returns>
-		protected virtual IPrimaryKeyDef MakePrimaryKey(params Func<object>[] getters) {
+		protected virtual IPrimaryKeyDef MakePrimaryKey(params Func<TColumns, object>[] getters) {
 			Mediator.Table = this;
 			Mediator.TableName = this.Name;
 			try {
 				var colDefs = new IColumnDef[getters.Length];
+				var columns = this.Columns;
 				for (int i = 0; i < getters.Length; i++) {
-					colDefs[i] = Mediator.GetFrom(getters[i]);
+					colDefs[i] = Mediator.GetFrom(getters[i], columns);
 				}
 				return new PrimaryKeyDef(colDefs);
 			} finally {
@@ -199,13 +219,14 @@ namespace DbCode {
 		/// <param name="flags">インデックスに設定するフラグ</param>
 		/// <param name="getters"><see cref="Columns"/>のプロパティを呼び出す処理を指定する</param>
 		/// <returns>インデックス定義</returns>
-		protected virtual IIndexDef MakeIndex(IndexFlags flags, params Func<object>[] getters) {
+		protected virtual IIndexDef MakeIndex(IndexFlags flags, params Func<TColumns, object>[] getters) {
 			Mediator.Table = this;
 			Mediator.TableName = this.Name;
 			try {
 				var colDefs = new IColumnDef[getters.Length];
+				var columns = this.Columns;
 				for (int i = 0; i < getters.Length; i++) {
-					colDefs[i] = Mediator.GetFrom(getters[i]);
+					colDefs[i] = Mediator.GetFrom(getters[i], columns);
 				}
 				return new IndexDef(flags, colDefs);
 			} finally {
@@ -228,13 +249,14 @@ namespace DbCode {
 		/// </summary>
 		/// <param name="getters"><see cref="Columns"/>のプロパティを呼び出す処理を指定する</param>
 		/// <returns>インデックス定義</returns>
-		protected virtual IUniqueDef MakeUnique(params Func<object>[] getters) {
+		protected virtual IUniqueDef MakeUnique(params Func<TColumns, object>[] getters) {
 			Mediator.Table = this;
 			Mediator.TableName = this.Name;
 			try {
 				var colDefs = new IColumnDef[getters.Length];
+				var columns = this.Columns;
 				for (int i = 0; i < getters.Length; i++) {
-					colDefs[i] = Mediator.GetFrom(getters[i]);
+					colDefs[i] = Mediator.GetFrom(getters[i], columns);
 				}
 				return new UniqueDef(colDefs);
 			} finally {

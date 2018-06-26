@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace DbCode {
+namespace DbCode.Defs {
 	/// <summary>
 	/// テーブル定義の基本機能を提供する
 	/// </summary>

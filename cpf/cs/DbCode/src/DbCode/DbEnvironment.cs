@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Reflection;
 using DbCode.Query;
+using DbCode.Defs;
 
 namespace DbCode {
 	/// <summary>

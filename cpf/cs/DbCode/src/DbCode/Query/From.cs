@@ -91,11 +91,6 @@ namespace DbCode.Query {
 		/// LIMIT句のノード
 		/// </summary>
 		public ILimit LimitNode { get; private set; }
-
-		/// <summary>
-		/// SELECT句のノード
-		/// </summary>
-		public ISelect SelectNode { get; private set; }
 		#endregion
 
 		#region コンストラクタ
@@ -103,87 +98,291 @@ namespace DbCode.Query {
 		/// コンストラクタ、親ノードと取得元のテーブル定義を指定して初期化する
 		/// </summary>
 		/// <param name="parent">親ノード</param>
-		/// <param name="tableDef">テーブル定義</param>
-		public From(IQueryNode parent, ITable<TColumns> tableDef) {
+		/// <param name="table">テーブル</param>
+		[SqlMethod]
+		public From(IQueryNode parent, ITable<TColumns> table) {
+			var select = table as ISelect<TColumns>;
+			if (select is null) {
+				table = table.AliasedClone();
+			} else {
+				QueryNodeHelper.SwitchParent(select, this);
+			}
+
 			this.Parent = parent;
+			this.Table = table;
+			this.Columns = table.Columns;
 
-			var clone = tableDef.AliasedClone();
-			this.Table = clone;
-			this.Columns = clone.Columns;
-
-			parent.Owner.Register(clone);
+			this.Owner.RegisterTable(table);
 		}
 		#endregion
 
 		#region 公開メソッド
 		/// <summary>
-		/// 内部結合の<see cref="Join{TColumns}"/>を生成し登録する
+		/// 指定ノードを子とする、既存の親は<see cref="RemoveChild(IQueryNode)"/>で切り離す必要がある
 		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
-		/// <param name="table">結合するテーブル</param>
-		/// <param name="on">結合式</param>
-		/// <returns>内部結合の<see cref="Join{TColumns}"></see></returns>
-		public IJoin<TColumns1> InnerJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Inner, table, on);
+		/// <param name="child">子ノード</param>
+		public void AddChild(IQueryNode child) {
+			IJoin join;
+			IWhere where;
+			IGroupBy groupby;
+			IOrderBy orderby;
+			ILimit limit;
+
+			if ((join = child as IJoin) != null) {
+				this.Join(join);
+			} else if ((where = child as IWhere) != null) {
+				this.Where(where);
+			} else if ((groupby = child as IGroupBy) != null) {
+				this.GroupBy(groupby);
+			} else if ((orderby = child as IOrderBy) != null) {
+				this.OrderBy(orderby);
+			} else if ((limit = child as ILimit) != null) {
+				this.Limit(limit);
+			} else {
+				throw new ApplicationException();
+			}
+		}
 
 		/// <summary>
-		/// 左外部結合の<see cref="Join{TColumns}"/>を生成し登録する
+		/// 指定の子ノードを取り除く
 		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
-		/// <param name="table">結合するテーブル</param>
-		/// <param name="on">結合式</param>
-		/// <returns>左外部結合の<see cref="Join{TColumns}"/></returns>
-		public IJoin<TColumns1> LeftJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Left, table, on);
+		/// <param name="child">子ノード</param>
+		public void RemoveChild(IQueryNode child) {
+			if (this.JoinNodes != null) {
+				var join = child as IJoin;
+				if (join != null) {
+					this.JoinNodes.Remove(join);
+				}
+			}
+			if (this.WhereNode == child) {
+				this.WhereNode = null;
+			}
+			if (this.GroupByNode == child) {
+				this.GroupByNode = null;
+			}
+			if (this.OrderByNode == child) {
+				this.OrderByNode = null;
+			}
+			if (this.LimitNode == child) {
+				this.LimitNode = null;
+			}
+		}
 
 		/// <summary>
-		/// 右外部結合の<see cref="Join{TColumns}"/>を生成し登録する
+		/// 親ノードが変更された際に呼び出される
 		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
-		/// <param name="table">結合するテーブル</param>
-		/// <param name="on">結合式</param>
-		/// <returns>右外部結合の<see cref="Join{TColumns}"/></returns>
-		public IJoin<TColumns1> RightJoin<TColumns1>(ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) => JoinByType(JoinType.Right, table, on);
+		/// <param name="parent">新しい親ノード</param>
+		public void ChangeParent(IQueryNode parent) {
+			this.Parent = parent;
+		}
 
 		/// <summary>
-		/// WHERE句の式を登録する
+		/// JOIN句のノードを登録する
 		/// </summary>
-		/// <param name="expression">式</param>
+		/// <param name="join">JOIN句ノード</param>
 		/// <returns>自分</returns>
-		public From<TColumns> Where(Expression<Func<TColumns, bool>> expression) {
-			var body = ParameterReplacer.Replace(expression.Body, new Dictionary<Expression, object> { { expression.Parameters[0], this.Columns } });
-			this.WhereNode = new Where(this, new ElementCode(body, this.Owner.AllColumns));
+		[SqlMethod]
+		public From<TColumns> Join(IJoin join) {
+			if (this.JoinNodes == null) {
+				this.JoinNodes = new List<IJoin>();
+			}
+			QueryNodeHelper.SwitchParent(join, this);
+			this.JoinNodes.Add(join);
 			return this;
 		}
 
 		/// <summary>
+		/// WHERE句のノードを登録する
+		/// </summary>
+		/// <param name="where">WHERE句ノード</param>
+		/// <returns>自分</returns>
+		[SqlMethod]
+		public From<TColumns> Where(IWhere where) {
+			if (this.WhereNode != null) {
+				throw new ApplicationException();
+			}
+			QueryNodeHelper.SwitchParent(where, this);
+			this.WhereNode = where;
+			return this;
+		}
+
+		/// <summary>
+		/// GROUP BY句のノードを登録する
+		/// </summary>
+		/// <param name="groupBy">GROUP BY句ノード</param>
+		/// <returns>自分</returns>
+		[SqlMethod]
+		public From<TColumns> GroupBy(IGroupBy groupBy) {
+			if (this.GroupByNode != null) {
+				throw new ApplicationException();
+			}
+			QueryNodeHelper.SwitchParent(groupBy, this);
+			this.GroupByNode = groupBy;
+			return this;
+		}
+
+		/// <summary>
+		/// ORDER BY句のノードを登録する
+		/// </summary>
+		/// <param name="orderBy">ORDER BY句ノード</param>
+		/// <returns>自分</returns>
+		[SqlMethod]
+		public From<TColumns> OrderBy(IOrderBy orderBy) {
+			if (this.OrderByNode != null) {
+				throw new ApplicationException();
+			}
+			QueryNodeHelper.SwitchParent(orderBy, this);
+			this.OrderByNode = orderBy;
+			return this;
+		}
+
+		/// <summary>
+		/// LIMIT句のノードを登録する
+		/// </summary>
+		/// <param name="limit">LIMIT句ノード</param>
+		/// <returns>自分</returns>
+		[SqlMethod]
+		public From<TColumns> Limit(ILimit limit) {
+			if (this.LimitNode != null) {
+				throw new ApplicationException();
+			}
+			QueryNodeHelper.SwitchParent(limit, this);
+			this.LimitNode = limit;
+			return this;
+		}
+
+		/// <summary>
+		/// 指定された結合種類の<see cref="Query.Join{TColumns}"/>を生成し登録する
+		/// </summary>
+		/// <typeparam name="TColumnsOfJoinTable">結合するテーブルの<see cref="ITable{TColumns}.Columns"/></typeparam>
+		/// <param name="joinType">結合種類</param>
+		/// <param name="table">結合するテーブル</param>
+		/// <param name="on">結合式</param>
+		/// <returns><see cref="Query.Join{TColumns}"/></returns>
+		[SqlMethod]
+		public IJoin<TColumnsOfJoinTable> Join<TColumnsOfJoinTable>(JoinType joinType, ITable<TColumnsOfJoinTable> table, Expression<Func<TColumnsOfJoinTable, bool>> on) {
+			var join = new Join<TColumnsOfJoinTable>(this, joinType, table, on);
+			this.Join(join);
+			return join;
+		}
+
+		/// <summary>
+		/// 内部結合の<see cref="Query.Join{TColumns}"/>を生成し登録する
+		/// </summary>
+		/// <typeparam name="TColumnsOfJoinTable">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
+		/// <param name="table">結合するテーブル</param>
+		/// <param name="on">結合式</param>
+		/// <returns>内部結合の<see cref="Query.Join{TColumns}"></see></returns>
+		[SqlMethod]
+		public IJoin<TColumnsOfJoinTable> InnerJoin<TColumnsOfJoinTable>(ITable<TColumnsOfJoinTable> table, Expression<Func<TColumnsOfJoinTable, bool>> on) => Join(JoinType.Inner, table, on);
+
+		/// <summary>
+		/// 左外部結合の<see cref="Query.Join{TColumns}"/>を生成し登録する
+		/// </summary>
+		/// <typeparam name="TColumnsOfJoinTable">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
+		/// <param name="table">結合するテーブル</param>
+		/// <param name="on">結合式</param>
+		/// <returns>左外部結合の<see cref="Query.Join{TColumns}"/></returns>
+		[SqlMethod]
+		public IJoin<TColumnsOfJoinTable> LeftJoin<TColumnsOfJoinTable>(ITable<TColumnsOfJoinTable> table, Expression<Func<TColumnsOfJoinTable, bool>> on) => Join(JoinType.Left, table, on);
+
+		/// <summary>
+		/// 右外部結合の<see cref="Query.Join{TColumns}"/>を生成し登録する
+		/// </summary>
+		/// <typeparam name="TColumnsOfJoinTable">結合するテーブルの<see cref="DbCode.ITable{TColumns}.Columns"/></typeparam>
+		/// <param name="table">結合するテーブル</param>
+		/// <param name="on">結合式</param>
+		/// <returns>右外部結合の<see cref="Query.Join{TColumns}"/></returns>
+		[SqlMethod]
+		public IJoin<TColumnsOfJoinTable> RightJoin<TColumnsOfJoinTable>(ITable<TColumnsOfJoinTable> table, Expression<Func<TColumnsOfJoinTable, bool>> on) => Join(JoinType.Right, table, on);
+
+		/// <summary>
 		/// WHERE句の式を登録する
 		/// </summary>
 		/// <param name="expression">式</param>
 		/// <returns>自分</returns>
-		public From<TColumns> Where(ElementCode expression) {
-			this.WhereNode = new Where(this, expression);
-			return this;
+		[SqlMethod]
+		public From<TColumns> Where(Expression<Func<TColumns, bool>> expression) {
+			var body = ParameterReplacer.Replace(expression.Body, new Dictionary<Expression, object> { { expression.Parameters[0], this.Columns } });
+			return this.Where(new Where(this, body));
 		}
 
 		/// <summary>
 		/// GROUP BYの列を登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
-		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
+		/// <typeparam name="TGroupByColumns">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
+		/// <param name="columnsExpression">t => new { t.A, t.B } の様な式を指定する、プロパティが列指定として扱われる</param>
 		/// <returns>自分</returns>
-		public From<TColumns> GroupBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
-			this.GroupByNode = new GroupBy<TColumns1>(this, columnsExpression);
-			return this;
+		[SqlMethod]
+		public From<TColumns> GroupBy<TGroupByColumns>(Expression<Func<TColumns, TGroupByColumns>> columnsExpression) {
+			// new 演算子で匿名クラスを生成するもの以外はエラーとする
+			var body = columnsExpression.Body;
+			if (body.NodeType != ExpressionType.New) {
+				throw new ApplicationException();
+			}
+			if (!TypeSystem.IsAnonymousType(body.Type)) {
+				throw new ApplicationException();
+			}
+
+			body = ParameterReplacer.Replace(body, new Dictionary<Expression, object> { { columnsExpression.Parameters[0], this.Columns } });
+
+			// 匿名クラスのプロパティをグルーピング用の列として取得する
+			var newexpr = body as NewExpression;
+			var args = newexpr.Arguments;
+			var columns = new Column[args.Count];
+			for (int i = 0; i < columns.Length; i++) {
+				var context = new ElementCode(args[i], this.Owner.AllColumns);
+				if (context.Items.Count != 1) {
+					throw new ApplicationException();
+				}
+				var column = context.Items[0] as Column;
+				if (column == null) {
+					throw new ApplicationException();
+				}
+
+				columns[i] = column;
+			}
+
+			return this.GroupBy(new GroupBy<TGroupByColumns>(this, columns));
 		}
 
 		/// <summary>
 		/// ORDER BYの列を登録する
 		/// </summary>
-		/// <typeparam name="TColumns1">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
-		/// <param name="columnsExpression">プロパティが列指定として扱われる匿名クラスを生成する式</param>
+		/// <typeparam name="TOrderByColumns">列を指定する為の匿名クラス、メンバに列プロパティを指定して初期化する</typeparam>
+		/// <param name="columnsExpression">t => new { t.A, t.B } の様な式を指定する、プロパティが列指定として扱われる</param>
 		/// <returns>自分</returns>
-		public From<TColumns> OrderBy<TColumns1>(Expression<Func<TColumns1>> columnsExpression) {
-			this.OrderByNode = new OrderBy<TColumns1>(this, columnsExpression);
-			return this;
+		[SqlMethod]
+		public From<TColumns> OrderBy<TOrderByColumns>(Expression<Func<TColumns, TOrderByColumns>> columnsExpression) {
+			// new 演算子で匿名クラスを生成するもの以外はエラーとする
+			var body = columnsExpression.Body;
+			if (body.NodeType != ExpressionType.New) {
+				throw new ApplicationException();
+			}
+			if (!TypeSystem.IsAnonymousType(body.Type)) {
+				throw new ApplicationException();
+			}
+
+			body = ParameterReplacer.Replace(body, new Dictionary<Expression, object> { { columnsExpression.Parameters[0], this.Columns } });
+
+			// 匿名クラスのプロパティをグルーピング用の列として取得する
+			var newexpr = body as NewExpression;
+			var args = newexpr.Arguments;
+			var columns = new Column[args.Count];
+			for (int i = 0; i < columns.Length; i++) {
+				var context = new ElementCode(args[i], this.Owner.AllColumns);
+				if (context.Items.Count != 1) {
+					throw new ApplicationException();
+				}
+				var column = context.Items[0] as Column;
+				if (column == null) {
+					throw new ApplicationException();
+				}
+
+				columns[i] = column;
+			}
+
+			return this.OrderBy(new OrderBy<TOrderByColumns>(this, columns));
 		}
 
 		/// <summary>
@@ -191,9 +390,18 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="count">制限値</param>
 		/// <returns>自分</returns>
+		[SqlMethod]
 		public From<TColumns> Limit(object count) {
-			this.LimitNode = new Limit(this, count);
-			return this;
+			return this.Limit(new Limit(this, count));
+		}
+
+		/// <summary>
+		/// 全ての列を選択する列選択部を生成する
+		/// </summary>
+		/// <returns>SELECT句ノード</returns>
+		[SqlMethod]
+		public SelectFrom<TColumns> Select() {
+			return new SelectFrom<TColumns>(this, null);
 		}
 
 		/// <summary>
@@ -201,12 +409,11 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <typeparam name="TSelectedColumns">列をプロパティとして持つクラス</typeparam>
 		/// <param name="columnsExpression">プロパティが列指定として扱われるクラスを生成する t => new { t.A, t1.B, t3.C } の様な式、<c>t</c>はFROM元のテーブルの列</param>
-		/// <returns>SELECT句</returns>
+		/// <returns>SELECT句ノード</returns>
+		[SqlMethod]
 		public SelectFrom<TSelectedColumns> Select<TSelectedColumns>(Expression<Func<TColumns, TSelectedColumns>> columnsExpression) {
 			var expr = ParameterReplacer.Replace(columnsExpression.Body, new Dictionary<Expression, object> { { columnsExpression.Parameters[0], this.Columns } });
-			var node = new SelectFrom<TSelectedColumns>(this, expr);
-			this.SelectNode = node;
-			return node;
+			return new SelectFrom<TSelectedColumns>(this, expr);
 		}
 
 		/// <summary>
@@ -214,12 +421,11 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
 		public void ToElementCode(ElementCode context) {
-			if (this.SelectNode != null) {
-				this.SelectNode.ToElementCode(context);
-			}
-
 			if (this.Table != null) {
 				context.Add(SqlKeyword.From);
+				context.Push();
+				this.Table.ToElementCode(context);
+				context.Pop();
 				context.Add(this.Table);
 			}
 
@@ -245,25 +451,15 @@ namespace DbCode.Query {
 				this.LimitNode.ToElementCode(context);
 			}
 		}
-		#endregion
 
-		#region 非公開メソッド
-		/// <summary>
-		/// 指定された結合種類の<see cref="Join{TColumns}"/>を生成し登録する
-		/// </summary>
-		/// <typeparam name="TColumns1">結合するテーブルの<see cref="ITable{TColumns}.Columns"/></typeparam>
-		/// <param name="joinType">結合種類</param>
-		/// <param name="table">結合するテーブル</param>
-		/// <param name="on">結合式</param>
-		/// <returns><see cref="Join{TColumns}"/></returns>
-		IJoin<TColumns1> JoinByType<TColumns1>(JoinType joinType, ITable<TColumns1> table, Expression<Func<TColumns1, bool>> on) {
-			if (this.JoinNodes == null) {
-				this.JoinNodes = new List<IJoin>();
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
 			}
-
-			var join = new Join<TColumns1>(this, joinType, table, on);
-			this.JoinNodes.Add(join);
-			return join;
 		}
 		#endregion
 	}

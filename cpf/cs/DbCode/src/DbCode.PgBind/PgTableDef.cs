@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using DbCode;
+using DbCode.Defs;
 
 namespace DbCode.PgBind {
 	public class PgTableDef : ITableDef {

@@ -4,7 +4,7 @@ using System.Text;
 using System.Linq;
 using DbCode.Internal;
 
-namespace DbCode {
+namespace DbCode.Defs {
 	/// <summary>
 	/// ユニーク制約定義
 	/// </summary>

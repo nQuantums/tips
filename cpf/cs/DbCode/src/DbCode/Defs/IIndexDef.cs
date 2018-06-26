@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace DbCode {
+namespace DbCode.Defs {
 	/// <summary>
 	/// インデックス定義
 	/// </summary>

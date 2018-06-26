@@ -21,8 +21,8 @@ namespace DbCode.Internal {
 		/// </summary>
 		/// <param name="getter">プロパティを取得する処理</param>
 		/// <returns>列定義</returns>
-		public static Column GetFrom(Func<object> getter) {
-			getter();
+		public static Column GetFrom<TColumns>(Func<TColumns, object> getter, TColumns columns) {
+			getter(columns);
 			var col = Mediator.Column;
 			if (col is null) {
 				throw new ApplicationException($"The function '{getter}' can not acquire column definitions because {nameof(Column)}'s column definition method is not called.");

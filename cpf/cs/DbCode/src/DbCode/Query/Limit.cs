@@ -44,12 +44,46 @@ namespace DbCode.Query {
 
 		#region 公開メソッド
 		/// <summary>
+		/// 指定ノードを子とする、既存の親は<see cref="RemoveChild(IQueryNode)"/>で切り離す必要がある
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void AddChild(IQueryNode child) {
+			throw new NotImplementedException();
+		}
+
+		/// <summary>
+		/// 指定の子ノードを取り除く
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void RemoveChild(IQueryNode child) {
+			throw new NotImplementedException();
+		}
+
+		/// <summary>
+		/// 親ノードが変更された際に呼び出される
+		/// </summary>
+		/// <param name="parent">新しい親ノード</param>
+		public void ChangeParent(IQueryNode parent) {
+			this.Parent = parent;
+		}
+
+		/// <summary>
 		/// SQL文を生成する
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
 		public void ToElementCode(ElementCode context) {
 			context.Add(SqlKeyword.Limit);
-			context.Add(this.Value);
+			context.AddObject(this.Value);
+		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
 		}
 		#endregion
 	}

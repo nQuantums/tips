@@ -12,7 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace CodeDb {
+namespace DbCode {
 <#
 for (int n = 0; n <= 10; n++) {
 	var tparams = string.Join(", ", from i in Enumerable.Range(1, n) select "T" + i);
@@ -63,7 +63,7 @@ for (int n = 0; n <= 10; n++) {
 		}
 
 		/// <summary>
-		/// 指定の<see cref="ICodeDbCommand"/>を使用してコマンドを実行しレコード読み取りオブジェクトを取得する
+		/// 指定の<see cref="IDbCodeCommand"/>を使用してコマンドを実行しレコード読み取りオブジェクトを取得する
 		/// </summary>
 		/// <param name="command">コマンド</param>
 <#
@@ -71,9 +71,9 @@ for (int n = 0; n <= 10; n++) {
 		/// <param name="arg<#=i#>">引数<#=i#></param>
 <#	}#>
 		/// <returns>レコード列挙オブジェクト</returns>
-		public RecordEnumerator<TResult> Execute(ICodeDbCommand command<#=n != 0 ? ", " + tparamArgs : ""#>) {
+		public RecordEnumerator<TResult> Execute(IDbCodeCommand command<#=n != 0 ? ", " + tparamArgs : ""#>) {
 <#	if (n != 0) {#>
-			this.ArgSetter(this.Commandable.Parameters, <#=args#>);
+			this.ArgSetter(this.Commandable.FixedParameters, <#=args#>);
 <#	}#>
 			return new RecordEnumerator<TResult>(this.Commandable.ExecuteReader(command), this.RecordReader);
 		}

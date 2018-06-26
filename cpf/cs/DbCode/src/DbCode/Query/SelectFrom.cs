@@ -26,18 +26,7 @@ namespace DbCode.Query {
 		/// <summary>
 		/// 子ノード一覧
 		/// </summary>
-		public IEnumerable<IQueryNode> Children {
-			get {
-				if (this.From != null) {
-					yield return this.From;
-				}
-			}
-		}
-
-		/// <summary>
-		/// 生成元のFROM
-		/// </summary>
-		public IFrom From { get; private set; }
+		public IEnumerable<IQueryNode> Children => null;
 
 		/// <summary>
 		/// 列をプロパティとして持つオブジェクト
@@ -53,21 +42,40 @@ namespace DbCode.Query {
 		/// テーブルが直接保持する列定義の取得
 		/// </summary>
 		public ColumnMap ColumnMap { get; private set; }
+
+		/// <summary>
+		/// FROM句ノード
+		/// </summary>
+		public IFrom FromNode { get; private set; }
 		#endregion
 
 		#region コンストラクタ
 		/// <summary>
 		/// コンストラクタ、親ノードと列指定式を指定して初期化する
 		/// </summary>
-		/// <param name="parent">親ノード</param>
-		/// <param name="body">生成元の式</param>
-		public SelectFrom(IFrom parent, Expression body) {
-			this.Parent = parent;
-			this.From = parent;
-			this.ColumnMap = new ColumnMap();
-			this.Columns = TypeWiseCache<TSelectedColumns>.Creator();
+		/// <param name="from">FROM句ノード</param>
+		/// <param name="body">生成元の new { A = 1, B = 2 } の様な式、全列選択するなら null を指定する</param>
+		[SqlMethod]
+		public SelectFrom(IFrom from, Expression body) {
+			this.Parent = from.Parent;
+			this.From(from);
+			this.Parent.AddChild(this);
 
-			if (body.NodeType == ExpressionType.New) {
+			this.ColumnMap = new ColumnMap();
+			this.Columns = TypewiseCache<TSelectedColumns>.Creator();
+
+			if (body == null) {
+				// 全列選択に対応
+				var sourceColumns = from.Table.ColumnMap;
+				var environment = this.Owner.Environment;
+				for (int i = 0; i < sourceColumns.Count; i++) {
+					var column = sourceColumns[i];
+					var pi = column.Property;
+					var ec = new ElementCode();
+					ec.Add(column);
+					BindColumn(pi.Name, "c" + i, environment.CreateDbTypeFromType(pi.PropertyType), 0, ec);
+				}
+			} else if (body.NodeType == ExpressionType.New) {
 				// new 演算子でのクラス生成式に対応
 
 				// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
@@ -117,11 +125,49 @@ namespace DbCode.Query {
 			} else {
 				throw new ApplicationException();
 			}
-
 		}
 		#endregion
 
 		#region 公開メソッド
+		/// <summary>
+		/// 指定ノードを子とする、既存の親は<see cref="RemoveChild(IQueryNode)"/>で切り離す必要がある
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void AddChild(IQueryNode child) {
+			throw new NotImplementedException();
+		}
+
+		/// <summary>
+		/// 指定の子ノードを取り除く
+		/// </summary>
+		/// <param name="child">子ノード</param>
+		public void RemoveChild(IQueryNode child) {
+			throw new NotImplementedException();
+		}
+
+		/// <summary>
+		/// 親ノードが変更された際に呼び出される
+		/// </summary>
+		/// <param name="parent">新しい親ノード</param>
+		public void ChangeParent(IQueryNode parent) {
+			this.Parent = parent;
+		}
+
+		/// <summary>
+		/// FROM句のノードを登録する
+		/// </summary>
+		/// <param name="from">FROM句ノード</param>
+		/// <returns>自分</returns>
+		[SqlMethod]
+		public SelectFrom<TSelectedColumns> From(IFrom from) {
+			if (this.FromNode != null) {
+				throw new ApplicationException();
+			}
+			QueryNodeHelper.SwitchParent(from, this);
+			this.FromNode = from;
+			return this;
+		}
+
 		/// <summary>
 		/// プロパティに列定義をバインドして取得する、バインド済みなら取得のみ行われる
 		/// </summary>
@@ -152,6 +198,11 @@ namespace DbCode.Query {
 		/// </summary>
 		/// <param name="context">生成先のコンテキスト</param>
 		public void ToElementCode(ElementCode context) {
+			if (this.FromNode == null) {
+				throw new ApplicationException();
+			}
+
+			// SELECT 部作成
 			int i = 0;
 			context.Add(SqlKeyword.Select);
 			context.AddColumns(this.ColumnMap, column => {
@@ -159,6 +210,19 @@ namespace DbCode.Query {
 				context.Add(SqlKeyword.As);
 				context.Concat("c" + (i++));
 			});
+
+			// FROM 部作成
+			this.FromNode.ToElementCode(context);
+		}
+
+		public override string ToString() {
+			try {
+				var ec = new ElementCode();
+				this.ToElementCode(ec);
+				return ec.ToString();
+			} catch {
+				return "";
+			}
 		}
 		#endregion
 

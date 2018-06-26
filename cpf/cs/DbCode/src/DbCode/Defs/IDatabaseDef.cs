@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace DbCode {
+namespace DbCode.Defs {
 	/// <summary>
 	/// データベース定義に関する機能を提供する
 	/// </summary>
