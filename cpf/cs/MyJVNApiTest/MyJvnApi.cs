@@ -74,6 +74,77 @@ namespace MyJVNApiTest {
 			}
 		}
 
+		public class Status {
+			public XElement Element { get; private set; }
+
+			public string RetCd {
+				get {
+					var e = this.Element.Attribute("retCd");
+					return e != null ? e.Value : throw new ApplicationException("応答の status に retCd が存在しません。");
+				}
+			}
+			public string TotalRes {
+				get {
+					var e = this.Element.Attribute("totalRes");
+					return e != null ? e.Value : throw new ApplicationException("応答の status に totalRes が存在しません。");
+				}
+			}
+			public string TotalResRet {
+				get {
+					var e = this.Element.Attribute("totalResRet");
+					return e != null ? e.Value : throw new ApplicationException("応答の status に totalResRet が存在しません。");
+				}
+			}
+
+			public Status(XElement element) {
+				if (element == null) {
+					throw new ApplicationException("応答の Status が null です。");
+				}
+				this.Element = element;
+			}
+		}
+
+		public class VulnOverviewList {
+			public XDocument Doc { get; private set; }
+
+			public Status Status => new Status(this.Doc.XPathSelectElement("//status:Status", NamespaceManager));
+			public IEnumerable<VulnOverviewItem> Items {
+				get {
+					foreach (var item in this.Doc.XPathSelectElements("/rdf:RDF/rss:item", MyJvnApi.NamespaceManager)) {
+						yield return new VulnOverviewItem(item);
+					}
+				}
+			}
+
+			public VulnOverviewList(XDocument doc) {
+				this.Doc = doc;
+			}
+		}
+
+		public class VulnOverviewItem {
+			public XElement Element { get; private set; }
+
+			public string Title {
+				get {
+					var e = this.Element.XPathSelectElement("./rss:title", NamespaceManager);
+					return e != null ? e.Value : throw new ApplicationException("getVulnOverviewList の応答アイテムに title が存在しないものがありました。");
+				}
+			}
+			public string Identifier {
+				get {
+					var e = this.Element.XPathSelectElement("./sec:identifier", NamespaceManager);
+					return e != null ? e.Value : throw new ApplicationException("getVulnOverviewList の応答アイテムに identifier が存在しないものがありました。");
+				}
+			}
+
+			public VulnOverviewItem(XElement element) {
+				if (element == null) {
+					throw new ApplicationException("応答の item が null です。");
+				}
+				this.Element = element;
+			}
+		}
+
 		public static async Task<string> GetStringAsync(string url) {
 			using (HttpClient client = new HttpClient())
 			using (var res = await client.GetAsync(url))
@@ -82,8 +153,9 @@ namespace MyJVNApiTest {
 			}
 		}
 
+
 		/// <summary>
-		/// フィルタリング条件に当てはまる脆弱性対策の概要情報リストを取得します。
+		/// フィルタリング条件に当てはまる脆弱性対策の概要情報リストを文字列で取得します。
 		/// </summary>
 		/// <param name="startItem">エントリ開始位置、1～応答エントリ数</param>
 		/// <param name="publicDateRange">発見年月日範囲または<see cref="TimeRange.Empty"/></param>
@@ -91,7 +163,21 @@ namespace MyJVNApiTest {
 		/// <param name="firstPublishDateRange">発行年月日範囲または<see cref="TimeRange.Empty"/></param>
 		/// <param name="lang">表示言語 、ja:日本語、en:英語</param>
 		/// <returns>XML文字列</returns>
-		public static async Task<string> getVulnOverviewList(int startItem = 0, TimeRange publicDateRange = new TimeRange(), TimeRange publishedDateRange = new TimeRange(), TimeRange firstPublishDateRange = new TimeRange(), string lang = "ja") {
+		public static async Task<VulnOverviewList> getVulnOverviewList(int startItem = 0, TimeRange publicDateRange = new TimeRange(), TimeRange publishedDateRange = new TimeRange(), TimeRange firstPublishDateRange = new TimeRange(), string lang = "ja") {
+			var result = await getVulnOverviewListAsString(startItem, publicDateRange, publishedDateRange, firstPublishDateRange, lang);
+			return new VulnOverviewList(XDocument.Parse(result));
+		}
+
+		/// <summary>
+		/// フィルタリング条件に当てはまる脆弱性対策の概要情報リストを文字列で取得します。
+		/// </summary>
+		/// <param name="startItem">エントリ開始位置、1～応答エントリ数</param>
+		/// <param name="publicDateRange">発見年月日範囲または<see cref="TimeRange.Empty"/></param>
+		/// <param name="publishedDateRange">更新年月日範囲または<see cref="TimeRange.Empty"/></param>
+		/// <param name="firstPublishDateRange">発行年月日範囲または<see cref="TimeRange.Empty"/></param>
+		/// <param name="lang">表示言語 、ja:日本語、en:英語</param>
+		/// <returns>XML文字列</returns>
+		public static async Task<string> getVulnOverviewListAsString(int startItem = 0, TimeRange publicDateRange = new TimeRange(), TimeRange publishedDateRange = new TimeRange(), TimeRange firstPublishDateRange = new TimeRange(), string lang = "ja") {
 			var sb = new StringBuilder("https://jvndb.jvn.jp/myjvn?method=getVulnOverviewList&feed=hnd");
 			sb.Append("&rangeDatePublic=n");
 			sb.Append("&rangeDatePublished=n");

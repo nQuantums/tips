@@ -101,34 +101,33 @@ namespace MyJVNApiTest {
 			var startItem = 1;
 
 			for(; ; ) {
-				var result = MyJvnApi.getVulnOverviewList(
+				var ol = MyJvnApi.getVulnOverviewList(
 					startItem: startItem,
 					publicDateRange: dateRange,
 					publishedDateRange: dateRange,
 					firstPublishDateRange: dateRange
 				).Result;
 
-				var doc = XDocument.Parse(result);
-				foreach (var item in doc.XPathSelectElements("/rdf:RDF/rss:item", MyJvnApi.NamespaceManager)) {
-					var title = item.XPathSelectElement("./rss:title", MyJvnApi.NamespaceManager);
-					var identifier = item.XPathSelectElement("./sec:identifier", MyJvnApi.NamespaceManager);
-					Console.WriteLine($"{identifier.Value}: {title.Value}");
+				foreach (var item in ol.Items) {
+					var title = item.Title;
+					var identifier = item.Identifier;
+					Console.WriteLine($"{identifier}: {title}");
+					//var detail = MyJvnApi.getVulnDetailInfo(identifier.Value).Result;
+					//Console.WriteLine(detail);
+					//Thread.Sleep(100);
 				}
-				var status = doc.XPathSelectElement("//status:Status", MyJvnApi.NamespaceManager);
-				if (status == null) {
+				var status = ol.Status;
+				var retCd = status.RetCd;
+				if (retCd != "0") {
 					break;
 				}
-				var retCd = status.Attribute("retCd");
-				if (retCd == null) {
-					break;
-				}
-				var totalRes = status.Attribute("totalRes");
-				if (totalRes == null) {
-					break;
-				}
-				if (int.TryParse(totalRes.Value, out int count)) {
-					startItem += 50;
-					if (count < startItem) {
+				if (int.TryParse(status.TotalRes, out int totalCount)) {
+					if (int.TryParse(status.TotalResRet, out int count)) {
+						startItem += count;
+						if (totalCount < startItem) {
+							break;
+						}
+					} else {
 						break;
 					}
 				} else {
