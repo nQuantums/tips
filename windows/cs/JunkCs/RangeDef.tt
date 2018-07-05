@@ -1,0 +1,278 @@
+﻿<#@ template debug="false" hostspecific="true" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="Microsoft.Csharp" #>
+<#@ assembly name="System.Runtime.Serialization" #>
+<#@ assembly name="$(SolutionDir)\FT4\bin\Debug\FT4.dll" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Runtime.Serialization" #>
+<#@ import namespace="System.Runtime.Serialization.Json" #>
+<#@ output extension="/" #>
+<#
+var defs = FT4.RangeDefines.FromJsonFile(Host.ResolvePath("RangeDef.json"));
+defs.Generate(Path.GetDirectoryName(this.Host.TemplateFile), this.GenerationEnvironment, d => {
+#>
+using System;
+using System.Collections.Generic;
+using System.Xml.Serialization;
+using System.Runtime.InteropServices;
+<#=d.UsingForInlining()#>
+
+using element = <#=d.FullType#>;
+using vector = Jk.<#=d.VectorDefine.ClassName#>;
+using volume = Jk.<#=d.ClassName#>;
+
+namespace Jk {
+	/// <summary>
+	/// 軸平行境界ボックス
+	/// </summary>
+	[XmlType("Jk.<#=d.ClassName#>")]
+	[StructLayout(LayoutKind.Explicit, Pack = <#=d.ElementSize#>, Size = <#=d.FullSize#>)]
+	[Serializable]
+	public struct <#=d.ClassName#> : IJsonable {
+		public static readonly volume InvalidValue = new volume(vector.MaxValue, vector.MinValue);
+
+<#=d.DefElems("\t\t")#>
+
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(vector position) {
+			Min = position;
+			Max = position;
+		}
+
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(vector min, vector max) {
+			Min = min;
+			Max = max;
+		}
+
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(vector min, vector max, bool normalize) {
+			if (normalize) {
+				vector.ElementWiseMinMax(min, max, out Min, out Max);
+			} else {
+				Min = min;
+				Max = max;
+			}
+		}
+
+		public <#=d.ClassName#>(IEnumerable<vector> positions) {
+			vector min = vector.MaxValue, max = vector.MinValue;
+			foreach(var p in positions) {
+				min.ElementWiseMinSelf(p);
+				max.ElementWiseMaxSelf(p);
+			}
+			Min = min;
+			Max = max;
+		}
+
+		public <#=d.ClassName#>(IEnumerable<volume> volumes) {
+			vector min = vector.MaxValue, max = vector.MinValue;
+			foreach (var v in volumes) {
+				min.ElementWiseMinSelf(v.Min);
+				max.ElementWiseMaxSelf(v.Max);
+			}
+			Min = min;
+			Max = max;
+		}
+
+<#foreach(var ovd in d.OtherTypes) {#>
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(<#=ovd.ClassName#> v) {
+<#=d.ElementWise("\t\t\t_E = new vector(v._E);")#>
+		}
+<#}#>
+
+		public override bool Equals(object obj) {
+			if (obj is volume)
+				return (volume)obj == this;
+			else
+				return false;
+		}
+
+		public override int GetHashCode() {
+			return Min.GetHashCode() ^ Max.GetHashCode() << 1;
+		}
+
+		public override string ToString() {
+			return string.Concat("{ ", <#=d.ElementWise("\"\\\"_E\\\": \" + _E", ", \", \", ")#>, " }");
+		}
+
+		public string ToJsonString() {
+			return this.ToString();
+		}
+
+		public bool IsValid {
+			get {
+				return Min <= Max;
+			}
+		}
+
+		public vector Size {
+			get {
+				return Max - Min;
+			}
+		}
+
+		public vector Center {
+			get {
+				return (Min + Max) / 2;
+			}
+		}
+
+		public vector Extents {
+			get {
+				return (Max - Min) / 2;
+			}
+		}
+
+		public element Perimeter {
+			get {
+				var size = Max - Min;
+				return 2 * size.Sum();
+			}
+		}
+
+		public element VolumeAndEdgesLength {
+			get {
+				var s = Size;
+				return s.Product() + s.Sum();
+			}
+		}
+
+		<#=d.Inlining()#>
+		public bool Contains(vector v) {
+			return Min <= v && v <= Max;
+		}
+
+		<#=d.Inlining()#>
+		public bool Contains(volume range) {
+			return Min <= range.Min && range.Max <= Max;
+		}
+
+		<#=d.Inlining()#>
+		public bool Intersects(volume range) {
+<#=d.VectorDefine.ElementWise(
+	"\t\t\tif (Max._E < range.Min._E || range.Max._E < Min._E) return false;",
+	delimiter: "\n")#>
+			return true;
+		}
+
+		<#=d.Inlining()#>
+		public volume Merge(vector v) {
+			return new volume(vector.ElementWiseMin(Min, v), vector.ElementWiseMax(Max, v));
+		}
+
+		<#=d.Inlining()#>
+		public volume Merge(volume range) {
+			return new volume(vector.ElementWiseMin(Min, range.Min), vector.ElementWiseMax(Max, range.Max));
+		}
+
+		public volume Merge(IEnumerable<vector> positions) {
+			var min = Min;
+			var max = Max;
+			foreach (var p in positions) {
+				min.ElementWiseMinSelf(p);
+				max.ElementWiseMaxSelf(p);
+			}
+			return new volume(min, max);
+		}
+
+		public volume Merge(IEnumerable<volume> volumes) {
+			var min = Min;
+			var max = Max;
+			foreach (var v in volumes) {
+				min.ElementWiseMinSelf(v.Min);
+				max.ElementWiseMaxSelf(v.Max);
+			}
+			return new volume(min, max);
+		}
+
+		<#=d.Inlining()#>
+		public void MergeSelf(vector v) {
+			Min.ElementWiseMinSelf(v);
+			Max.ElementWiseMaxSelf(v);
+		}
+
+		<#=d.Inlining()#>
+		public void MergeSelf(volume range) {
+			Min.ElementWiseMinSelf(range.Min);
+			Max.ElementWiseMaxSelf(range.Max);
+		}
+
+		<#=d.Inlining()#>
+		public volume Expand(element s) {
+			return new volume(Min - s, Max + s);
+		}
+
+		<#=d.Inlining()#>
+		public void ExpandSelf(element s) {
+			Min.SubSelf(s);
+			Max.AddSelf(s);
+		}
+
+		<#=d.Inlining()#>
+		public volume Expand(vector v) {
+			return new volume(Min - v, Max + v);
+		}
+
+		<#=d.Inlining()#>
+		public void ExpandSelf(vector v) {
+			Min.SubSelf(v);
+			Max.AddSelf(v);
+		}
+
+		<#=d.Inlining()#>
+		static public bool operator ==(volume b1, volume b2) {
+			return b1.Min == b2.Min && b1.Max == b2.Max;
+		}
+
+		<#=d.Inlining()#>
+		static public bool operator !=(volume b1, volume b2) {
+			return b1.Min != b2.Min || b1.Max != b2.Max;
+		}
+
+		<#=d.Inlining()#>
+		static public volume operator +(volume b, vector v) {
+			return new volume(b.Min + v, b.Max + v);
+		}
+
+		<#=d.Inlining()#>
+		static public volume operator +(vector v, volume b) {
+			return new volume(b.Min + v, b.Max + v);
+		}
+
+		<#=d.Inlining()#>
+		static public volume operator -(volume b, vector v) {
+			return new volume(b.Min - v, b.Max - v);
+		}
+
+		<#=d.Inlining()#>
+		static public volume operator *(volume b, element s) {
+			return new volume(b.Min * s, b.Max * s);
+		}
+
+		<#=d.Inlining()#>
+		static public volume operator /(volume b, element s) {
+			return new volume(b.Min / s, b.Max / s);
+		}
+
+		<#=d.Inlining()#>
+		static public volume operator *(volume b, vector v) {
+			return new volume(b.Min * v, b.Max * v);
+		}
+
+		<#=d.Inlining()#>
+		static public volume operator *(vector v, volume b) {
+			return new volume(b.Min * v, b.Max * v);
+		}
+
+		<#=d.Inlining()#>
+		static public volume operator /(volume b, vector v) {
+			return new volume(b.Min / v, b.Max / v);
+		}
+	}
+}
+<#}); #>

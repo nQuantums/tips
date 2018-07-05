@@ -109,9 +109,80 @@ namespace DbCode {
 	/// 列定義のオプションフラグ
 	/// </summary>
 	[Flags]
-	public enum ColumnFlags {
-		Nullable = 1 << 0,
-		Serial = 1 << 1,
-		DefaultCurrentTimestamp = 1 << 2,
+	public enum ColumnFlags : ulong {
+		/// <summary>
+		/// NULL許容
+		/// </summary>
+		Nullable = 1u << 0,
+
+		/// <summary>
+		/// プライマリキーとする、複数列に指定されたら複合プライマリキーとなる
+		/// </summary>
+		PrimaryKey = 1u << 1,
+
+		/// <summary>
+		/// １から始まる自動採番とする
+		/// </summary>
+		Serial = 1u << 2,
+
+		/// <summary>
+		/// インデックスを付与する、複数列に指定されたら複合インデックスとなる
+		/// </summary>
+		Index_1 = 1u << 4,
+
+		/// <summary>
+		/// インデックスを付与する、複数列に指定されたら複合インデックスとなる
+		/// </summary>
+		Index_2 = 1u << 5,
+
+		/// <summary>
+		/// インデックスを付与する、複数列に指定されたら複合インデックスとなる
+		/// </summary>
+		Index_3 = 1u << 6,
+
+		/// <summary>
+		/// インデックスを付与する、複数列に指定されたら複合インデックスとなる
+		/// </summary>
+		Index_4 = 1u << 7,
+
+		/// <summary>
+		/// インデックスマスク
+		/// </summary>
+		IndexMask = Index_1 | Index_2 | Index_3 | Index_4,
+
+		/// <summary>
+		/// UNIQUE制約とする、複数列に指定されたら複合列のUNIQUE制約となる
+		/// </summary>
+		Unique_1 = 1u << 8,
+
+		/// <summary>
+		/// UNIQUE制約とする、複数列に指定されたら複合列のUNIQUE制約となる
+		/// </summary>
+		Unique_2 = 1u << 9,
+
+		/// <summary>
+		/// UNIQUE制約とする、複数列に指定されたら複合列のUNIQUE制約となる
+		/// </summary>
+		Unique_3 = 1u << 10,
+
+		/// <summary>
+		/// UNIQUE制約とする、複数列に指定されたら複合列のUNIQUE制約となる
+		/// </summary>
+		Unique_4 = 1u << 11,
+
+		/// <summary>
+		/// UNIQUEマスク
+		/// </summary>
+		UniqueMask = Unique_1 | Unique_2 | Unique_3 | Unique_4,
+
+		/// <summary>
+		/// インデックスと一緒に指定すると gin インデックスとなる
+		/// </summary>
+		Gin = 1u << 62,
+
+		/// <summary>
+		/// デフォルト値として現在日時を使用する
+		/// </summary>
+		DefaultCurrentTimestamp = 1u << 63,
 	}
 }

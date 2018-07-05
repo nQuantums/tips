@@ -1,0 +1,223 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>8.0.30703</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{85512350-2040-4BE5-86A8-AB17ECFAF270}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Junk</RootNamespace>
+    <AssemblyName>Junk</AssemblyName>
+    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Aabb2d.cs" />
+    <Compile Include="Aabb2f.cs" />
+    <Compile Include="Aabb2i.cs" />
+    <Compile Include="Aabb3d.cs" />
+    <Compile Include="Aabb3f.cs" />
+    <Compile Include="Aabb3i.cs" />
+    <Compile Include="Aabb4d.cs" />
+    <Compile Include="Aabb4f.cs" />
+    <Compile Include="Aabb4i.cs" />
+    <Compile Include="Bezier2d.cs" />
+    <Compile Include="Bezier2f.cs" />
+    <Compile Include="Bezier3d.cs" />
+    <Compile Include="Bezier3f.cs" />
+    <Compile Include="Bezier4d.cs" />
+    <Compile Include="Bezier4f.cs" />
+    <Compile Include="BinarySearch.cs" />
+    <Compile Include="BitMarshal.cs" />
+    <Compile Include="BitsAccessor.cs" />
+    <Compile Include="BoolUtil2f.cs" />
+    <Compile Include="Box2d.cs" />
+    <Compile Include="Box2i.cs" />
+    <Compile Include="Cloner.cs" />
+    <Compile Include="ColorMath.cs" />
+    <Compile Include="Crypto.cs" />
+    <Compile Include="Csv.cs" />
+    <Compile Include="CsvReader.cs" />
+    <Compile Include="CsvWriter.cs" />
+    <Compile Include="DegRange.cs" />
+    <Compile Include="Degree.cs" />
+    <Compile Include="Dib.cs" />
+    <Compile Include="DynamicAABB2fTree.cs" />
+    <Compile Include="ErrorLogger.cs" />
+    <Compile Include="ExceptionHandler.cs" />
+    <Compile Include="ExceptionMessageForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ExceptionMessageForm.Designer.cs">
+      <DependentUpon>ExceptionMessageForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="FileCriticalSection.cs" />
+    <Compile Include="FileCriticalSectionForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="FileCriticalSectionForm.Designer.cs">
+      <DependentUpon>FileCriticalSectionForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="FileIcon.cs" />
+    <Compile Include="FileListView.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="FileListView.designer.cs">
+      <DependentUpon>FileListView.cs</DependentUpon>
+    </Compile>
+    <Compile Include="FList.cs" />
+    <Compile Include="FolderTreeView.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="FolderTreeView.designer.cs">
+      <DependentUpon>FolderTreeView.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Geo2f.cs" />
+    <Compile Include="GlobalLogger.cs" />
+    <Compile Include="GridSpace2f.cs" />
+    <Compile Include="IJsonable.cs" />
+    <Compile Include="IniFile.cs" />
+    <Compile Include="JRpc.cs" />
+    <Compile Include="ListViewEx.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="ListViewEx.designer.cs">
+      <DependentUpon>ListViewEx.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Logger.cs" />
+    <Compile Include="LongPressButton.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Matrix.cs" />
+    <Compile Include="MemMapFile.cs" />
+    <Compile Include="MouseWheelHandler.cs" />
+    <Compile Include="NativeDllDir.cs" />
+    <Compile Include="Obb2d.cs" />
+    <Compile Include="Obb2f.cs" />
+    <Compile Include="Obb2i.cs" />
+    <Compile Include="Obb3d.cs" />
+    <Compile Include="Obb3f.cs" />
+    <Compile Include="Obb3i.cs" />
+    <Compile Include="Obb4d.cs" />
+    <Compile Include="Obb4f.cs" />
+    <Compile Include="Obb4i.cs" />
+    <Compile Include="PathUtil.cs" />
+    <Compile Include="PolBool2f.cs" />
+    <Compile Include="PriorityQueue.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Radian.cs" />
+    <Compile Include="RadRange.cs" />
+    <Compile Include="Range2d.cs" />
+    <Compile Include="Range2f.cs" />
+    <Compile Include="Range2i.cs" />
+    <Compile Include="Range3d.cs" />
+    <Compile Include="Range3f.cs" />
+    <Compile Include="Range3i.cs" />
+    <Compile Include="Range4d.cs" />
+    <Compile Include="Range4f.cs" />
+    <Compile Include="Range4i.cs" />
+    <Compile Include="Ranged.cs" />
+    <Compile Include="Serialization.cs" />
+    <Compile Include="Shell.cs" />
+    <Compile Include="ShellAPI.cs" />
+    <Compile Include="ShellItem.cs" />
+    <Compile Include="ShellLink.cs" />
+    <Compile Include="SystemImageList.cs" />
+    <Compile Include="TransformLinear.cs" />
+    <Compile Include="TriangulationD.cs" />
+    <Compile Include="TriangulationF.cs" />
+    <Compile Include="ValueTextBox.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Vector2f.cs" />
+    <Compile Include="Vector2d.cs" />
+    <Compile Include="Vector2i.cs" />
+    <Compile Include="Vector3d.cs" />
+    <Compile Include="Vector3f.cs" />
+    <Compile Include="Vector4d.cs" />
+    <Compile Include="Vector4f.cs" />
+    <Compile Include="Vector4i.cs" />
+    <Compile Include="Win32API.cs" />
+    <Compile Include="WindowPlacement.cs" />
+    <Compile Include="Vector3i.cs" />
+    <Compile Include="WndUtil.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="ExceptionMessageForm.resx">
+      <DependentUpon>ExceptionMessageForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FileCriticalSectionForm.resx">
+      <DependentUpon>FileCriticalSectionForm.cs</DependentUpon>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="BezierDef.json" />
+    <None Include="AabbDef.json" />
+    <None Include="ObbDef.json" />
+    <None Include="RangeDef.json" />
+    <None Include="VectorDef.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="BezierDef.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+    </Content>
+    <Content Include="AabbDef.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+    </Content>
+    <Content Include="ObbDef.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+    </Content>
+    <Content Include="RangeDef.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+    </Content>
+    <Content Include="VectorDef.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

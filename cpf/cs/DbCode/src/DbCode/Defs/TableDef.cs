@@ -13,27 +13,10 @@ namespace DbCode.Defs {
 	/// <typeparam name="TColumns"><see cref="ColumnsBase"/>を継承しプロパティを列として扱うクラス</typeparam>
 	public class TableDef<TColumns> : ITable<TColumns>, ITableDef {
 		#region スタティック要素
-		static Action<TColumns> _AllColumnsBinder;
-
 		/// <summary>
 		/// <typeparamref name="TColumns"/>の全プロパティを取得することで<see cref="ITable.BindColumn"/>を呼び出し<see cref="Column"/>を結びつけるアクション
 		/// </summary>
-		protected static Action<TColumns> AllColumnsBinder {
-			get {
-				if (_AllColumnsBinder == null) {
-					var type = typeof(TColumns);
-					var param = Expression.Parameter(type);
-					var properties = type.GetProperties();
-					var expressions = new Expression[properties.Length];
-					for (int i = 0; i < properties.Length; i++) {
-						expressions[i] = Expression.Property(param, properties[i]);
-					}
-					var expr = Expression.Lambda<Action<TColumns>>(Expression.Block(expressions), param);
-					_AllColumnsBinder = (Action<TColumns>)expr.Compile();
-				}
-				return _AllColumnsBinder;
-			}
-		}
+		protected static Action<TColumns> AllColumnsBinder { get; private set; }
 		#endregion
 
 		#region プロパティ
@@ -90,6 +73,21 @@ namespace DbCode.Defs {
 				Mediator.Table = null;
 			}
 		}
+
+		/// <summary>
+		/// コンストラクタ、静的要素を初期化する
+		/// </summary>
+		static TableDef() {
+			var type = typeof(TColumns);
+			var param = Expression.Parameter(type);
+			var properties = type.GetProperties();
+			var expressions = new Expression[properties.Length];
+			for (int i = 0; i < properties.Length; i++) {
+				expressions[i] = Expression.Property(param, properties[i]);
+			}
+			var expr = Expression.Lambda<Action<TColumns>>(Expression.Block(expressions), param);
+			AllColumnsBinder = (Action<TColumns>)expr.Compile();
+		}
 		#endregion
 
 		#region 公開メソッド
@@ -115,7 +113,14 @@ namespace DbCode.Defs {
 		/// </summary>
 		/// <returns>プライマリキー定義</returns>
 		public virtual IPrimaryKeyDef GetPrimaryKey() {
-			return null;
+			var columns = from c in this.ColumnMap
+						  where (c.Flags & ColumnFlags.PrimaryKey) != 0
+						  select (IColumnDef)c;
+			if (columns.Any()) {
+				return new PrimaryKeyDef(columns.ToArray());
+			} else {
+				return null;
+			}
 		}
 
 		/// <summary>
@@ -123,7 +128,15 @@ namespace DbCode.Defs {
 		/// </summary>
 		/// <returns>インデックス定義列</returns>
 		public virtual IEnumerable<IIndexDef> GetIndices() {
-			return new IIndexDef[0];
+			var columns = from c in this.ColumnMap
+						  where (c.Flags & ColumnFlags.IndexMask) != 0
+						  select (IColumnDef)c;
+			var groups = columns.GroupBy(c => c.Flags & ColumnFlags.IndexMask);
+			return from g
+				   in groups
+				   select new IndexDef(
+					   g.Where(c => (c.Flags & ColumnFlags.Gin) != 0).Any() ? IndexFlags.Gin : 0,
+					   g.Select(c => (IColumnDef)c).ToArray());
 		}
 
 		/// <summary>
@@ -131,7 +144,13 @@ namespace DbCode.Defs {
 		/// </summary>
 		/// <returns>ユニーク制約定義列</returns>
 		public virtual IEnumerable<IUniqueDef> GetUniques() {
-			return new IUniqueDef[0];
+			var columns = from c in this.ColumnMap
+						  where (c.Flags & ColumnFlags.UniqueMask) != 0
+						  select (IColumnDef)c;
+			var groups = columns.GroupBy(c => c.Flags & ColumnFlags.UniqueMask);
+			return from g
+				   in groups
+				   select new UniqueDef(g.Select(c => (IColumnDef)c).ToArray());
 		}
 
 		/// <summary>

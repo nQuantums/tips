@@ -1,0 +1,40 @@
+﻿{
+  "defines": [
+    {
+      "type": "int",
+      "length": 2
+    },
+    {
+      "type": "float",
+      "length": 2
+    },
+    {
+      "type": "double",
+      "length": 2
+    },
+    {
+      "type": "int",
+      "length": 3
+    },
+    {
+      "type": "float",
+      "length": 3
+    },
+    {
+      "type": "double",
+      "length": 3
+    },
+    {
+      "type": "int",
+      "length": 4
+    },
+    {
+      "type": "float",
+      "length": 4
+    },
+    {
+      "type": "double",
+      "length": 4
+    }
+  ]
+}

@@ -25,10 +25,13 @@ namespace Test1 {
 		/// </summary>
 		public static class C {
 			public static int UserID => E.Int32("user_id");
+			public static int[] UserIDs => E.Int32Array("user_ids");
+			public static int UserGroupID => E.Int32("user_group_id");
 			public static string UserName => E.String("user_name");
 			public static int EntityID => E.Int32("entity_id");
 			public static int ParentEntityID => E.Int32("parent_entity_id");
 			public static int TagID => E.Int32("tag_id");
+			public static int TagGroupID => E.Int32("tag_group_id");
 			public static int[] TagIDs => E.Int32Array("tag_ids");
 			public static string TagText => E.String("tag_text");
 			public static string Content => E.String("content");
@@ -42,88 +45,92 @@ namespace Test1 {
 			public static DateTime CreateDateTime => E.DateTime("create_date_time", ColumnFlags.DefaultCurrentTimestamp);
 		}
 
-		public class TblUser : TableDef<TblUser.D> {
-			public TblUser() : base(E, "tb_user") { }
+		public class TbUser : TableDef<TbUser.D> {
+			public TbUser() : base(E, "tb_user") { }
 
 			public class D : ColumnsBase {
-				public int UserID => As(() => C.UserID, ColumnFlags.Serial);
-				public string UserName => As(() => C.UserName);
-				public DateTime CreateDateTime => As(() => C.CreateDateTime);
+				public int UserID => As(() => C.UserID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+				public string UserName => As(() => C.UserName, ColumnFlags.Index_1 | ColumnFlags.Unique_1);
+				public DateTime CreateDateTime => As(() => C.CreateDateTime, ColumnFlags.Index_2);
 			}
 			public class R : D {
 				new public int UserID { get; set; }
 				new public string UserName { get; set; }
 				new public DateTime CreateDateTime { get; set; }
 			}
-
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.UserID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
-				MakeIndex(0, t => t.UserID),
-				MakeIndex(0, t => t.CreateDateTime)
-			);
-			public override IEnumerable<IUniqueDef> GetUniques() => MakeUniques(
-				MakeUnique(t => t.UserName)
-			);
 		}
 
-		public class TblEntityConst : TableDef<TblEntityConst.Cols> {
-			public TblEntityConst() : base(E, "tb_entity_const") { }
+		public class TbUserGroup : TableDef<TbUserGroup.D> {
+			public TbUserGroup() : base(E, "tb_user_group") { }
 
-			public class Cols : ColumnsBase {
-				public int EntityID => As(() => C.EntityID, ColumnFlags.Serial);
-				public int UserID => As(() => C.UserID);
-				public DateTime CreateDateTime => As(() => C.CreateDateTime);
+			public class D : ColumnsBase {
+				public int UserGroupID => As(() => C.UserGroupID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+				public int[] UserIDs => As(() => C.UserIDs, ColumnFlags.Index_1 | ColumnFlags.Unique_1 | ColumnFlags.Gin);
 			}
-
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.EntityID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(
-				MakeIndex(0, t => t.UserID),
-				MakeIndex(0, t => t.CreateDateTime)
-			);
 		}
 
-		public class TblEntityContent : TableDef<TblEntityContent.Cols> {
-			public TblEntityContent() : base(E, "tb_entity_content") { }
+		public class TbTag : TableDef<TbTag.D> {
+			public TbTag() : base(E, "tb_tag") { }
 
-			public class Cols : ColumnsBase {
-				public int ContentRevisionID => As(() => C.ContentRevisionID, ColumnFlags.Serial);
-				public int EntityID => As(() => C.EntityID);
+			public class D : ColumnsBase {
+				public int TagID => As(() => C.TagID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+				public string TagText => As(() => C.TagText, ColumnFlags.Index_1 | ColumnFlags.Unique_1);
+				public DateTime CreateDateTime => As(() => C.CreateDateTime, ColumnFlags.Index_2);
+			}
+		}
+
+		public class TbTagGroup : TableDef<TbTagGroup.D> {
+			public TbTagGroup() : base(E, "tb_tag_group") { }
+
+			public class D : ColumnsBase {
+				public int TagGroupID => As(() => C.TagGroupID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+				public int[] TagIDs => As(() => C.TagIDs, ColumnFlags.Index_1 | ColumnFlags.Unique_1 | ColumnFlags.Gin);
+			}
+		}
+
+		public class TbEntityConst : TableDef<TbEntityConst.D> {
+			public TbEntityConst() : base(E, "tb_entity_const") { }
+
+			public class D : ColumnsBase {
+				public int EntityID => As(() => C.EntityID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+				public int UserID => As(() => C.UserID, ColumnFlags.Index_1);
+				public DateTime CreateDateTime => As(() => C.CreateDateTime, ColumnFlags.Index_2);
+			}
+		}
+
+		public class TbEntityContent : TableDef<TbEntityContent.D> {
+			public TbEntityContent() : base(E, "tb_entity_content") { }
+
+			public class D : ColumnsBase {
+				public int ContentRevisionID => As(() => C.ContentRevisionID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+				public int EntityID => As(() => C.EntityID, ColumnFlags.Index_1);
 				public string Content => As(() => C.Content);
 				public DateTime CreateDateTime => As(() => C.CreateDateTime);
 			}
-
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.ContentRevisionID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, t => t.EntityID));
 		}
 
-		public class TblEntityTag : TableDef<TblEntityTag.Cols> {
-			public TblEntityTag() : base(E, "tb_entity_tag") { }
+		public class TbEntityTag : TableDef<TbEntityTag.D> {
+			public TbEntityTag() : base(E, "tb_entity_tag") { }
 
-			public class Cols : ColumnsBase {
-				public int EntityID => As(() => C.EntityID);
-				public int[] TagIDs => As(() => C.TagIDs);
+			public class D : ColumnsBase {
+				public int EntityID => As(() => C.EntityID, ColumnFlags.PrimaryKey);
+				public int TagGroupID => As(() => C.TagGroupID, ColumnFlags.Index_1);
 			}
-
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.EntityID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(IndexFlags.Gin, t => t.TagIDs));
 		}
 
-		public class TblEntityParent : TableDef<TblEntityParent.Cols> {
-			public TblEntityParent() : base(E, "tb_entity_parent") { }
+		public class TbEntityParent : TableDef<TbEntityParent.D> {
+			public TbEntityParent() : base(E, "tb_entity_parent") { }
 
-			public class Cols : ColumnsBase {
-				public int EntityID => As(() => C.EntityID);
-				public int ParentEntityID => As(() => C.ParentEntityID);
+			public class D : ColumnsBase {
+				public int EntityID => As(() => C.EntityID, ColumnFlags.PrimaryKey);
+				public int ParentEntityID => As(() => C.ParentEntityID, ColumnFlags.Index_1);
 			}
-
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.EntityID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, t => t.ParentEntityID));
 		}
 
-		public class TblEntityHolder : TableDef<TblEntityHolder.Cols> {
-			public TblEntityHolder() : base(E, "tb_entity_holder") { }
+		public class TbEntityHolder : TableDef<TbEntityHolder.D> {
+			public TbEntityHolder() : base(E, "tb_entity_holder") { }
 
-			public class Cols : ColumnsBase {
+			public class D : ColumnsBase {
 				public int EntityID => As(() => C.EntityID);
 				public int[] CachedHolderIDs => As(() => C.CachedHolderIDs);
 				public int[] AddHolderIDs => As(() => C.AddHolderIDs);
@@ -147,27 +154,14 @@ namespace Test1 {
 			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(IndexFlags.Gin, t => t.CachedWatcherIDs));
 		}
 
-		public class TblTag : TableDef<TblTag.Cols> {
-			public TblTag() : base(E, "tb_tag") { }
-
-			public class Cols : ColumnsBase {
-				public int TagID => As(() => C.TagID);
-				public string TagText => As(() => C.TagText);
-				public DateTime CreateDateTime => As(() => C.CreateDateTime);
-			}
-
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.TagID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(0, t => t.TagText), MakeIndex(0, t => t.CreateDateTime));
-		}
-
-		public static TblUser User { get; } = new TblUser();
-		public static TblEntityConst EntityConst { get; } = new TblEntityConst();
-		public static TblEntityContent EntityContent { get; } = new TblEntityContent();
-		public static TblEntityTag EntityTag { get; } = new TblEntityTag();
-		public static TblEntityParent EntityParent { get; } = new TblEntityParent();
-		public static TblEntityHolder EntityHolder { get; } = new TblEntityHolder();
+		public static TbUser User { get; } = new TbUser();
+		public static TbEntityConst EntityConst { get; } = new TbEntityConst();
+		public static TbEntityContent EntityContent { get; } = new TbEntityContent();
+		public static TbEntityTag EntityTag { get; } = new TbEntityTag();
+		public static TbEntityParent EntityParent { get; } = new TbEntityParent();
+		public static TbEntityHolder EntityHolder { get; } = new TbEntityHolder();
 		public static TblEntityWatcher EntityWatcher { get; } = new TblEntityWatcher();
-		public static TblTag Tag { get; } = new TblTag();
+		public static TbTag Tag { get; } = new TbTag();
 	}
 
 	class Program {

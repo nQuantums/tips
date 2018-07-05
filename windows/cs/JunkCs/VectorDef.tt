@@ -1,0 +1,544 @@
+﻿<#@ template debug="false" hostspecific="true" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="Microsoft.Csharp" #>
+<#@ assembly name="System.Runtime.Serialization" #>
+<#@ assembly name="$(SolutionDir)\FT4\bin\Debug\FT4.dll" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Runtime.Serialization" #>
+<#@ import namespace="System.Runtime.Serialization.Json" #>
+<#@ output extension="/" #>
+<#
+var defs = FT4.VectorDefines.FromJsonFile(Host.ResolvePath("VectorDef.json"));
+defs.Generate(Path.GetDirectoryName(this.Host.TemplateFile), this.GenerationEnvironment, d => {
+#>
+using System;
+using System.Xml.Serialization;
+using System.Runtime.InteropServices;
+<#=d.UsingForInlining()#>
+
+using element = <#=d.FullType#>;
+using vector = Jk.<#=d.ClassName#>;
+
+namespace Jk {
+	[XmlType("Jk.<#=d.ClassName#>")]
+	[StructLayout(LayoutKind.Explicit, Pack = <#=d.ElementSize#>, Size = <#=d.FullSize#>)]
+	[Serializable]
+	public struct <#=d.ClassName#> : IJsonable {
+		public static readonly vector Zero = new vector();
+<#=d.ElementWise(
+	(i) => "\t\tpublic static readonly vector Axis_E = new vector(" + d.Axis(i) + ");",
+	delimiter: (i) => "\n")#>
+		public static readonly vector MinValue = new vector(<#=d.Repeat("element.MinValue")#>);
+		public static readonly vector MaxValue = new vector(<#=d.Repeat("element.MaxValue")#>);
+
+<#=d.DefElems("\t\t")#>
+
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(element s) {
+<#=d.ElementWise("\t\t\t_E = s;")#>
+		}
+
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(<#=d.Args()#>) {
+<#=d.ElementWise("\t\t\t_E = _e;")#>
+		}
+
+<#foreach(var ovd in d.OtherTypes) {#>
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(<#=ovd.ClassName#> v) {
+<#=d.ElementWise("\t\t\t_E = (element)v._E;")#>
+		}
+<#}#>
+
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(element[] arr) {
+<#=d.ElementWise("\t\t\t_E = arr[_i];")#>
+		}
+
+		public element this[int i] {
+			get {
+				switch (i) {
+<#=d.ElementWise(
+	"\t\t\t\tcase _i: return _E;",
+	delimiter: "\n",
+	postfix: "\t\t\t\tdefault: throw new IndexOutOfRangeException();")#>
+				}
+			}
+			set {
+				switch (i) {
+<#=d.ElementWise(
+	"\t\t\t\tcase _i: _E = value; break;",
+	delimiter: "\n",
+	postfix: "\t\t\t\tdefault: throw new IndexOutOfRangeException();")#>
+				}
+			}
+		}
+
+		public bool IsZero {
+			get {
+<#=d.ElementWise(
+	"_E == 0",
+	delimiter: " && ",
+	prefix: "\t\t\t\treturn ",
+	terminator: ";")#>
+			}
+		}
+
+		public bool HasZero {
+			get {
+<#=d.ElementWise(
+	"_E == 0",
+	delimiter: " || ",
+	prefix: "\t\t\t\treturn ",
+	terminator: ";")#>
+			}
+		}
+
+		public override bool Equals(object obj) {
+			if (obj is vector)
+				return (vector)obj == this;
+			else
+				return false;
+		}
+
+		public override int GetHashCode() {
+<#=d.ElementWise(
+	(i) => {
+		var s = "(_E.GetHashCode()";
+		var shift = i % 3;
+		if(shift == 1)
+			s += " << 2";
+		else if(shift == 2)
+			s += " >> 2";
+		s += ")";
+		return s;
+	},
+	delimiter: (i) => " ^ ",
+	prefix: () => "\t\t\treturn ",
+	terminator: () => ";")#>
+		}
+
+		public override string ToString() {
+			return string.Concat("{ ", <#=d.ElementWise("\"\\\"_E\\\": \" + _E", ", \", \", ")#>, " }");
+		}
+
+		public string ToString(string f) {
+			return string.Concat("{ ", <#=d.ElementWise("\"\\\"_E\\\": \" + _E.ToString(f)", ", \", \", ")#>, " }");
+		}
+
+		public string ToJsonString() {
+			return this.ToString();
+		}
+
+		public element LengthSquare {
+<#=d.ElementWise(
+	"_E * _E",
+	delimiter: " + ",
+	prefix: "\t\t\tget { return ",
+	terminator: "; }")#>
+		}
+
+		public element Length {
+			get { return (element)Math.Sqrt(LengthSquare); }
+		}
+
+		<#=d.Inlining()#>
+		public void NormalizeSelf() {
+			var l = LengthSquare;
+			if (l == 0 || l == 1)
+				return;
+			l = 1 / (element)Math.Sqrt(l);
+<#=d.ElementWise(
+	"_E *= l;",
+	delimiter: " ",
+	prefix: "\t\t\t")#>
+		}
+
+		<#=d.Inlining()#>
+		public vector Normalize() {
+			var l = LengthSquare;
+			if (l == 0 || l == 1)
+				return this;
+			l = 1 / (element)Math.Sqrt(l);
+			return new vector(<#=d.ElementWise("_E * l", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		public void RelengthSelf(element length) {
+			var l = LengthSquare;
+			if (l == 0 || l == length)
+				return;
+			l = length / (element)Math.Sqrt(l);
+<#=d.ElementWise(
+	"_E *= l;",
+	delimiter: " ",
+	prefix: "\t\t\t")#>
+		}
+
+		<#=d.Inlining()#>
+		public vector Relength(element length) {
+			var l = LengthSquare;
+			if (l == 0 || l == length)
+				return this;
+			l = length / (element)Math.Sqrt(l);
+			return new vector(<#=d.ElementWise("_E * l", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		public void AddSelf(element s) {
+<#=d.ElementWise(
+	"\t\t\t_E += s;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public void AddSelf(vector v) {
+<#=d.ElementWise(
+	"\t\t\t_E += v._E;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public void SubSelf(element s) {
+<#=d.ElementWise(
+	"\t\t\t_E -= s;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public void SubSelf(vector v) {
+<#=d.ElementWise(
+	"\t\t\t_E -= v._E;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public void MulSelf(element s) {
+<#=d.ElementWise(
+	"\t\t\t_E *= s;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public void MulSelf(vector v) {
+<#=d.ElementWise(
+	"\t\t\t_E *= v._E;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public void DivSelf(element s) {
+<#=d.ElementWise(
+	"\t\t\t_E /= s;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public void DivSelf(vector v) {
+<#=d.ElementWise(
+	"\t\t\t_E /= v._E;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public void ClipSelf(element min, element max) {
+<#=d.ElementWise(
+	"\t\t\tif (_E < min) _E = min; else if (max < _E) _E = max;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public vector Clip(element min, element max) {
+			var v = this;
+<#=d.ElementWise(
+	"\t\t\tif (v._E < min) v._E = min; else if (max < v._E) v._E = max;",
+	delimiter: "\n")#>
+			return v;
+		}
+
+		<#=d.Inlining()#>
+		public void ClipSelf(vector min, vector max) {
+<#=d.ElementWise(
+	"\t\t\tif (_E < min._E) _E = min._E; else if (max._E < _E) _E = max._E;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public vector Clip(vector min, vector max) {
+			vector v = this;
+<#=d.ElementWise(
+	"\t\t\tif (v._E < min._E) v._E = min._E; else if (max._E < v._E) v._E = max._E;",
+	delimiter: "\n")#>
+			return v;
+		}
+
+		<#=d.Inlining()#>
+		public void AbsSelf() {
+<#=d.ElementWise(
+	"\t\t\t_E = Math.Abs(_E);",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public vector Abs() {
+			return new vector(<#=d.ElementWise("Math.Abs(_E)", ", ")#>);
+		}
+<#
+// ベクタ長別の処理
+switch(d.length) {
+case 2:#>
+		<#=d.Inlining()#>
+		public void RightAngleSelf() {
+			var t = X;
+			X = -Y;
+			Y = t;
+		}
+
+		<#=d.Inlining()#>
+		public vector RightAngle() {
+			return new vector(-Y, X);
+		}
+<#	break;
+}#>
+
+		<#=d.Inlining()#>
+		public element Sum() {
+			return <#=d.ElementWise("_E", " + ")#>;
+		}
+
+		<#=d.Inlining()#>
+		public element Product() {
+			return <#=d.ElementWise("_E", " * ")#>;
+		}
+
+		<#=d.Inlining()#>
+		public element Max() {
+			var m = X;
+<#=d.ElementWise(
+	"\t\t\tif (_E > m) m = _E;",
+	delimiter: "\n",
+	startIndex: 1)#>
+			return m;
+		}
+
+		<#=d.Inlining()#>
+		public element Min() {
+			var m = X;
+<#=d.ElementWise(
+	"\t\t\tif (_E < m) m = _E;",
+	delimiter: "\n",
+	startIndex: 1)#>
+			return m;
+		}
+
+		<#=d.Inlining()#>
+		public void ElementWiseMinSelf(element s) {
+<#=d.ElementWise(
+	"\t\t\tif (s < _E) _E = s;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public void ElementWiseMaxSelf(element s) {
+<#=d.ElementWise(
+	"\t\t\tif (s > _E) _E = s;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public void ElementWiseMinSelf(vector v) {
+<#=d.ElementWise(
+	"\t\t\tif (v._E < _E) _E = v._E;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public void ElementWiseMaxSelf(vector v) {
+<#=d.ElementWise(
+	"\t\t\tif (v._E > _E) _E = v._E;",
+	delimiter: "\n")#>
+		}
+
+		<#=d.Inlining()#>
+		public element Dot(vector v) {
+			return <#=d.ElementWise("_E * v._E", " + ")#>;
+		}
+
+		<#=d.Inlining()#>
+		public vector Cross(vector v) {
+			return new vector(<#=d.ElementWise("_Ep1 * v._Ep2 - _Ep2 * v._Ep1", ", ")#>);
+		}
+
+<#if (d.TypeDefine.IsReal) {#>
+		<#=d.Inlining()#>
+		public vector Floor() {
+			return new vector(<#=d.ElementWise("(element)Math.Floor(_E)", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		public vector Ceil() {
+			return new vector(<#=d.ElementWise("(element)Math.Ceiling(_E)", ", ")#>);
+		}
+<#}#>
+
+		public bool LessIdThan(vector v) {
+<#=d.ElementWise(
+	"\t\t\tif (_E < v._E) return true;\n\t\t\tif (_E > v._E) return false;",
+	delimiter: "\n")#>
+			return false;
+		}
+
+		<#=d.Inlining()#>
+		static public bool operator ==(vector v1, vector v2) {
+			return <#=d.ElementWise("v1._E == v2._E", " && ")#>;
+		}
+
+		<#=d.Inlining()#>
+		static public bool operator !=(vector v1, vector v2) {
+			return <#=d.ElementWise("v1._E != v2._E", " || ")#>;
+		}
+
+		<#=d.Inlining()#>
+		static public bool operator <(vector v1, vector v2) {
+<#=d.ElementWise(
+	"\t\t\tif (v1._E >= v2._E) return false;",
+	delimiter: "\n")#>
+			return true;
+		}
+
+		<#=d.Inlining()#>
+		static public bool operator >(vector v1, vector v2) {
+<#=d.ElementWise(
+	"\t\t\tif (v1._E <= v2._E) return false;",
+	delimiter: "\n")#>
+			return true;
+		}
+
+		<#=d.Inlining()#>
+		static public bool operator <=(vector v1, vector v2) {
+<#=d.ElementWise(
+	"\t\t\tif (v1._E > v2._E) return false;",
+	delimiter: "\n")#>
+			return true;
+		}
+
+		<#=d.Inlining()#>
+		static public bool operator >=(vector v1, vector v2) {
+<#=d.ElementWise(
+	"\t\t\tif (v1._E < v2._E) return false;",
+	delimiter: "\n")#>
+			return true;
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator +(vector v) {
+			return v;
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator -(vector v) {
+			return new vector(<#=d.ElementWise("-v._E", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator +(vector v1, vector v2) {
+			return new vector(<#=d.ElementWise("v1._E + v2._E", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator -(vector v1, vector v2) {
+			return new vector(<#=d.ElementWise("v1._E - v2._E", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator +(vector v, element s) {
+			return new vector(<#=d.ElementWise("v._E + s", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator +(element s, vector v) {
+			return new vector(<#=d.ElementWise("s + v._E", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator -(vector v, element s) {
+			return new vector(<#=d.ElementWise("v._E - s", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator -(element s, vector v) {
+			return new vector(<#=d.ElementWise("s - v._E", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator *(vector v, element s) {
+			return new vector(<#=d.ElementWise("v._E * s", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator *(element s, vector v) {
+			return new vector(<#=d.ElementWise("s * v._E", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator /(vector v, element s) {
+			return new vector(<#=d.ElementWise("v._E / s", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator *(vector v1, vector v2) {
+			return new vector(<#=d.ElementWise("v1._E * v2._E", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector operator /(vector v1, vector v2) {
+			return new vector(<#=d.ElementWise("v1._E / v2._E", ", ")#>);
+		}
+
+		<#=d.Inlining()#>
+		static public vector ElementWiseMin(vector v1, vector v2) {
+<#=d.ElementWise(
+	"\t\t\tif (v2._E < v1._E) v1._E = v2._E;",
+	delimiter: "\n")#>
+			return v1;
+		}
+
+		<#=d.Inlining()#>
+		static public vector ElementWiseMax(vector v1, vector v2) {
+<#=d.ElementWise(
+	"\t\t\tif (v2._E < v1._E) v2._E = v1._E;",
+	delimiter: "\n")#>
+			return v2;
+		}
+
+		<#=d.Inlining()#>
+		public static void ElementWiseMinMax(vector v1, vector v2, out vector min, out vector max) {
+<#=d.ElementWise(
+	"\t\t\tif (v2._E < v1._E) { var t = v1._E; v1._E = v2._E; v2._E = t; };",
+	delimiter: "\n")#>
+			min = v1;
+			max = v2;
+		}
+
+#if UNITY_5_3_OR_NEWER
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(UnityEngine.Vector<#=d.length#> v) {
+<#=d.ElementWise(
+	"\t\t\t_E = (element)v._e;",
+	delimiter: "\n")#>
+		}
+		<#=d.Inlining()#>
+		public static implicit operator vector(UnityEngine.Vector<#=d.length#> v) {
+			return new vector(<#=d.ElementWise("(element)v._e", ", ")#>);
+		}
+		<#=d.Inlining()#>
+		public static implicit operator UnityEngine.Vector<#=d.length#>(vector v) {
+			return new UnityEngine.Vector<#=d.length#>(<#=d.ElementWise("(float)v._E", ", ")#>);
+		}
+#endif
+	}
+}
+<#}); #>
