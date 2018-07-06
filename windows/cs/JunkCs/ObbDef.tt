@@ -1,0 +1,230 @@
+﻿<#@ template debug="false" hostspecific="true" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="Microsoft.Csharp" #>
+<#@ assembly name="System.Runtime.Serialization" #>
+<#@ assembly name="$(SolutionDir)\FT4\bin\Debug\FT4.dll" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Runtime.Serialization" #>
+<#@ import namespace="System.Runtime.Serialization.Json" #>
+<#@ output extension="/" #>
+<#
+var defs = FT4.ObbDefines.FromJsonFile(Host.ResolvePath("ObbDef.json"));
+defs.Generate(Path.GetDirectoryName(this.Host.TemplateFile), this.GenerationEnvironment, d => {
+#>
+using System;
+using System.Xml.Serialization;
+using System.Runtime.InteropServices;
+
+using element = <#=d.FullType#>;
+using vector = Jk.<#=d.VectorDefine.ClassName#>;
+using volume = Jk.<#=d.ClassName#>;
+using range = Jk.<#=d.RangeDefine.ClassName#>;
+using aabb = Jk.<#=d.AabbDefine.ClassName#>;
+<#=d.UsingForInlining()#>
+
+namespace Jk {
+	/// <summary>
+	/// 方向付き境界ボックス
+	/// </summary>
+	[XmlType("Jk.<#=d.ClassName#>")]
+	[StructLayout(LayoutKind.Explicit, Pack = <#=d.ElementSize#>, Size = <#=d.FullSize#>)]
+	[Serializable]
+	public struct <#=d.ClassName#> : IJsonable {
+<#=d.DefElems("\t\t")#>
+
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(<#=d.Args()#>) {
+<#=d.ElementWise("\t\t\t_E = _e;")#>
+		}
+
+<#foreach(var ovd in d.OtherTypes) {#>
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(<#=ovd.ClassName#> v) {
+<#=d.ElementWise("\t\t\t_E = new vector(v._E);")#>
+		}
+<#}#>
+
+		<#=d.Inlining()#>
+		public <#=d.ClassName#>(aabb aabb) {
+			Center = aabb.Center;
+			Extents = aabb.Extents;
+<#=d.VectorDefine.ElementWise(
+	"\t\t\tA_e = vector.Axis_E;",
+	delimiter: "\n")#>
+		}
+
+		public override bool Equals(object obj) {
+			if (obj is volume)
+				return (volume)obj == this;
+			else
+				return false;
+		}
+
+		public override int GetHashCode() {
+<#=d.ElementWise(
+	(i) => {
+		var s = "(_E.GetHashCode()";
+		var shift = i % 3;
+		if(shift == 1)
+			s += " << 2";
+		else if(shift == 2)
+			s += " >> 2";
+		s += ")";
+		return s;
+	},
+	delimiter: (i) => " ^ ",
+	prefix: () => "\t\t\treturn ",
+	terminator: () => ";")#>
+		}
+
+		public override string ToString() {
+			return string.Concat("{ ", <#=d.ElementWise("\"\\\"_E\\\": \" + _E", ", \", \", ")#>, " }");
+		}
+
+		public string ToJsonString() {
+			return this.ToString();
+		}
+
+		public bool IsValid {
+			get {
+				return vector.Zero <= Extents;
+			}
+		}
+
+		public bool IsAabb {
+			get {
+				return <#=d.VectorDefine.ElementWise("A_e == vector.Axis_E", delimiter: " && ")#>;
+			}
+		}
+
+		public range Range {
+			get {
+				var c = Center;
+				var ext = Extents;
+<#=d.VectorDefine.ElementWise("\t\t\t\tvar ea_e = A_e * ext._E;", "\n")#>
+				var r = range.InvalidValue;
+<#for (int flag = 0; flag < (1 << d.length); flag++) {#>
+				r.MergeSelf(c<#=d.VectorDefine.ElementWise((i) => ((flag & (1 << i)) != 0 ? " + " : " - ") + "ea_e", null)#>);
+<#}#>
+				return r;
+			}
+		}
+
+<#for (int flag = 0; flag < (1 << d.length); flag++) {#>
+		public vector P<#=flag#> {
+			get {
+				var ext = Extents;
+				return Center<#=d.VectorDefine.ElementWise((i) => ((flag & (1 << i)) != 0 ? " + " : " - ") + "A_e * ext._E", null)#>;
+			}
+		}
+<#}#>
+
+		public vector Size {
+			get {
+				return Extents * 2;
+			}
+		}
+
+		public element Perimeter {
+			get {
+				var size = Extents * 2;
+				return 2 * size.Sum();
+			}
+		}
+
+		public element VolumeAndEdgesLength {
+			get {
+				var s = Extents * 2;
+				return s.Product() + s.Sum();
+			}
+		}
+
+		<#=d.Inlining()#>
+		public bool Contains(vector v) {
+			v.SubSelf(Center);
+			v = <#=d.VectorDefine.ElementWise("(A_e * v._E)", " + ")#>;
+			return <#=d.VectorDefine.ElementWise("Math.Abs(v._E) <= Extents._E", " && ")#>;
+		}
+
+<#
+// ベクタ長別の処理
+switch(d.length) {
+case 2:#>
+		public bool Intersects(volume obb2) {
+			volume obb1;
+			if (this.IsAabb) {
+				obb1 = obb2;
+				obb2 = this;
+			} else {
+				obb1 = this;
+			}
+
+			var d = new vector();
+			var v = obb1.Center - obb2.Center;
+
+			var eax = obb2.Ax * obb2.Extents.X;
+			var eay = obb2.Ay * obb2.Extents.Y;
+			var e1 = eax + eay;
+			var e2 = eay - eax;
+			d.X = Math.Abs(obb1.Ax.Dot(e1));
+			d.Y = Math.Abs(obb1.Ax.Dot(e2));
+			if (obb1.Extents.X + d.Max() < Math.Abs(obb1.Ax.Dot(v)))
+				return false;
+			d.X = Math.Abs(obb1.Ay.Dot(e1));
+			d.Y = Math.Abs(obb1.Ay.Dot(e2));
+			if (obb1.Extents.Y + d.Max() < Math.Abs(obb1.Ay.Dot(v)))
+				return false;
+
+			eax = obb1.Ax * obb1.Extents.X;
+			eay = obb1.Ay * obb1.Extents.Y;
+			e1 = eax + eay;
+			e2 = eay - eax;
+			d.X = Math.Abs(obb2.Ax.Dot(e1));
+			d.Y = Math.Abs(obb2.Ax.Dot(e2));
+			if (obb2.Extents.X + d.Max() < Math.Abs(obb2.Ax.Dot(v)))
+				return false;
+			d.X = Math.Abs(obb2.Ay.Dot(e1));
+			d.Y = Math.Abs(obb2.Ay.Dot(e2));
+			if (obb2.Extents.Y + d.Max() < Math.Abs(obb2.Ay.Dot(v)))
+				return false;
+
+			return true;
+		}
+<#	break;
+}#>
+
+		<#=d.Inlining()#>
+		public bool IntersectsAsAabb(aabb aabb) {
+			var v = Center - aabb.Center;
+			var extents = Extents;
+			return <#=d.VectorDefine.ElementWise("Math.Abs(v._E) <= extents._E + aabb.Extents._E", " && ")#>;
+		}
+
+		static public bool operator ==(volume b1, volume b2) {
+			return <#=d.ElementWise("b1._E == b2._E", " && ")#>;
+		}
+
+		static public bool operator !=(volume b1, volume b2) {
+			return <#=d.ElementWise("b1._E != b2._E", " || ")#>;
+		}
+
+		static public volume operator +(volume b, vector v) {
+			b.Center.AddSelf(v);
+			return b;
+		}
+
+		static public volume operator +(vector v, volume b) {
+			b.Center.AddSelf(v);
+			return b;
+		}
+
+		static public volume operator -(volume b, vector v) {
+			b.Center.SubSelf(v);
+			return b;
+		}
+	}
+}
+<#}); #>
