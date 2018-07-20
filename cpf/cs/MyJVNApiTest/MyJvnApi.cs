@@ -35,6 +35,7 @@ namespace MyJVNApiTest {
 					_NamespaceManager.AddNamespace("tlpMarking", "http://data-marking.mitre.org/extensions/MarkingStructure#TLP-1");
 					_NamespaceManager.AddNamespace("vuldef", "http://jvn.jp/vuldef/");
 					_NamespaceManager.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+					_NamespaceManager.AddNamespace("mjres", "http://jvndb.jvn.jp/myjvn/Results");
 				}
 				return _NamespaceManager;
 			}
@@ -74,8 +75,18 @@ namespace MyJVNApiTest {
 			}
 		}
 
+		/// <summary>
+		/// レスポンス内のステータス
+		/// </summary>
 		public class Status {
 			public XElement Element { get; private set; }
+
+			public string Version {
+				get {
+					var e = this.Element.Attribute("version");
+					return e != null ? e.Value : throw new ApplicationException("応答の status に version が存在しません。");
+				}
+			}
 
 			public string RetCd {
 				get {
@@ -104,13 +115,23 @@ namespace MyJVNApiTest {
 			}
 		}
 
+		/// <summary>
+		/// 脆弱性対策概要情報
+		/// </summary>
 		public class VulnOverviewList {
 			public XDocument Doc { get; private set; }
 
+			/// <summary>
+			/// ステータス
+			/// </summary>
 			public Status Status => new Status(this.Doc.XPathSelectElement("//status:Status", NamespaceManager));
+
+			/// <summary>
+			/// 脆弱性対策概要情報一覧
+			/// </summary>
 			public IEnumerable<VulnOverviewItem> Items {
 				get {
-					foreach (var item in this.Doc.XPathSelectElements("/rdf:RDF/rss:item", MyJvnApi.NamespaceManager)) {
+					foreach (var item in this.Doc.XPathSelectElements("/rdf:RDF/rss:item", NamespaceManager)) {
 						yield return new VulnOverviewItem(item);
 					}
 				}
@@ -121,15 +142,93 @@ namespace MyJVNApiTest {
 			}
 		}
 
+		/// <summary>
+		/// ベンダ一覧
+		/// </summary>
+		public class VendorList {
+			public XDocument Doc { get; private set; }
+
+			/// <summary>
+			/// ステータス
+			/// </summary>
+			public Status Status => new Status(this.Doc.XPathSelectElement("/mjres:Result/status:Status", NamespaceManager));
+
+			/// <summary>
+			/// ベンダ戒情報一覧
+			/// </summary>
+			public IEnumerable<VendorInfo> Items {
+				get {
+					foreach (var item in this.Doc.XPathSelectElements("/mjres:Result/mjres:VendorInfo/mjres:Vendor", NamespaceManager)) {
+						yield return new VendorInfo(item);
+					}
+				}
+			}
+
+			public VendorList(XDocument doc) {
+				this.Doc = doc;
+			}
+		}
+
+		/// <summary>
+		/// ベンダ情報
+		/// </summary>
+		public class VendorInfo {
+			public XElement Element { get; private set; }
+
+			/// <summary>
+			/// ベンダ名
+			/// </summary>
+			public string Name {
+				get {
+					var e = this.Element.Attribute("vname");
+					return e != null ? e.Value : throw new ApplicationException("ベンダー情報に vname が存在しません。");
+				}
+			}
+
+			/// <summary>
+			/// CPE ベンダ名
+			/// </summary>
+			public string Cpe {
+				get {
+					var e = this.Element.Attribute("cpe");
+					return e != null ? e.Value : throw new ApplicationException("ベンダー情報に cpe が存在しません。");
+				}
+			}
+
+			/// <summary>
+			/// ベンダID
+			/// </summary>
+			public string Id {
+				get {
+					var e = this.Element.Attribute("vid");
+					return e != null ? e.Value : throw new ApplicationException("ベンダー情報に vid が存在しません。");
+				}
+			}
+
+			public VendorInfo(XElement element) {
+				this.Element = element;
+			}
+		}
+
+		/// <summary>
+		/// 注意警戒情報
+		/// </summary>
 		public class VulnOverviewItem {
 			public XElement Element { get; private set; }
 
+			/// <summary>
+			/// 注意警戒のタイトル
+			/// </summary>
 			public string Title {
 				get {
 					var e = this.Element.XPathSelectElement("./rss:title", NamespaceManager);
 					return e != null ? e.Value : throw new ApplicationException("getVulnOverviewList の応答アイテムに title が存在しないものがありました。");
 				}
 			}
+
+			/// <summary>
+			/// 注意警戒の識別子
+			/// </summary>
 			public string Identifier {
 				get {
 					var e = this.Element.XPathSelectElement("./sec:identifier", NamespaceManager);
@@ -155,7 +254,7 @@ namespace MyJVNApiTest {
 
 
 		/// <summary>
-		/// フィルタリング条件に当てはまる脆弱性対策の概要情報リストを文字列で取得します。
+		/// 脆弱性対策概要情報一覧の取得
 		/// </summary>
 		/// <param name="startItem">エントリ開始位置、1～応答エントリ数</param>
 		/// <param name="publicDateRange">発見年月日範囲または<see cref="TimeRange.Empty"/></param>
@@ -169,7 +268,19 @@ namespace MyJVNApiTest {
 		}
 
 		/// <summary>
-		/// フィルタリング条件に当てはまる脆弱性対策の概要情報リストを文字列で取得します。
+		/// ベンダ一覧の取得
+		/// </summary>
+		/// <param name="startItem">エントリ開始位置、1～応答エントリ数</param>
+		/// <param name="maxCountItem">エントリ取得件数、1～10,000</param>
+		/// <param name="lang">表示言語 、ja:日本語、en:英語</param>
+		/// <returns>XML文字列</returns>
+		public static async Task<VendorList> getVendorList(int startItem = 0, int maxCountItem = 0, string lang = "ja") {
+			var result = await getVendorListAsString(startItem, maxCountItem, lang);
+			return new VendorList(XDocument.Parse(result));
+		}
+
+		/// <summary>
+		/// 脆弱性対策概要情報一覧の取得
 		/// </summary>
 		/// <param name="startItem">エントリ開始位置、1～応答エントリ数</param>
 		/// <param name="publicDateRange">発見年月日範囲または<see cref="TimeRange.Empty"/></param>
@@ -224,9 +335,33 @@ namespace MyJVNApiTest {
 		/// <param name="vulnId">脆弱性対策情報ID</param>
 		/// <param name="lang">表示言語 、ja:日本語、en:英語</param>
 		/// <returns>XML文字列</returns>
-		public static async Task<string> getVulnDetailInfo(string vulnId, string lang = "ja") {
+		public static async Task<string> getVulnDetailInfoAsString(string vulnId, string lang = "ja") {
 			var sb = new StringBuilder("https://jvndb.jvn.jp/myjvn?method=getVulnDetailInfo&feed=hnd");
 			sb.Append("&vulnId=" + vulnId);
+			sb.Append("&lang=" + lang);
+
+			using (HttpClient client = new HttpClient())
+			using (var res = await client.GetAsync(sb.ToString()))
+			using (var content = res.Content) {
+				return await content.ReadAsStringAsync();
+			}
+		}
+
+		/// <summary>
+		/// ベンダ一覧の取得
+		/// </summary>
+		/// <param name="startItem">エントリ開始位置、1～応答エントリ数</param>
+		/// <param name="maxCountItem">エントリ取得件数、1～10,000</param>
+		/// <param name="lang">表示言語 、ja:日本語、en:英語</param>
+		/// <returns>XML文字列</returns>
+		public static async Task<string> getVendorListAsString(int startItem = 0, int maxCountItem = 0, string lang = "ja") {
+			var sb = new StringBuilder("https://jvndb.jvn.jp/myjvn?method=getVendorList&feed=hnd");
+			if (startItem != 0) {
+				sb.Append("&startItem=" + startItem);
+			}
+			if (maxCountItem != 0) {
+				sb.Append("&maxCountItem=" + maxCountItem);
+			}
 			sb.Append("&lang=" + lang);
 
 			using (HttpClient client = new HttpClient())
