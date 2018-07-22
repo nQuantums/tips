@@ -19,12 +19,16 @@ namespace MySQLTest1 {
 				using (var cmd = con.CreateCommand()) {
 					cmd.CommandTimeout = 0;
 
-//					cmd.CommandText = $@"
-//SELECT `COLUMN_NAME` 
-//FROM `INFORMATION_SCHEMA`.`COLUMNS` 
-//WHERE `TABLE_SCHEMA`='{DbName}' 
-//    AND `TABLE_NAME`='{TableName}';
-//";
+					//					cmd.CommandText = $@"
+					//SELECT `COLUMN_NAME` 
+					//FROM `INFORMATION_SCHEMA`.`COLUMNS` 
+					//WHERE `TABLE_SCHEMA`='{DbName}' 
+					//    AND `TABLE_NAME`='{TableName}';
+					//";
+
+
+					Console.WriteLine("# プライマリキー一覧");
+					Console.WriteLine();
 
 					cmd.CommandText = $@"
 SELECT 
@@ -48,6 +52,11 @@ ORDER by
 		}
 
 		static void ShowResult(MySqlCommand cmd) {
+			Console.WriteLine("```sql");
+			Console.WriteLine(cmd.CommandText);
+			Console.WriteLine("```");
+			Console.WriteLine();
+
 			using (var dr = cmd.ExecuteReader()) {
 				do {
 					Console.Write("|");
