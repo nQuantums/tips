@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.IO;
 using MySql.Data.MySqlClient;
 
 namespace MySqlDiff {
@@ -148,23 +149,49 @@ namespace MySqlDiff {
 		}
 
 		static List<Schema> Schemas = new List<Schema>();
+		static bool Sql = false;
+		static bool SaveNodiff = false;
 
 		static int Main(string[] args) {
-			if (args.Length < 3) {
+			// 必須引数取得
+			var requiredArgs = args.Where(a => !a.StartsWith("/")).ToArray();
+
+			// 必須引数が足りなかったら使い方表示
+			if (requiredArgs.Length < 3) {
 				Console.WriteLine("--------------------------------");
 				Console.WriteLine("指定された２スキーマ間のデータの差分を表示する。");
 				Console.WriteLine("スキーマ内のテーブル構造は同じでなければならない。");
 				Console.WriteLine();
-				Console.WriteLine(" usage : MySqlDiff <接続文字列> <スキーマ1> <スキーマ2>");
+				Console.WriteLine("usage: MySqlDiff [オプション] <接続文字列> <スキーマ1> <スキーマ2>");
+				Console.WriteLine("  オプション:");
+				Console.WriteLine("    /sql         : SQLも出力する。");
+				Console.WriteLine("    /save_nodiff : 差が無いテーブルの出力を残す。");
+				Console.WriteLine();
+				Console.WriteLine("カレントディレクトリに MySqlDiff{yyyyMMddHHmmss} フォルダを作成しその中にテーブル毎に差分ファイルを作成する。");
 				Console.WriteLine("--------------------------------");
 				return 0;
 			}
 
-			var connectionString = args[0];
-			var schema1 = args[1];
-			var schema2 = args[2];
+			// オプション取得
+			foreach (var option in args.Where(a => a.StartsWith("/"))) {
+				switch (option.Substring(1)) {
+				case "sql":
+					Sql = true;
+					break;
+				case "save_nodiff":
+					SaveNodiff = true;
+					break;
+				}
+			}
 
-			using (var con = new MySqlConnection(connectionString)) {
+			// 出力先ディレクトリ作成
+			var dir = "MySqlDiff" + DateTime.Now.ToString("yyyyMMddHHmmss");
+			Directory.CreateDirectory(dir);
+
+			// 使用文字コード
+			var enc = new UTF8Encoding(false);
+
+			using (var con = new MySqlConnection(requiredArgs[0])) {
 				con.Open();
 
 				using (var cmd = con.CreateCommand()) {
@@ -172,14 +199,24 @@ namespace MySqlDiff {
 
 					// 指定された２つのスキーマ情報を取得
 					for (int i = 1; i <= 2; i++) {
-						AddSchema(cmd, args[i]);
+						AddSchema(cmd, requiredArgs[i]);
 					}
 
 					// 両方のスキーマに存在するテーブルの比較を行う
 					foreach (var table1 in Schemas[0].Tables) {
 						var table2 = Schemas[1][table1.Name];
 						if (table2 != null) {
-							DiffTable(cmd, table1, table2);
+							var fileName = Path.Combine(dir, table1.Name) + ".md";
+							int count = 0;
+
+							using (var fs = new FileStream(fileName, FileMode.Create, FileAccess.ReadWrite, FileShare.Read))
+							using (var sw = new StreamWriter(fs, enc)) {
+								count = DiffTable(cmd, table1, table2, sw);
+							}
+
+							if (count == 0 && !SaveNodiff) {
+								File.Delete(fileName);
+							}
 						}
 					}
 				}
@@ -193,6 +230,7 @@ namespace MySqlDiff {
 		/// </summary>
 		static void AddSchema(MySqlCommand cmd, string schemaName) {
 			cmd.Parameters.Clear();
+			cmd.Parameters.AddWithValue("@schemaName", schemaName);
 			cmd.CommandText = $@"
 SELECT
 	c.table_schema
@@ -206,7 +244,7 @@ FROM
 	information_schema.columns c
 	LEFT JOIN information_schema.key_column_usage u ON u.table_schema=c.table_schema AND u.table_name=c.table_name AND u.column_name=c.column_name
 WHERE
-	c.table_schema='{schemaName}' AND (u.constraint_name='PRIMARY' OR u.constraint_name IS NULL);
+	c.table_schema=@schemaName AND (u.constraint_name='PRIMARY' OR u.constraint_name IS NULL);
 ";
 			var schema = new Schema(schemaName);
 			using (var dr = cmd.ExecuteReader()) {
@@ -233,49 +271,28 @@ WHERE
 		}
 
 		/// <summary>
-		/// 指定テーブルのデータの差分を出力する
-		/// </summary>
-		static void DiffTable(MySqlCommand cmd, string tableName) {
-			var tables = new List<Table>();
-			foreach (var schema in Schemas) {
-				var table = schema[tableName];
-				if (table == null) {
-					throw new ApplicationException($"テーブル {tableName} は {schema.Name} 内に存在しません。");
-				}
-				tables.Add(table);
-			}
-
-			DiffTable(cmd, tables[0], tables[1]);
-		}
-
-		/// <summary>
 		/// 指定された２テーブル間のデータ差分を出力する
 		/// </summary>
-		static void DiffTable(MySqlCommand cmd, Table table1, Table table2) {
+		static int DiffTable(MySqlCommand cmd, Table table1, Table table2, StreamWriter sw) {
 			if (table1.PrimaryKey == null || table2.PrimaryKey == null) {
-				return;
+				return 0;
 			}
 			if (!table1.PrimaryKey.IsSame(table2.PrimaryKey)) {
-				return;
+				return 0;
 			}
 
-			var columnNames = new List<string>();
-			foreach (var column1 in table1.Columns) {
-				var columnName = column1.Name;
-				var column2 = table2[columnName];
-				if (column2 != null) {
-					columnNames.Add(columnName);
-				}
-			}
+			int result = 0;
+			sw.WriteLine("# " + table1.Name);
+			sw.WriteLine();
 
-			var pkNames = new List<string>(table1.PrimaryKey.Columns.Select(c => c.Name));
-
-			var columnNamesWithoutPk = new List<string>(columnNames.Where(c => !pkNames.Contains(c)));
+			var columnNames = (from c1 in table1.Columns let c2 = table2[c1.Name] where c2 != null select c1.Name).ToList();
+			var pkNames = table1.PrimaryKey.Columns.Select(c => c.Name).ToList();
+			var columnNamesWithoutPk = columnNames.Where(c => !pkNames.Contains(c)).ToList();
 
 			Func<Table, Table, string> generateCommandText = (t1, t2) => {
 				return $@"
 SELECT
-	{string.Join(",", pkNames.Select(name => "t1." + name))}
+	*
 FROM
 	{t1.FullName} t1
 WHERE
@@ -285,9 +302,9 @@ WHERE
 
 			cmd.Parameters.Clear();
 			cmd.CommandText = generateCommandText(table1, table2);
-			ShowResult(cmd, $"{table1.Name} [{table1.Schema} > {table2.Schema}]");
+			result += ShowResult(cmd, $"{table1.Schema} > {table2.Schema}", sw);
 			cmd.CommandText = generateCommandText(table2, table1);
-			ShowResult(cmd, $"{table1.Name} [{table1.Schema} < {table2.Schema}]");
+			result += ShowResult(cmd, $"{table1.Schema} < {table2.Schema}", sw);
 
 			if (columnNamesWithoutPk.Count != 0) {
 				cmd.CommandText = $@"
@@ -301,52 +318,61 @@ FROM
 WHERE
 	{string.Join(" OR ", columnNamesWithoutPk.Select(name => "t1." + name + "<>t2." + name))};
 ";
-				ShowResult(cmd, $"{table1.Name} [{table1.Schema} != {table2.Schema}]");
+				result += ShowResult(cmd, $"{table1.Schema} != {table2.Schema}", sw);
 			}
+
+			return result;
 		}
 
-		static void ShowResult(MySqlCommand cmd, string title) {
-			Console.WriteLine("# " + title);
-			Console.WriteLine();
+		static int ShowResult(MySqlCommand cmd, string title, StreamWriter sw) {
+			int result = 0;
 
-			Console.WriteLine("```sql");
-			Console.WriteLine(cmd.CommandText);
-			Console.WriteLine("```");
-			Console.WriteLine();
+			sw.WriteLine("## " + title);
+			sw.WriteLine();
+
+			if (Sql) {
+				sw.WriteLine("```sql");
+				sw.WriteLine(cmd.CommandText);
+				sw.WriteLine("```");
+				sw.WriteLine();
+			}
 
 			using (var dr = cmd.ExecuteReader()) {
 				do {
-					Console.Write("|");
+					sw.Write("|");
 					for (int i = 0; i < dr.FieldCount; i++) {
 						if (i != 0) {
-							Console.Write("|");
+							sw.Write("|");
 						}
-						Console.Write(dr.GetName(i));
+						sw.Write(dr.GetName(i));
 					}
-					Console.WriteLine("|");
+					sw.WriteLine("|");
 
-					Console.Write("|");
+					sw.Write("|");
 					for (int i = 0; i < dr.FieldCount; i++) {
 						if (i != 0) {
-							Console.Write("|");
+							sw.Write("|");
 						}
-						Console.Write("-");
+						sw.Write("-");
 					}
-					Console.WriteLine("|");
+					sw.WriteLine("|");
 
 					while (dr.Read()) {
-						Console.Write("|");
+						result++;
+						sw.Write("|");
 						for (int i = 0; i < dr.FieldCount; i++) {
 							if (i != 0) {
-								Console.Write("|");
+								sw.Write("|");
 							}
-							Console.Write(dr[i]);
+							sw.Write(dr[i]);
 						}
-						Console.WriteLine("|");
+						sw.WriteLine("|");
 					}
-					Console.WriteLine();
+					sw.WriteLine();
 				} while (dr.NextResult());
 			}
+
+			return result;
 		}
 
 		static string ToString(object value) {
