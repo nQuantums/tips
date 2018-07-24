@@ -352,7 +352,11 @@ namespace PatchCrawler {
 								} else if (names[0] == "tab") {
 									Console.WriteLine(chrome.ExecuteScript("return document.activeElement.tabIndex"));
 								} else if (names[0] == "js") {
-									Console.WriteLine(chrome.ExecuteScript(line.Substring(2)));
+									try {
+										Console.WriteLine(chrome.ExecuteScript(line.Substring(2)));
+									} catch (Exception ex) {
+										Console.WriteLine(ex.Message);
+									}
 								} else if (names[0] == "init") {
 									//pageInitializer(chrome.CurrentWindowHandle);
 								} else if (names[0] == "s") {
