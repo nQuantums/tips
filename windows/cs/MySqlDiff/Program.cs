@@ -291,7 +291,7 @@ WHERE
 			}
 
 			int result = 0;
-			sw.WriteLine("# " + table1.Name);
+			sw.WriteLine($"# {table1.Name} テーブル差分");
 			sw.WriteLine();
 
 			var columnNames = (from c1 in table1.Columns let c2 = table2[c1.Name] where c2 != null select c1.Name).ToList();
@@ -319,7 +319,7 @@ WHERE
 				cmd.CommandText = $@"
 SELECT
 	{string.Join(",", columnNames.Select(name => "t1." + name))}
-	,
+	,'<=>',
 	{string.Join(",", columnNames.Select(name => "t2." + name))}
 FROM
 	{table1.FullName} t1
