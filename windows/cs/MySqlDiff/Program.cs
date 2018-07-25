@@ -189,7 +189,7 @@ namespace MySqlDiff {
 			Directory.CreateDirectory(dir);
 
 			// 使用文字コード
-			var enc = new UTF8Encoding(false);
+			var enc = new UTF8Encoding(true); // BOM付きUTF8
 
 			using (var con = new MySqlConnection(requiredArgs[0])) {
 				con.Open();
@@ -203,7 +203,10 @@ namespace MySqlDiff {
 					}
 
 					// 両方のスキーマに存在するテーブルの比較を行う
+					var proceededTableCount = 0;
+					var allTableCount = Schemas[0].Tables.Count;
 					foreach (var table1 in Schemas[0].Tables) {
+						Console.WriteLine($"{table1.Name} テーブル処理開始 {proceededTableCount}/{allTableCount}");
 						var table2 = Schemas[1][table1.Name];
 						if (table2 != null) {
 							var fileName = Path.Combine(dir, table1.Name) + ".md";
@@ -217,7 +220,11 @@ namespace MySqlDiff {
 							if (count == 0 && !SaveNodiff) {
 								File.Delete(fileName);
 							}
+						} else {
+							Console.WriteLine($"両方に存在しないテーブルのためスキップ。");
 						}
+						proceededTableCount++;
+						Console.WriteLine($"{table1.Name} テーブル処理完了 {proceededTableCount}/{allTableCount}");
 					}
 				}
 			}
@@ -275,14 +282,16 @@ WHERE
 		/// </summary>
 		static int DiffTable(MySqlCommand cmd, Table table1, Table table2, StreamWriter sw) {
 			if (table1.PrimaryKey == null || table2.PrimaryKey == null) {
+				Console.WriteLine("プライマリキーが存在しないためスキップ。");
 				return 0;
 			}
 			if (!table1.PrimaryKey.IsSame(table2.PrimaryKey)) {
+				Console.WriteLine("プライマリキー構成が異なるためスキップ。");
 				return 0;
 			}
 
 			int result = 0;
-			sw.WriteLine("# " + table1.Name);
+			sw.WriteLine($"# {table1.Name} テーブル差分");
 			sw.WriteLine();
 
 			var columnNames = (from c1 in table1.Columns let c2 = table2[c1.Name] where c2 != null select c1.Name).ToList();
@@ -310,7 +319,7 @@ WHERE
 				cmd.CommandText = $@"
 SELECT
 	{string.Join(",", columnNames.Select(name => "t1." + name))}
-	,
+	,'<=>',
 	{string.Join(",", columnNames.Select(name => "t2." + name))}
 FROM
 	{table1.FullName} t1
@@ -357,17 +366,27 @@ WHERE
 					}
 					sw.WriteLine("|");
 
+					int count = 0;
 					while (dr.Read()) {
+						count++;
 						result++;
 						sw.Write("|");
 						for (int i = 0; i < dr.FieldCount; i++) {
 							if (i != 0) {
 								sw.Write("|");
 							}
-							sw.Write(dr[i]);
+							var value = ToString(dr[i]);
+							if (value == null) {
+								value = "";
+							} else {
+								value = value.Replace("\r\n", "").Replace("\n", "").Replace("|", "");
+							}
+							sw.Write(value);
 						}
 						sw.WriteLine("|");
 					}
+					sw.WriteLine();
+					sw.WriteLine($"### {count} 件");
 					sw.WriteLine();
 				} while (dr.NextResult());
 			}
