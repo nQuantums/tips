@@ -19,46 +19,14 @@ namespace SeleniumTest {
 	/// Chromeを制御するためのサーバー
 	/// </summary>
 	public class Server : IDisposable {
-		class Stub {
-			public int Id { get; private set; }
-			public Action Action { get; private set; }
-
-			public Stub(int id, Action action) {
-				this.Id = id;
-				this.Action = action;
-			}
-		}
-
-		[DataContract]
-		class PageAfterInitArgs {
-			[DataMember]
-			public string url;
-			[DataMember]
-			public string title;
-			[DataMember]
-			public int id;
-		}
-
 		/// <summary>
 		/// サーバーアドレス
 		/// </summary>
 		public const string LocalHttpServerUrl = "http://localhost:9999/";
 
 		public ChromeDriver Chrome { get; private set; }
-		Dictionary<int, Stub> _Stubs = new Dictionary<int, Stub>();
-		int _StubId = 0;
-		static string _SetEventsJs;
 		CancellationTokenSource _HttpServerCts;
 		Task _HttpServerTask;
-
-
-		static Server() {
-			var asm = Assembly.GetExecutingAssembly();
-
-			using (var sr = new StreamReader(asm.GetManifestResourceStream("SeleniumTest.SetEvents.js"), Encoding.UTF8)) {
-				_SetEventsJs = sr.ReadToEnd();
-			}
-		}
 
 		public Server() {
 		}
@@ -107,27 +75,26 @@ namespace SeleniumTest {
 		/// Chromeの現在のタブを指定のURLを表示するようナビゲートする
 		/// </summary>
 		/// <param name="url">移動先URL</param>
-		/// <param name="afterPageInitialized">ページ初期化後に呼び出されるハンドラ</param>
-		public void Navigate(string url, Action afterPageInitialized) {
-			// 移動先ページ初期化後に呼び出される処理登録
-			lock (this._Stubs) {
-				_StubId++;
-				this._Stubs.Add(_StubId, new Stub(_StubId, afterPageInitialized));
-			}
-
-			// ページ移動してそのページにJavaScriptを仕込む
+		public void Navigate(string url) {
 			lock (this.Chrome) {
 				// Chrome側を指定URLへナビゲート
 				this.Chrome.Navigate().GoToUrl(url);
 
-				// Chrome側が準備できるまで待機
-				this.Chrome.ExecuteScript("return document.readyState;");
-
-				// Chromeで現在表示中のページにJavaScriptを埋め込む
-				this.Chrome.ExecuteScript(_SetEventsJs, this.Chrome.CurrentWindowHandle, LocalHttpServerUrl, _StubId);
+				// Chrome側でページの表示が完了するまで待機
+				var wait = new OpenQA.Selenium.Support.UI.WebDriverWait(this.Chrome, TimeSpan.FromSeconds(30.00));
+				wait.Until(driver => ((IJavaScriptExecutor)driver).ExecuteScript("return document.readyState").Equals("complete"));
 			}
 		}
 
+		/// <summary>
+		/// Chrome側に指定のJavaScriptを仕込んで実行し結果を文字列で取得する
+		/// </summary>
+		/// <param name="script">JavaScriptソースコード</param>
+		/// <param name="args">引数列</param>
+		/// <returns>実行結果の文字列</returns>
+		public string ExecuteScript(string script, params object[] args) {
+			return this.Chrome.ExecuteScript(script, args).ToString();
+		}
 
 		/// <summary>
 		/// ブラウザのページ内イベント取得とタブ間で同じ値を保持するためにHTTPサーバーを開始する
@@ -150,11 +117,11 @@ namespace SeleniumTest {
 
 					// リクエストをハンドリング
 					var resp = "";
-					switch (req.QueryString["event"]) {
-					case "PageAfterInit":
-						OnPageAfterInit(Json.ToObject<PageAfterInitArgs>(req.InputStream));
-						break;
-					}
+					//switch (req.QueryString["event"]) {
+					//case "PageAfterInit":
+					//	OnPageAfterInit(Json.ToObject<PageAfterInitArgs>(req.InputStream));
+					//	break;
+					//}
 
 					// レスポンス内容設定
 					res.ContentEncoding = Encoding.UTF8;
@@ -164,20 +131,6 @@ namespace SeleniumTest {
 					sw.WriteLine(resp);
 					sw.Flush();
 				}
-			}
-		}
-
-		void OnPageAfterInit(PageAfterInitArgs args) {
-			var id = args.id;
-			Stub stub;
-			lock (_Stubs) {
-				if (!_Stubs.TryGetValue(id, out stub)) {
-					return;
-				}
-				_Stubs.Remove(id);
-			}
-			if (stub.Action != null) {
-				stub.Action();
 			}
 		}
 
