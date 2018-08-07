@@ -43,14 +43,36 @@ namespace Test1 {
 			public static int[] AddWatcherIDs => E.Int32Array("add_watcher_ids");
 			public static int[] DelWatcherIDs => E.Int32Array("del_watcher_ids");
 			public static DateTime CreateDateTime => E.DateTime("create_date_time", ColumnFlags.DefaultCurrentTimestamp);
+			public static int PermissionID => E.Int32("permission_id");
+			public static int CreatableUserGroupID => E.Int32("creatable_usergroup_id");
+			public static int WritableUserGroupID => E.Int32("writable_usergroup_id");
+			public static int ReadableUserGroupID => E.Int32("readable_usergroup_id");
 		}
 
+		/// <summary>
+		/// ユーザー
+		/// <para>ユーザー名はユニーク、一度決めたら変更できない</para>
+		/// </summary>
 		public class TbUser : TableDef<TbUser.D> {
 			public TbUser() : base(E, "tb_user") { }
 
+			/// <summary>
+			/// 列定義
+			/// </summary>
 			public class D : ColumnsBase {
+				/// <summary>
+				/// ユーザーID
+				/// </summary>
 				public int UserID => As(() => C.UserID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+
+				/// <summary>
+				/// ユーザー名
+				/// </summary>
 				public string UserName => As(() => C.UserName, ColumnFlags.Index_1 | ColumnFlags.Unique_1);
+
+				/// <summary>
+				/// ユーザー作成日時
+				/// </summary>
 				public DateTime CreateDateTime => As(() => C.CreateDateTime, ColumnFlags.Index_2);
 			}
 			public class R : D {
@@ -60,107 +82,273 @@ namespace Test1 {
 			}
 		}
 
+		/// <summary>
+		/// ユーザーグループ、複数ユーザーを１つのIDで表現するために使用される
+		/// <para>ユーザーID一覧は一度決めたら変更できない</para>
+		/// </summary>
 		public class TbUserGroup : TableDef<TbUserGroup.D> {
 			public TbUserGroup() : base(E, "tb_user_group") { }
 
+			/// <summary>
+			/// 列定義
+			/// </summary>
 			public class D : ColumnsBase {
+				/// <summary>
+				/// ユーザーグループID
+				/// </summary>
 				public int UserGroupID => As(() => C.UserGroupID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+
+				/// <summary>
+				/// ユーザーID一覧
+				/// </summary>
 				public int[] UserIDs => As(() => C.UserIDs, ColumnFlags.Index_1 | ColumnFlags.Unique_1 | ColumnFlags.Gin);
 			}
 		}
 
+		/// <summary>
+		/// アクセス許可設定
+		/// <para>ユーザーグループIDは一度決めたら変更できない</para>
+		/// </summary>
+		public class TbPermission : TableDef<TbPermission.D> {
+			public TbPermission() : base(E, "tb_permission") { }
+
+			/// <summary>
+			/// 列定義
+			/// </summary>
+			public class D : ColumnsBase {
+				/// <summary>
+				/// アクセス許可設定ID
+				/// </summary>
+				public int PermissionID => As(() => C.PermissionID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+
+				/// <summary>
+				/// 作成が許可されたユーザーグループID、0なら全ユーザー許可
+				/// </summary>
+				public int CreatableUserGroupID => As(() => C.CreatableUserGroupID, ColumnFlags.Index_1 | ColumnFlags.Unique_1);
+
+				/// <summary>
+				/// 書き込みが許可されたユーザーグループID、0なら全ユーザー許可
+				/// </summary>
+				public int WritableUserGroupID => As(() => C.WritableUserGroupID, ColumnFlags.Index_2 | ColumnFlags.Unique_1);
+
+				/// <summary>
+				/// 読み込みが許可されたユーザーグループID、0なら全ユーザー許可
+				/// </summary>
+				public int ReadableUserGroupID => As(() => C.ReadableUserGroupID, ColumnFlags.Index_3 | ColumnFlags.Unique_1);
+			}
+		}
+
+		/// <summary>
+		/// エンティティに付与するタグ
+		/// <para>タグテキストは一度決めたら変更できない</para>
+		/// </summary>
 		public class TbTag : TableDef<TbTag.D> {
 			public TbTag() : base(E, "tb_tag") { }
 
+			/// <summary>
+			/// 列定義
+			/// </summary>
 			public class D : ColumnsBase {
+				/// <summary>
+				/// タグID
+				/// </summary>
 				public int TagID => As(() => C.TagID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+
+				/// <summary>
+				/// タグテキスト
+				/// </summary>
 				public string TagText => As(() => C.TagText, ColumnFlags.Index_1 | ColumnFlags.Unique_1);
+
+				/// <summary>
+				/// タグ作成日時
+				/// </summary>
 				public DateTime CreateDateTime => As(() => C.CreateDateTime, ColumnFlags.Index_2);
 			}
 		}
 
+		/// <summary>
+		/// タググループ、複数タグを１つのIDで表現するために使用される
+		/// <para>タグID一覧は一度決めたら変更できない</para>
+		/// </summary>
 		public class TbTagGroup : TableDef<TbTagGroup.D> {
 			public TbTagGroup() : base(E, "tb_tag_group") { }
 
+			/// <summary>
+			/// 列定義
+			/// </summary>
 			public class D : ColumnsBase {
+				/// <summary>
+				/// タググループID
+				/// </summary>
 				public int TagGroupID => As(() => C.TagGroupID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+
+				/// <summary>
+				/// タグID一覧
+				/// </summary>
 				public int[] TagIDs => As(() => C.TagIDs, ColumnFlags.Index_1 | ColumnFlags.Unique_1 | ColumnFlags.Gin);
 			}
 		}
 
+		/// <summary>
+		/// エンティティ固定値、エンティティ作成時に値が確定しその後変更されることは無い
+		/// </summary>
 		public class TbEntityConst : TableDef<TbEntityConst.D> {
 			public TbEntityConst() : base(E, "tb_entity_const") { }
 
+			/// <summary>
+			/// 列定義
+			/// </summary>
 			public class D : ColumnsBase {
+				/// <summary>
+				/// エンティティID
+				/// </summary>
 				public int EntityID => As(() => C.EntityID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+
+				/// <summary>
+				/// エンティティ作成ユーザーID
+				/// </summary>
 				public int UserID => As(() => C.UserID, ColumnFlags.Index_1);
-				public DateTime CreateDateTime => As(() => C.CreateDateTime, ColumnFlags.Index_2);
 			}
 		}
 
-		public class TbEntityContent : TableDef<TbEntityContent.D> {
-			public TbEntityContent() : base(E, "tb_entity_content") { }
+		/// <summary>
+		/// エンティティへのアクセス許可設定
+		/// <para>アクセス許可設定に関係無く<see cref="TbEntityConst.D.UserID"/>のユーザーはフルアクセス可能</para>
+		/// </summary>
+		public class TbEntityPermission : TableDef<TbEntityPermission.D> {
+			public TbEntityPermission() : base(E, "tb_entity_permission") { }
 
+			/// <summary>
+			/// 列定義
+			/// </summary>
 			public class D : ColumnsBase {
-				public int ContentRevisionID => As(() => C.ContentRevisionID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
-				public int EntityID => As(() => C.EntityID, ColumnFlags.Index_1);
-				public string Content => As(() => C.Content);
-				public DateTime CreateDateTime => As(() => C.CreateDateTime);
+				/// <summary>
+				/// エンティティID
+				/// </summary>
+				public int EntityID => As(() => C.EntityID, ColumnFlags.PrimaryKey);
+
+				/// <summary>
+				/// アクセス許可設定ID
+				/// </summary>
+				public int PermissionID => As(() => C.PermissionID);
 			}
 		}
 
+		/// <summary>
+		/// エンティティに付与するタグ
+		/// </summary>
 		public class TbEntityTag : TableDef<TbEntityTag.D> {
 			public TbEntityTag() : base(E, "tb_entity_tag") { }
 
+			/// <summary>
+			/// 列定義
+			/// </summary>
 			public class D : ColumnsBase {
+				/// <summary>
+				/// エンティティID
+				/// </summary>
 				public int EntityID => As(() => C.EntityID, ColumnFlags.PrimaryKey);
+
+				/// <summary>
+				/// タググループID
+				/// </summary>
 				public int TagGroupID => As(() => C.TagGroupID, ColumnFlags.Index_1);
 			}
 		}
 
-		public class TbEntityParent : TableDef<TbEntityParent.D> {
-			public TbEntityParent() : base(E, "tb_entity_parent") { }
+		/// <summary>
+		/// エンティティの階層構造
+		/// </summary>
+		public class TbEntityTree : TableDef<TbEntityTree.D> {
+			public TbEntityTree() : base(E, "tb_entity_tree") { }
 
+			/// <summary>
+			/// 列定義
+			/// </summary>
 			public class D : ColumnsBase {
+				/// <summary>
+				/// エンティティID
+				/// </summary>
 				public int EntityID => As(() => C.EntityID, ColumnFlags.PrimaryKey);
+
+				/// <summary>
+				/// 親エンティティID
+				/// </summary>
 				public int ParentEntityID => As(() => C.ParentEntityID, ColumnFlags.Index_1);
 			}
 		}
 
-		public class TbEntityHolder : TableDef<TbEntityHolder.D> {
-			public TbEntityHolder() : base(E, "tb_entity_holder") { }
+		/// <summary>
+		/// エンティティアクセス許可設定の階層構造
+		/// </summary>
+		public class TbEntityPermissionTree : TableDef<TbEntityPermissionTree.D> {
+			public TbEntityPermissionTree() : base(E, "tb_entity_permission_tree") { }
 
+			/// <summary>
+			/// 列定義
+			/// </summary>
 			public class D : ColumnsBase {
-				public int EntityID => As(() => C.EntityID);
-				public int[] CachedHolderIDs => As(() => C.CachedHolderIDs);
-				public int[] AddHolderIDs => As(() => C.AddHolderIDs);
-			}
+				/// <summary>
+				/// エンティティID
+				/// </summary>
+				public int EntityID => As(() => C.EntityID, ColumnFlags.PrimaryKey);
 
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.EntityID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(IndexFlags.Gin, t => t.CachedHolderIDs));
+				/// <summary>
+				/// アクセス許可設定を持つ直近の親エンティティID
+				/// </summary>
+				public int ParentEntityID => As(() => C.ParentEntityID, ColumnFlags.Index_1);
+			}
 		}
 
-		public class TblEntityWatcher : TableDef<TblEntityWatcher.Cols> {
-			public TblEntityWatcher() : base(E, "tb_entity_watcher") { }
+		/// <summary>
+		/// エンティティ内容
+		/// </summary>
+		public class TbEntityContent : TableDef<TbEntityContent.D> {
+			public TbEntityContent() : base(E, "tb_entity_content") { }
 
-			public class Cols : ColumnsBase {
-				public int EntityID => As(() => C.EntityID);
-				public int[] CachedWatcherIDs => As(() => C.CachedWatcherIDs);
+			/// <summary>
+			/// 列定義
+			/// </summary>
+			public class D : ColumnsBase {
+				/// <summary>
+				/// エンティティ内容リビジョンID、内容が書き換わる度にインクリメントされる
+				/// </summary>
+				public int ContentRevisionID => As(() => C.ContentRevisionID, ColumnFlags.PrimaryKey | ColumnFlags.Serial);
+
+				/// <summary>
+				/// エンティティID
+				/// </summary>
+				public int EntityID => As(() => C.EntityID, ColumnFlags.Index_1);
+
+				/// <summary>
+				/// エンティティ内容
+				/// </summary>
+				public string Content => As(() => C.Content);
+
+				/// <summary>
+				/// エンティティ内容作成日時
+				/// </summary>
+				public DateTime CreateDateTime => As(() => C.CreateDateTime);
+			}
+		}
+
+		public class TbEntityWatcher : TableDef<TbEntityWatcher.D> {
+			public TbEntityWatcher() : base(E, "tb_entity_watcher") { }
+
+			public class D : ColumnsBase {
+				public int EntityID => As(() => C.EntityID, ColumnFlags.PrimaryKey);
+				public int[] CachedWatcherIDs => As(() => C.CachedWatcherIDs, ColumnFlags.Index_1 | ColumnFlags.Gin);
 				public int[] AddWatcherIDs => As(() => C.AddWatcherIDs);
 				public int[] DelWatcherIDs => As(() => C.DelWatcherIDs);
 			}
-
-			public override IPrimaryKeyDef GetPrimaryKey() => MakePrimaryKey(t => t.EntityID);
-			public override IEnumerable<IIndexDef> GetIndices() => MakeIndices(MakeIndex(IndexFlags.Gin, t => t.CachedWatcherIDs));
 		}
 
 		public static TbUser User { get; } = new TbUser();
 		public static TbEntityConst EntityConst { get; } = new TbEntityConst();
 		public static TbEntityContent EntityContent { get; } = new TbEntityContent();
 		public static TbEntityTag EntityTag { get; } = new TbEntityTag();
-		public static TbEntityParent EntityParent { get; } = new TbEntityParent();
-		public static TbEntityHolder EntityHolder { get; } = new TbEntityHolder();
-		public static TblEntityWatcher EntityWatcher { get; } = new TblEntityWatcher();
+		public static TbEntityTree EntityParent { get; } = new TbEntityTree();
+		public static TbEntityWatcher EntityWatcher { get; } = new TbEntityWatcher();
 		public static TbTag Tag { get; } = new TbTag();
 	}
 
