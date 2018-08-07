@@ -184,10 +184,6 @@ namespace MySqlDiff {
 				}
 			}
 
-			// 出力先ディレクトリ作成
-			var dir = "MySqlDiff" + DateTime.Now.ToString("yyyyMMddHHmmss");
-			Directory.CreateDirectory(dir);
-
 			// 使用文字コード
 			var enc = new UTF8Encoding(true); // BOM付きUTF8
 
@@ -200,7 +196,14 @@ namespace MySqlDiff {
 					// 指定された２つのスキーマ情報を取得
 					for (int i = 1; i <= 2; i++) {
 						AddSchema(cmd, requiredArgs[i]);
+						if (Schemas[i - 1].Tables.Count == 0) {
+							throw new ApplicationException($"指定されたスキーマ {requiredArgs[i]} は存在しません。");
+						}
 					}
+
+					// 出力先ディレクトリ作成
+					var dir = "MySqlDiff" + DateTime.Now.ToString("yyyyMMddHHmmss");
+					Directory.CreateDirectory(dir);
 
 					// 両方のスキーマに存在するテーブルの比較を行う
 					var proceededTableCount = 0;
