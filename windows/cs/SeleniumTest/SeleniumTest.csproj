@@ -74,7 +74,7 @@
     <EmbeddedResource Include="JustsystemsGetFileUrl.js" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="JustsystemsGetSupportLinks.js" />
+    <EmbeddedResource Include="JustsystemsGetResultLinks.js" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="JustsystemsGetTargetProducts.js" />
