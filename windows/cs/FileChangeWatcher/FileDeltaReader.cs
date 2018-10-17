@@ -8,53 +8,53 @@ using System.IO;
 
 namespace FileChangeWatcher {
 	/// <summary>
-	/// ログファイル内容を読み込み保持する
+	/// ファイル内容を読み込み保持する、ファイル変更時は変更部分のみ読み込む
 	/// </summary>
-	public class LogFileReader {
+	public class FileDeltaReader {
 		/// <summary>
-		/// ログファイルパス名
+		/// ログファイル名
 		/// </summary>
-		public string FilePath;
+		public string FileName { get; private set; }
 
 		/// <summary>
 		/// ファイルのエンコード
 		/// </summary>
-		public Encoding Encoding;
+		public Encoding Encoding { get; private set; }
 
 		/// <summary>
 		/// ログファイル内容データ、実データよりサイズが大きいことがある
 		/// </summary>
-		public byte[] Content;
+		public byte[] Content { get; private set; }
 
 		/// <summary>
 		/// ログファイル内容の実データサイズ
 		/// </summary>
-		public int ContentLength;
+		public int ContentLength { get; private set; }
 
 		/// <summary>
-		/// コンストラクタ、ファイルパス名を指定して初期化する
+		/// コンストラクタ、ファイル名を指定して初期化する
 		/// </summary>
-		/// <param name="filePath">ログファイルパス名</param>
-		public LogFileReader(string filePath) {
-			this.FilePath = filePath;
+		/// <param name="filePath">ログファイル名</param>
+		public FileDeltaReader(string filePath) {
+			this.FileName = filePath;
 		}
 
 		/// <summary>
-		/// ログファイルの増加分のみ読み込む
+		/// ログファイルの増加分の文字列を読み込む
 		/// </summary>
 		/// <param name="retryCount">読み込み試行回数</param>
 		/// <param name="retryWait">読み込み再試行前の待機時間(ms)</param>
 		/// <returns>読み込んだデータの文字列または null </returns>
-		public string ReadDelta(int retryCount = 100, int retryWait = 10) {
-			var filePath = this.FilePath;
+		public string ReadDeltaString(int retryCount = 100, int retryWait = 10) {
+			var fileName = this.FileName;
 			var content = this.Content;
 			var contentLength = this.ContentLength;
 
 			// 一定回数読み込みを試行する
 			string text = null;
-			for (int i = 0; i < retryCount; i++) {
+			for (int i = 1; i <= retryCount; i++) {
 				try {
-					using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+					using (var fs = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
 						var fileLength = fs.Length;
 						if (content == null || fileLength < contentLength) {
 							// 既存データが存在しない、または既存データサイズより小さくなるならファイル切り替わったかもしれないので全体読み込み
@@ -86,7 +86,8 @@ namespace FileChangeWatcher {
 
 					break;
 				} catch (IOException ex) {
-					if (ex.HResult == -2147024864) {
+					if (i < retryCount && ex.HResult == -2147024864) {
+						// 満足するまで一定時間待機して再試行
 						Thread.Sleep(retryWait);
 					} else {
 						throw;
