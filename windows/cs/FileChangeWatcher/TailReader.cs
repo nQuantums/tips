@@ -91,9 +91,10 @@ namespace FileChangeWatcher {
 			// 監視を開始する
 			_Watcher = new FileSystemWatcher();
 			_Watcher.Path = dir;
-			_Watcher.NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.LastAccess | NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName;
+			//_Watcher.NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.LastAccess | NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size;
 			_Watcher.Filter = filter;
-			_Watcher.Changed += (s, e) => {
+
+			FileSystemEventHandler fsehandler = (s, e) => {
 				// 変更ファイルに対応する LogFile オブジェクト取得
 				FileChangeHandler fch;
 				if (Handlers.TryGetValue(e.Name.ToLower(), out fch)) {
@@ -115,6 +116,8 @@ namespace FileChangeWatcher {
 					}
 				}
 			};
+			_Watcher.Created += fsehandler;
+			_Watcher.Changed += fsehandler;
 			_Watcher.EnableRaisingEvents = true;
 		}
 

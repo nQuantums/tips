@@ -14,20 +14,27 @@ namespace FileChangeWatcher {
 			for (int i = 1; i < args.Length; i++) {
 				var fileName = args[i];
 				Process p = null;
+				Action startProcess = () => {
+					p = new Process();
+					p.StartInfo.CreateNoWindow = false;
+					p.StartInfo.UseShellExecute = false;
+					p.StartInfo.RedirectStandardInput = true;
+					p.StartInfo.FileName = "ColoredLogViewer.exe";
+					p.StartInfo.Arguments = fileName;
+					p.Start();
+				};
 				Action<FileDeltaReader> handler = r => {
-					if (p == null) {
-						p = new Process();
-						p.StartInfo.CreateNoWindow = true;
-						p.StartInfo.UseShellExecute = true;
-						p.StartInfo.RedirectStandardInput = true;
-						p.StartInfo.RedirectStandardOutput = false;
-						p.StartInfo.FileName = "ColoredLogViewer.exe";
-						var result = p.Start();
+					var str = r.ReadDeltaString();
+					if (p != null && p.HasExited) {
+						p.Dispose();
+						p = null;
 					}
-
-					var text = r.ReadDeltaString();
-					foreach (var line in text.Split('\n')) {
-						p.StandardInput.WriteLine(line.Replace("\r", ""));
+					if (p == null) {
+						startProcess();
+					}
+					foreach (var line in str.Split('\n')) {
+						var text = line.Replace("\r", "");
+						p.StandardInput.WriteLine(text);
 					}
 				};
 				handlers.Add(fileName, handler);
