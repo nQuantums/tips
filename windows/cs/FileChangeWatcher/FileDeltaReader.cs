@@ -22,21 +22,35 @@ namespace FileChangeWatcher {
 		public Encoding Encoding { get; private set; }
 
 		/// <summary>
-		/// ログファイル内容データ、実データよりサイズが大きいことがある
-		/// </summary>
-		public byte[] Content { get; private set; }
-
-		/// <summary>
 		/// ログファイル内容の実データサイズ
 		/// </summary>
-		public int ContentLength { get; private set; }
+		public long ContentLength { get; private set; }
 
 		/// <summary>
 		/// コンストラクタ、ファイル名を指定して初期化する
 		/// </summary>
-		/// <param name="filePath">ログファイル名</param>
-		public FileDeltaReader(string filePath) {
-			this.FileName = filePath;
+		/// <param name="fileName">ログファイル名</param>
+		public FileDeltaReader(string fileName, int retryCount = 100, int retryWait = 10) {
+			this.FileName = fileName;
+
+			// 既にファイルが存在する場合にはサイズとエンコードを取得する
+			long fileLength = 0;
+			Retry(
+				() => {
+					using (var fs = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+						fileLength = fs.Length;
+						var buffer = new byte[Math.Min(fs.Length, 4096)];
+						var len = fs.Read(buffer, 0, buffer.Length);
+						if (len < buffer.Length) {
+							Array.Resize(ref buffer, len);
+						}
+						this.Encoding = GetCode(buffer);
+					}
+				},
+				retryCount,
+				retryWait
+			);
+			this.ContentLength = fileLength;
 		}
 
 		/// <summary>
@@ -44,56 +58,53 @@ namespace FileChangeWatcher {
 		/// </summary>
 		/// <param name="retryCount">読み込み試行回数</param>
 		/// <param name="retryWait">読み込み再試行前の待機時間(ms)</param>
-		/// <returns>読み込んだデータの文字列または null </returns>
+		/// <returns>読み込んだデータの文字列</returns>
 		public string ReadDeltaString(int retryCount = 100, int retryWait = 10) {
 			var fileName = this.FileName;
-			var content = this.Content;
 			var contentLength = this.ContentLength;
 
 			// 一定回数読み込みを試行する
-			string text = null;
-			for (int i = 1; i <= retryCount; i++) {
-				try {
+			string text = "";
+			Retry(
+				() => {
 					using (var fs = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
 						var fileLength = fs.Length;
-						if (content == null || fileLength < contentLength) {
-							// 既存データが存在しない、または既存データサイズより小さくなるならファイル切り替わったかもしれないので全体読み込み
-							content = new byte[fileLength];
-							contentLength = fs.Read(content, 0, (int)fileLength);
+						if (fileLength < contentLength) {
+							// ファイルサイズが小さくなったらファイル切り替わったかもしれない、全体読み込み
+							var buffer = new byte[fileLength];
+							contentLength = fs.Read(buffer, 0, (int)fileLength);
 							if (contentLength != fileLength) {
-								Array.Resize(ref content, contentLength);
+								Array.Resize(ref buffer, (int)contentLength);
 							}
-							var enc = GetCode(content);
-							text = enc.GetString(content);
+
+							var enc = GetCode(buffer);
+							text = enc.GetString(buffer);
 							this.Encoding = enc;
 						} else if (contentLength < fileLength) {
 							// 既存データよりファイルサイズが大きくなるなら増加分のみ読み込み
+							var buffer = new byte[fileLength - contentLength];
 							fs.Seek(contentLength, SeekOrigin.Begin);
-							if (content.Length < fileLength) {
-								Array.Resize(ref content, (int)fileLength * 2);
+
+							var length = fs.Read(buffer, 0, buffer.Length);
+							if (this.Encoding == null) {
+								if (length < buffer.Length) {
+									Array.Resize(ref buffer, length);
+								}
+								this.Encoding = GetCode(buffer);
 							}
-							var length = fs.Read(content, contentLength, (int)fileLength - contentLength);
-							text = this.Encoding.GetString(content, contentLength, length);
+							text = this.Encoding.GetString(buffer, 0, length);
 							contentLength += length;
 						} else {
 							// サイズが変わらない場合は何もしない
 						}
 					}
+				},
+				retryCount,
+				retryWait
+			);
 
-					// 読み込まれた内容を保持する
-					this.Content = content;
-					this.ContentLength = contentLength;
-
-					break;
-				} catch (IOException ex) {
-					if (i < retryCount && ex.HResult == -2147024864) {
-						// 満足するまで一定時間待機して再試行
-						Thread.Sleep(retryWait);
-					} else {
-						throw;
-					}
-				}
-			}
+			// 読み込まれた内容を保持する
+			this.ContentLength = contentLength;
 
 			return text;
 		}
@@ -112,7 +123,7 @@ namespace FileChangeWatcher {
 		/// <param name="bytes">文字コードを調べるデータ</param>
 		/// <returns>適当と思われるEncodingオブジェクト。
 		/// 判断できなかった時はnull。</returns>
-		public static System.Text.Encoding GetCode(byte[] bytes) {
+		static System.Text.Encoding GetCode(byte[] bytes) {
 			const byte bEscape = 0x1B;
 			const byte bAt = 0x40;
 			const byte bDollar = 0x24;
@@ -154,7 +165,7 @@ namespace FileChangeWatcher {
 				}
 			}
 			if (notJapanese) {
-				return System.Text.Encoding.ASCII;
+				return System.Text.Encoding.UTF8;
 			}
 
 			for (int i = 0; i < len - 2; i++) {
@@ -266,6 +277,24 @@ namespace FileChangeWatcher {
 			}
 
 			return null;
+		}
+
+		static void Retry(Action action, int retryCount = 100, int retryWait = 10) {
+			for (int i = 1; i <= retryCount; i++) {
+				try {
+					action();
+					break;
+				} catch (FileNotFoundException) {
+					break;
+				} catch (IOException ex) {
+					if (i < retryCount && ex.HResult == -2147024864) {
+						// 他プロセスにより開かれていたら一定時間待機して再試行
+						Thread.Sleep(retryWait);
+					} else {
+						throw;
+					}
+				}
+			}
 		}
 	}
 }

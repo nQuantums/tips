@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace FileChangeWatcher {
 	/// <summary>
-	/// ファイルの変更時の終端部分読み込み処理を行う
+	/// ファイル変更時の終端部分読み込み処理を行う
 	/// </summary>
 	public class TailReader : IDisposable {
 		/// <summary>
@@ -37,9 +37,11 @@ namespace FileChangeWatcher {
 			/// </summary>
 			/// <param name="fileName">ファイル名</param>
 			/// <param name="handler">ファイル変更時の処理</param>
-			public FileChangeHandler(string fileName, Action<FileDeltaReader> handler) {
+			/// <param name="reader">ファイル読み込みオブジェクト</param>
+			public FileChangeHandler(string fileName, Action<FileDeltaReader> handler, FileDeltaReader reader) {
 				this.FileName = fileName;
 				this.Handler = handler;
+				this.Reader = reader;
 			}
 
 			public bool TryEnter() {
@@ -86,12 +88,14 @@ namespace FileChangeWatcher {
 		public TailReader(string dir, string filter, Dictionary<string, Action<FileDeltaReader>> handlers) {
 			this.Dir = dir;
 			this.Filter = filter;
-			this.Handlers = handlers.ToDictionary(kvp => kvp.Key.ToLower(), kvp => new FileChangeHandler(kvp.Key.ToLower(), kvp.Value));
+			this.Handlers = handlers.ToDictionary(
+				kvp => kvp.Key.ToLower(),
+				kvp => new FileChangeHandler(kvp.Key.ToLower(), kvp.Value, new FileDeltaReader(Path.Combine(dir, kvp.Key)))
+			);
 
 			// 監視を開始する
 			_Watcher = new FileSystemWatcher();
 			_Watcher.Path = dir;
-			//_Watcher.NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.LastAccess | NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size;
 			_Watcher.Filter = filter;
 
 			FileSystemEventHandler fsehandler = (s, e) => {
