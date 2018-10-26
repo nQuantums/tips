@@ -103,9 +103,9 @@ namespace FileChangeWatcher {
 				FileChangeHandler fch;
 				if (Handlers.TryGetValue(e.Name.ToLower(), out fch)) {
 					if (fch.TryEnter()) {
-						Task.Run(() => {
+						Task.Run(async () => {
 							// １回の変更で複数回イベントが発生するため、ファイルに対するイベントは一定時間待って吸収する
-							Thread.Sleep(100);
+							await Task.Delay(100);
 
 							// 変更ファイルを基に処理を行う
 							try {
