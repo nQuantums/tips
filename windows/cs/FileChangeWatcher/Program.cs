@@ -27,18 +27,6 @@ namespace FileChangeWatcher {
 		private const int STD_INPUT_HANDLE = -10;
 		private const int STD_OUTPUT_HANDLE = -11;
 
-		public class Pattern {
-			public string GroupName;
-			public string Format;
-			public ConsoleColor Color;
-
-			public Pattern(string groupName, string format, ConsoleColor color) {
-				this.GroupName = groupName;
-				this.Format = format;
-				this.Color = color;
-			}
-		}
-
 		static int Main(string[] args) {
 			AllocConsole();
 			var encoding = Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
@@ -84,6 +72,8 @@ namespace FileChangeWatcher {
 				return 0;
 			}
 
+			Console.WriteLine("exit と入力すると終了します。");
+
 			var handlers = new Dictionary<string, Action<FileDeltaReader>>();
 			for (int i = 3; i < args.Length; i++) {
 				var fileName = args[i];
@@ -116,7 +106,12 @@ namespace FileChangeWatcher {
 
 			var fcw = new TailReader(args[1], args[2], handlers);
 
-			Console.ReadKey();
+			for (; ; ) {
+				var line = Console.ReadLine();
+				if(line == "exit") {
+					break;
+				}
+			}
 
 			return 0;
 		}
@@ -126,60 +121,74 @@ namespace FileChangeWatcher {
 				Console.Title = args[1];
 			}
 
-			Pattern[] patterns;
+			ConsoleStyle cs;
+			try {
+				cs = ConsoleStyle.FromJsonFile("consoleStyle.json");
+				cs.Apply();
+			} catch (FileNotFoundException) {
+				cs = new ConsoleStyle();
+			}
+			if (cs.highlights == null) {
+				cs.highlights = new ConsoleStyle.Highlight[0];
+			}
+
+			var highlights = cs.highlights;
 			Regex rx;
 
-			{
-				var ptns = new List<Pattern>();
-				ptns.Add(new Pattern("date", @"[0-9]+/[0-9]+/[0-9]+", ConsoleColor.Cyan));
-				ptns.Add(new Pattern("time", @"[0-9]+:[0-9]+:[0-9]+(\.[0-9]+|)", ConsoleColor.Green));
-				ptns.Add(new Pattern("url", @"(http(s|)|ftp)://.+", ConsoleColor.Blue));
-				ptns.Add(new Pattern("err", @"exception|failed|error|fail|エラー|失敗", ConsoleColor.Red));
-				ptns.Add(new Pattern("num", @"[0-9]+", ConsoleColor.Yellow));
-				ptns.Add(new Pattern("symbl", @"[\(\){}\[\]\*'\+\-/=<>,]", ConsoleColor.Magenta));
+			if (highlights.Length != 0) {
 				var sb = new StringBuilder();
-				foreach (var p in ptns) {
+				foreach (var h in cs.highlights) {
 					if (sb.Length != 0) {
 						sb.Append("|");
 					}
-					sb.AppendFormat("(?<{0}>{1})", p.GroupName, p.Format);
+					sb.AppendFormat("(?<{0}>{1})", h.name, h.pattern);
 				}
-				patterns = ptns.ToArray();
 				rx = new Regex(sb.ToString(), RegexOptions.IgnoreCase | RegexOptions.Compiled);
+			} else {
+				rx = null;
 			}
 
+			var colors = new ConsoleColor[0];
 			for (; ; ) {
 				var line = Console.ReadLine();
+				if (line == null) {
+					break;
+				}
 				if (line.Length == 0) {
 					continue;
 				}
+				line = line.Replace("\t", "    ");
 
-				var colors = new ConsoleColor[line.Length];
-				for (int i = 0; i < colors.Length; i++) {
+				if (colors.Length < line.Length) {
+					colors = new ConsoleColor[line.Length];
+				}
+				for (int i = 0; i < line.Length; i++) {
 					colors[i] = ConsoleColor.White;
 				}
 
-				rx.Replace(line, match => {
-					var groups = match.Groups;
-					for (int i = 0; i < patterns.Length; i++) {
-						var p = patterns[i];
-						var g = groups[p.GroupName];
-						if (g.Success) {
-							var s = g.Index;
-							var c = p.Color;
-							for (int j = 0, m = g.Length; j < m; j++) {
-								colors[s + j] = c;
+				if (rx != null) {
+					rx.Replace(line, match => {
+						var groups = match.Groups;
+						for (int i = 0; i < highlights.Length; i++) {
+							var h = highlights[i];
+							var g = groups[h.name];
+							if (g.Success) {
+								var s = g.Index;
+								var c = h.Color;
+								for (int j = 0, m = g.Length; j < m; j++) {
+									colors[s + j] = c;
+								}
+								break;
 							}
-							break;
 						}
-					}
-					return "";
-				});
+						return "";
+					});
+				}
 
 				int start = 0;
 				int lastColor = (int)colors[0];
 				Console.ForegroundColor = (ConsoleColor)lastColor;
-				for (int i = 0; i < colors.Length; i++) {
+				for (int i = 0; i < line.Length; i++) {
 					var c = (int)colors[i];
 					if (c != lastColor) {
 						Console.ForegroundColor = (ConsoleColor)lastColor;
@@ -191,6 +200,8 @@ namespace FileChangeWatcher {
 				Console.ForegroundColor = (ConsoleColor)lastColor;
 				Console.WriteLine(line.Substring(start, line.Length - start));
 			}
+
+			return 0;
 		}
 	}
 }

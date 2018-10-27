@@ -1,0 +1,56 @@
+{
+    "colors": {
+        "black": "#1e1e1e",
+        "blue": "#0080FF",
+        "cyan": "#569cd6",
+        "darkBlue": "#004080",
+        "darkCyan": "#008080",
+        "darkGray": "#808080",
+        "darkGreen": "#008000",
+        "darkMagenta": "#800080",
+        "darkRed": "#d16969",
+        "darkYellow": "#d16969",
+        "gray": "#C0C0C0",
+        "green": "#6A9955",
+        "magenta": "#b267e6",
+        "red": "#ff0000",
+        "white": "#d4d4d4",
+        "yellow": "#cd9731"
+    },
+    "highlights": [{
+            "name": "err",
+            "pattern": "exception|failed|error|fail|エラー|失敗",
+            "colorName": "red"
+        },
+        {
+            "name": "str",
+            "pattern": "(\"([^\\\"]|\\.)*?\")|('([^\\']|\\.)*?')",
+            "colorName": "darkRed"
+        },
+        {
+            "name": "date",
+            "pattern": "[0-9]+/[0-9]+/[0-9]+",
+            "colorName": "cyan"
+        },
+        {
+            "name": "time",
+            "pattern": "[0-9]+:[0-9]+(:[0-9]+(\\.[0-9]+|)|)",
+            "colorName": "green"
+        },
+        {
+            "name": "url",
+            "pattern": "(https?|ftp)://[\\w/:%#\\$&\\?\\(\\)~\\.=\\+\\-]+",
+            "colorName": "blue"
+        },
+        {
+            "name": "num",
+            "pattern": "[0-9]+(\\.[0-9]+|)",
+            "colorName": "yellow"
+        },
+        {
+            "name": "symbl",
+            "pattern": "[\\(\\){}\\[\\]\\*'\\+\\-/=<>,]",
+            "colorName": "magenta"
+        }
+    ]
+}
