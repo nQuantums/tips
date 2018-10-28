@@ -164,73 +164,131 @@ namespace FileChangeWatcher {
 			[DataMember]
 			public string pattern;
 			[DataMember]
-			public string colorName;
+			public string fore;
+            [DataMember]
+            public string back;
 
-			public ConsoleColor Color;
+            public ConsoleColor ForeColor;
+            public ConsoleColor BackColor;
 
-			public Highlight(string name, string format, string colorName) {
+			public Highlight(string name, string format, string fore, string back) {
 				this.name = name;
 				this.pattern = format;
-				this.colorName = colorName;
+                this.fore = fore;
+                this.back = back;
 			}
 
 			[OnDeserialized]
 			void OnDeserialized(StreamingContext context) {
-				switch (this.colorName) {
+				switch (this.fore) {
 				case "black":
-					this.Color = ConsoleColor.Black;
+					this.ForeColor = ConsoleColor.Black;
 					break;
 				case "darkBlue":
-					this.Color = ConsoleColor.DarkBlue;
+					this.ForeColor = ConsoleColor.DarkBlue;
 					break;
 				case "darkGreen":
-					this.Color = ConsoleColor.DarkGreen;
+					this.ForeColor = ConsoleColor.DarkGreen;
 					break;
 				case "darkCyan":
-					this.Color = ConsoleColor.DarkCyan;
+					this.ForeColor = ConsoleColor.DarkCyan;
 					break;
 				case "darkRed":
-					this.Color = ConsoleColor.DarkRed;
+					this.ForeColor = ConsoleColor.DarkRed;
 					break;
 				case "darkMagenta":
-					this.Color = ConsoleColor.DarkMagenta;
+					this.ForeColor = ConsoleColor.DarkMagenta;
 					break;
 				case "darkYellow":
-					this.Color = ConsoleColor.DarkYellow;
+					this.ForeColor = ConsoleColor.DarkYellow;
 					break;
 				case "gray":
-					this.Color = ConsoleColor.Gray;
+					this.ForeColor = ConsoleColor.Gray;
 					break;
 				case "darkGray":
-					this.Color = ConsoleColor.DarkGray;
+					this.ForeColor = ConsoleColor.DarkGray;
 					break;
 				case "blue":
-					this.Color = ConsoleColor.Blue;
+					this.ForeColor = ConsoleColor.Blue;
 					break;
 				case "green":
-					this.Color = ConsoleColor.Green;
+					this.ForeColor = ConsoleColor.Green;
 					break;
 				case "cyan":
-					this.Color = ConsoleColor.Cyan;
+					this.ForeColor = ConsoleColor.Cyan;
 					break;
 				case "red":
-					this.Color = ConsoleColor.Red;
+					this.ForeColor = ConsoleColor.Red;
 					break;
 				case "magenta":
-					this.Color = ConsoleColor.Magenta;
+					this.ForeColor = ConsoleColor.Magenta;
 					break;
 				case "yellow":
-					this.Color = ConsoleColor.Yellow;
+					this.ForeColor = ConsoleColor.Yellow;
 					break;
 				case "white":
-					this.Color = ConsoleColor.White;
+					this.ForeColor = ConsoleColor.White;
 					break;
 				default:
-					this.Color = ConsoleColor.White;
+					this.ForeColor = ConsoleColor.White;
 					break;
 				}
-			}
-		}
+
+                switch (this.back) {
+                case "black":
+                    this.BackColor = ConsoleColor.Black;
+                    break;
+                case "darkBlue":
+                    this.BackColor = ConsoleColor.DarkBlue;
+                    break;
+                case "darkGreen":
+                    this.BackColor = ConsoleColor.DarkGreen;
+                    break;
+                case "darkCyan":
+                    this.BackColor = ConsoleColor.DarkCyan;
+                    break;
+                case "darkRed":
+                    this.BackColor = ConsoleColor.DarkRed;
+                    break;
+                case "darkMagenta":
+                    this.BackColor = ConsoleColor.DarkMagenta;
+                    break;
+                case "darkYellow":
+                    this.BackColor = ConsoleColor.DarkYellow;
+                    break;
+                case "gray":
+                    this.BackColor = ConsoleColor.Gray;
+                    break;
+                case "darkGray":
+                    this.BackColor = ConsoleColor.DarkGray;
+                    break;
+                case "blue":
+                    this.BackColor = ConsoleColor.Blue;
+                    break;
+                case "green":
+                    this.BackColor = ConsoleColor.Green;
+                    break;
+                case "cyan":
+                    this.BackColor = ConsoleColor.Cyan;
+                    break;
+                case "red":
+                    this.BackColor = ConsoleColor.Red;
+                    break;
+                case "magenta":
+                    this.BackColor = ConsoleColor.Magenta;
+                    break;
+                case "yellow":
+                    this.BackColor = ConsoleColor.Yellow;
+                    break;
+                case "white":
+                    this.BackColor = ConsoleColor.White;
+                    break;
+                default:
+                    this.BackColor = ConsoleColor.Black;
+                    break;
+                }
+            }
+        }
 
 		[DataMember]
 		public ConsoleColors colors;

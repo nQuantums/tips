@@ -27,6 +27,16 @@ namespace FileChangeWatcher {
 		private const int STD_INPUT_HANDLE = -10;
 		private const int STD_OUTPUT_HANDLE = -11;
 
+        struct ColorPair {
+            public ConsoleColor Fore;
+            public ConsoleColor Back;
+
+            public ColorPair(ConsoleColor fore, ConsoleColor back) {
+                this.Fore = fore;
+                this.Back = back;
+            }
+        }
+
 		static int Main(string[] args) {
 			AllocConsole();
 			var encoding = Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
@@ -148,7 +158,7 @@ namespace FileChangeWatcher {
 				rx = null;
 			}
 
-			var colors = new ConsoleColor[0];
+			var colors = new ColorPair[0];
 			for (; ; ) {
 				var line = Console.ReadLine();
 				if (line == null) {
@@ -160,10 +170,10 @@ namespace FileChangeWatcher {
 				line = line.Replace("\t", "    ");
 
 				if (colors.Length < line.Length) {
-					colors = new ConsoleColor[line.Length];
+					colors = new ColorPair[line.Length];
 				}
 				for (int i = 0; i < line.Length; i++) {
-					colors[i] = ConsoleColor.White;
+					colors[i] = new ColorPair(ConsoleColor.White, ConsoleColor.Black);
 				}
 
 				if (rx != null) {
@@ -174,8 +184,8 @@ namespace FileChangeWatcher {
 							var g = groups[h.name];
 							if (g.Success) {
 								var s = g.Index;
-								var c = h.Color;
-								for (int j = 0, m = g.Length; j < m; j++) {
+                                var c = new ColorPair(h.ForeColor, h.BackColor);
+                                for (int j = 0, m = g.Length; j < m; j++) {
 									colors[s + j] = c;
 								}
 								break;
@@ -186,18 +196,21 @@ namespace FileChangeWatcher {
 				}
 
 				int start = 0;
-				int lastColor = (int)colors[0];
-				Console.ForegroundColor = (ConsoleColor)lastColor;
-				for (int i = 0; i < line.Length; i++) {
-					var c = (int)colors[i];
-					if (c != lastColor) {
-						Console.ForegroundColor = (ConsoleColor)lastColor;
+				var lastColor = colors[0];
+                Console.ForegroundColor = lastColor.Fore;
+                Console.BackgroundColor = lastColor.Back;
+                for (int i = 0; i < line.Length; i++) {
+					var c = colors[i];
+					if (c.Fore != lastColor.Fore || c.Back != lastColor.Back) {
+                        Console.ForegroundColor = lastColor.Fore;
+                        Console.BackgroundColor = lastColor.Back;
 						Console.Write(line.Substring(start, i - start));
 						start = i;
 					}
 					lastColor = c;
 				}
-				Console.ForegroundColor = (ConsoleColor)lastColor;
+                Console.ForegroundColor = lastColor.Fore;
+                Console.BackgroundColor = lastColor.Back;
 				Console.WriteLine(line.Substring(start, line.Length - start));
 			}
 

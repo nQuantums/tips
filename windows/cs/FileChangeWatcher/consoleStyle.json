@@ -20,37 +20,38 @@
     "highlights": [{
             "name": "err",
             "pattern": "exception|failed|error|fail|エラー|失敗",
-            "colorName": "red"
+            "fore": "white",
+            "back":  "red"
         },
         {
             "name": "str",
             "pattern": "(\"([^\\\"]|\\.)*?\")|('([^\\']|\\.)*?')",
-            "colorName": "darkRed"
+            "fore": "darkRed"
         },
         {
             "name": "date",
             "pattern": "[0-9]+/[0-9]+/[0-9]+",
-            "colorName": "cyan"
+            "fore": "cyan"
         },
         {
             "name": "time",
             "pattern": "[0-9]+:[0-9]+(:[0-9]+(\\.[0-9]+|)|)",
-            "colorName": "green"
+            "fore": "green"
         },
         {
             "name": "url",
             "pattern": "(https?|ftp)://[\\w/:%#\\$&\\?\\(\\)~\\.=\\+\\-]+",
-            "colorName": "blue"
+            "fore": "blue"
         },
         {
             "name": "num",
             "pattern": "[0-9]+(\\.[0-9]+|)",
-            "colorName": "yellow"
+            "fore": "yellow"
         },
         {
             "name": "symbl",
             "pattern": "[\\(\\){}\\[\\]\\*'\\+\\-/=<>,]",
-            "colorName": "magenta"
+            "fore": "magenta"
         }
     ]
 }
