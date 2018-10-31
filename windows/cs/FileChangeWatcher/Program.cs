@@ -127,8 +127,9 @@ namespace FileChangeWatcher {
 		}
 
 		static int View(string[] args) {
+			string title = "Untitled";
 			if (2 <= args.Length) {
-				Console.Title = args[1];
+				Console.Title = title = args[1];
 			}
 
 			ConsoleStyle cs;
@@ -159,6 +160,7 @@ namespace FileChangeWatcher {
 			}
 
 			var colors = new ColorPair[0];
+			int errCount = 0;
 			for (; ; ) {
 				var line = Console.ReadLine();
 				if (line == null) {
@@ -177,6 +179,7 @@ namespace FileChangeWatcher {
 				}
 
 				if (rx != null) {
+					var errorExists = false;
 					rx.Replace(line, match => {
 						var groups = match.Groups;
 						for (int i = 0; i < highlights.Length; i++) {
@@ -188,11 +191,18 @@ namespace FileChangeWatcher {
                                 for (int j = 0, m = g.Length; j < m; j++) {
 									colors[s + j] = c;
 								}
+								if (h.name == "err") {
+									errorExists = true;
+								}
 								break;
 							}
 						}
 						return "";
 					});
+					if (errorExists) {
+						errCount++;
+						Console.Title = title + " <Error : " + errCount + ">";
+					}
 				}
 
 				int start = 0;

@@ -19,7 +19,7 @@
     },
     "highlights": [{
             "name": "err",
-            "pattern": "exception|failed|error|fail|エラー|失敗",
+            "pattern": "exception|failed|error|fail|エラー|失敗|例外",
             "fore": "white",
             "back":  "red"
         },
