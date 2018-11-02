@@ -4,22 +4,24 @@ from dnn import cp
 from dnn import chainer
 from dnn import F
 from dnn import L
+from dnn import Variable
 import chainer.computational_graph as ccg
 
-dnn.startup(-1)
+dnn.startup(0)
 xp = dnn.xp
 
-IN_LENGTH = 2
-OUT_LENGTH = 2
-MID_LENGTH = 2
+IN_LENGTH = 32
+OUT_LENGTH = 32
+MID_LENGTH = 32
 
-m = dnn.Model(chainer.optimizers.SGD())
-x = m.input(L.Linear(IN_LENGTH, MID_LENGTH), F.relu)
-# x = m.glue(None, L.Linear(MID_LENGTH, MID_LENGTH), F.relu, x)
-# x = m.glue(None, L.Linear(MID_LENGTH, MID_LENGTH), F.relu, x)
-# x = m.glue(None, L.Linear(MID_LENGTH, MID_LENGTH), F.relu, x)
-# x = m.glue(None, L.Linear(MID_LENGTH, MID_LENGTH), F.relu, x)
-x = m.output(L.Linear(MID_LENGTH, OUT_LENGTH), F.relu, x)
+m = dnn.Model(chainer.optimizers.Adam())
+x = m.input(L.Linear(IN_LENGTH, MID_LENGTH), None)
+x = m.layer(L.Linear(MID_LENGTH, MID_LENGTH), None, dnn.Lambda(lambda a, x: a.pl(x) * 2, pl=x))
+x = m.layer(L.Linear(MID_LENGTH, MID_LENGTH), None, x)
+x = m.layer(L.Linear(MID_LENGTH, MID_LENGTH), None, x)
+x = m.layer(L.Linear(MID_LENGTH, MID_LENGTH), None, x)
+x = m.layer(L.Linear(MID_LENGTH, MID_LENGTH), None, x)
+x = m.output(L.Linear(MID_LENGTH, OUT_LENGTH), None, x)
 m.compile()
 m = dnn.to_gpu(m)
 
@@ -28,7 +30,7 @@ m = dnn.to_gpu(m)
 
 for i in range(10):
 	m.zerograds()
-	x = xp.random.uniform(0, 1, (1, IN_LENGTH)).astype(xp.float32)
+	x = Variable(xp.random.uniform(0, 1, (1, IN_LENGTH)).astype(xp.float32))
 	y = m(x)
 	t = x * 10
 	loss = F.mean_squared_error(y, t)
