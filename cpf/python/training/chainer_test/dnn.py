@@ -1,33 +1,47 @@
 """ディープラーニング関係ヘルパ、テンソルのCPU↔GPU変換処理など.
 """
+import types
+# import inspect
 import numpy as np, chainer, chainer.functions as F, chainer.links as L
 from chainer import Variable
 from chainer.link import Link
+
 xp = None
 cp = None
 cuda = None
 test = False
 
+
 class Layer(chainer.Chain):
 	"""レイヤ、学習対象の重み、活性化関数、入力レイヤへの参照を持つ.
 
 	Args:
+		model: このレイヤをメンバ変数として持つモデル.
 		input: 入力レイヤ、Layer を継承するものまたは None.
 		link: 学習対象の重みを持つ chainer.links.Convolution2D など chainer.link.Link を継承するもの.
 		activator: 活性化関数、chainer.functions.relu など.
 	"""
 
-	def __init__(self, input, link, activator):
-		if not isinstance(link, Layer):
-			raise TypeError("Invalid argument. 'input' must be Layer.")
+	def __init__(self, model, input, link, activator):
+		if input is not None and not isinstance(input, Layer) and not isinstance(input, Glue):
+			raise TypeError("Invalid argument. 'input' must be Layer or Glue.")
 		if not isinstance(link, Link):
 			raise TypeError('Cannot register a non-link object as a child')
 		super().__init__()
-		self.model = None
+		self.model = model
 		self.input = input
+		self.output_variable_id = None
+		self.is_uner_build = False
+		self.is_built = False
 		with self.init_scope():
 			self.link = link
 			self.activator = activator
+
+	def __str__(self):
+		return self.name
+
+	def __repr__(self):
+		return self.name
 
 	def __call__(self, x=None):
 		"""指定値をレイヤーで変換する.
@@ -38,85 +52,109 @@ class Layer(chainer.Chain):
 		Returns:
 			変換後の値.
 		"""
-		if self.input is not None:
-			x = self.input(x)
 		x = self.link(x)
 		if self.activator is not None:
 			x = self.activator(x)
 		return x
 
-	def pretrace(self, caller, depth, code):
-		if self.input is not None:
-			return self.input.pretrace(caller, depth + 1, code)
-		else:
-			return None
-
-class Lambda:
-	"""ラムダ式を実行する.
-
-	Lambda(lambda a, x: a.pl(x) * 2, pl=prev_layer) の様に初期化し、引数 args に渡したものが a に渡る。
-
-	Args:
-		func: 計算処理、lambda a, x: x * a.k の様に args に指定した値と入力値を受け取り計算を行う処理.
-		args: 係数辞書、 k=2 の様に指定してメンバ変数を作りそれが func の x に渡る.
-	"""
-	def __init__(self, func, **args):
-		if not callable(func):
-			raise TypeError("Invalid argument. 'func' must be callable.")
-		self.func = func
-		for k, v in args.items():
-			setattr(self, k, v)
-
-	def __call__(self, x):
-		"""計算を実行する.
+	def build(self, depth):
+		"""コード生成を行う.
 
 		Args:
-				x: 入力値.
+			depth: 関数呼び出し深さ.
+		"""
+		if self.is_built:
+			return
+		if self.is_uner_build:
+			raise Exception()
+		self.is_uner_build = True
+
+		if self.input is None:
+			in_id = 0
+		else:
+			self.input.build(depth + 1)
+			in_id = self.input.get_output_variable_id(self)
+		in_name = self.model.get_local_variable_name(in_id)
+		self.model.del_local_variable_id(in_id)
+
+		out_id = self.model.new_local_variable_id()
+		out_name = self.model.get_local_variable_name(out_id)
+		self.output_variable_id = out_id
+
+		self.model.code.append('\t{} = self.{}({})'.format(out_name, self.name, in_name))
+		if self.input is not None:
+			self.model.dot_code.append('{} -> {} [label="{}"];'.format(self.input.name, self.name, in_name))
+
+		self.is_built = True
+		self.is_uner_build = False
+
+	def get_output_variable_id(self, layer):
+		"""このレイヤから指定レイヤへの出力を一時的に保持するローカル変数IDを取得する.
+
+		Args:
+			layer: 出力先レイヤ.
 
 		Returns:
-				結果.
+			ローカル変数ID.
 		"""
-		return self.func(self, x)
+		if self.output_variable_id is not None:
+			return self.output_variable_id
+		else:
+			self.output_variable_id = self.model.new_local_variable_id()
+			return self.output_variable_id
+
+	def collect_glue(self, output, depth, glue_set):
+		"""入力側の直近の複数出力 Glue を集める.
+
+		Args:
+			output: 呼び出し元出力側レイヤ.
+			depth: 関数呼び出し深さ.
+			glue_set: Glue 収集先 set.
+		"""
+		if self.input is None:
+			return
+		self.input.collect_glue(self, depth + 1, glue_set)
+
 
 class Glue:
 	"""指定値を１～複数の出力レイヤーで変換する、複数対複数のレイヤーをくっつける役割を持つ.
 
 	使用例）
 		m = dnn.Model(chainer.optimizers.Adam())
-		def saparate(glue, x, out):
-			x = x.reshape(2, 1, 16)
-			return [out[0](x[0]), out[1](x[1])]
-		def concat(glue, x, out):
-			h = F.concat((x[0], x[1]), axis=1)
-			return out[0](h)
-		l1 = m.input(L.Linear(32, 32))
-		l2 = m.layer(None, L.Linear(16, 16))
-		l3 = m.layer(None, L.Linear(16, 16))
-		l4 = m.layer(None, L.Linear(32, 32))
-		g1 = m.glue([l1], [l2, l3], saparate)
-		g2 = m.glue([l2, l3], [l4], concat)
+		l = m.input(L.Linear(32, 32))
+		g = m.glue([l], separate) # ２つに分ける
+		g = m.glue([g.output(L.Linear(16, 16)), g.output(L.Linear(16, 16))], concat) # ２つを１つに結合する
+		m.assign_output(g.output(L.Linear(32, 32)))
+		m.build()
 
 	Args:
+		model: このレイヤをメンバ変数として持つモデル.
 		inputs: 入力レイヤーリスト.
-		outputs: 出力レイヤーリスト.
-		func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理.
+		func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(glue, x, output_layers).
 	"""
-	def __init__(self, inputs, outputs, func):
-		self.model = None
-		self.inputs = inputs
-		self.outputs = outputs
-		self.func = func
 
-		self.outputs_set = {o for o in outputs}
-		self.input_len  = len(inputs)
-		self.output_len = len(outputs)
-		self.traced_outputs = set()
-		self.is_traced_all = False
-		for layer in outputs:
-			layer.input = self
+	def __init__(self, model, inputs, func):
+		for i in inputs:
+			if not isinstance(i, Layer):
+				raise TypeError("Invalid argument. 'inputs' element must be Layer.")
+
+		self.model = model
+		self.name = None
+		self.inputs = inputs
+		self.func = func
+		self.outputs = []
+		self.output_variable_ids = {}
+		self.is_built = False
+		self.is_uner_build = False
+
+	def __str__(self):
+		return self.name
+
+	def __repr__(self):
+		return self.name
 
 	def __call__(self, x):
-		"""指定値をレイヤーで変換する.
+		"""指定値をユーザー指定処理で変換する.
 
 		Args:
 			x: 入力値.
@@ -124,21 +162,96 @@ class Glue:
 		Returns:
 			変換後の値.
 		"""
-		return self.func(self, x, self.inputs, self.outputs)
+		return self.func(self, x, self.outputs)
 
-	def pretrace(self, caller, depth, code):
-		if 2 <= self.output_len:
-			# 出力が複数あるなら全出力（呼び出し元）からの呼び出し完了後に呼び出してもらう
-			self.traced_outputs.add(caller)
-			self.is_traced_all = self.outputs_set.issubset(self.traced_outputs)
-			return (self, depth)
+	def output(self, link, activator=None):
+		"""この Glue の出力レイヤを作成する.
+
+		Args:
+			link: 学習対象の重みを持つ chainer.links.Convolution2D など chainer.link.Link を継承するもの.
+			activator: 活性化関数、chainer.functions.relu など.
+
+		Returns:
+			出力に結び付けられた Layer.
+		"""
+		layer = self.model.layer(self, link, activator)
+		self.outputs.append(layer)
+		return layer
+
+	def build(self, depth):
+		"""コード生成を行う.
+
+		Args:
+			depth: 関数呼び出し深さ.
+		"""
+		if self.is_built:
+			return
+		if self.is_uner_build:
+			raise Exception()
+		self.is_uner_build = True
+
+		depth += 1
+
+		glue_set = set()
+		for i in self.inputs:
+			i.collect_glue(self, depth, glue_set)
+		glues_list = [g for g in glue_set]
+		glues_list.sort(key=lambda g: g[1])
+		for g in reversed(glues_list):
+			g[0].build(g[1])
+
+		in_ids = []
+		for i in self.inputs:
+			i.build(depth)
+			in_ids.append(i.get_output_variable_id(self))
+
+		out_ids = [self.get_output_variable_id(o) for o in self.outputs]
+
+		in_names = ', '.join([self.model.get_local_variable_name(id) for id in in_ids])
+		out_names = ', '.join([self.model.get_local_variable_name(id) for id in out_ids])
+		self.model.code.append('\t{} = self.{}(({}))'.format(out_names, self.name, in_names))
+
+		# func_code = inspect.getsource(self.func)
+		# func_code = func_code.replace('\n', '\\n')
+		# func_code = func_code.replace('\t', '\\t')
+		# self.model.dot_code.append('{} [label="{}"];'.format(self.name, func_code))
+
+		for i in self.inputs:
+			self.model.dot_code.append('{} -> {} [label="{}"];'.format(i.name, self.name, self.model.get_local_variable_name(i.get_output_variable_id(self))))
+
+		for id in in_ids:
+			self.model.del_local_variable_id(id)
+
+		self.is_built = True
+		self.is_uner_build = False
+
+	def get_output_variable_id(self, layer):
+		"""このレイヤから指定レイヤへの出力を一時的に保持するローカル変数IDを取得する.
+
+		Args:
+			layer: 出力先レイヤ.
+
+		Returns:
+			ローカル変数ID.
+		"""
+		if layer in self.output_variable_ids:
+			return self.output_variable_ids[layer]
 		else:
-			depth += 1
-			glues = set()
-			for input in self.inputs:
-				g = input.pretrace(self, depth, code)
-				if g is not None:
-					glues.add(g)
+			id = self.model.new_local_variable_id()
+			self.output_variable_ids[layer] = id
+			return id
+
+	def collect_glue(self, output, depth, glue_set):
+		"""入力側の直近の複数出力 Glue を集める.
+
+		Args:
+			output: 呼び出し元出力側レイヤ.
+			depth: 関数呼び出し深さ.
+			glue_set: Glue 収集先 set.
+		"""
+		if 2 <= len(self.outputs):
+			glue_set.add((self, depth))
+
 
 class Model(chainer.Chain):
 	"""モデル、 input() 、 layer() 、 output() により複数のレイヤを保持する事が可能.
@@ -149,12 +262,16 @@ class Model(chainer.Chain):
 
 	def __init__(self, optimizer):
 		super().__init__()
-		self.input_layer_name_prefix = 'input_layer_'
-		self.input_layer_name_count = 0
-		self.layer_name_prefix = 'layer_'
-		self.layer_name_count = 0
-		self.output_layer = None
 		self.optimizer = optimizer
+		self.input_layer = None
+		self.output_layer = None
+		self.nodes = set()
+		self.layers = []
+		self.glues = []
+		self.local_variable_ids = set()
+		self.code = []
+		self.dot_code = []
+		self.prediction = None
 
 	def input(self, link, activator=None):
 		"""入力レイヤを作成する.
@@ -164,51 +281,81 @@ class Model(chainer.Chain):
 			activator: 活性化関数、chainer.functions.relu など.
 
 		Returns:
-			レイヤ.
+			Layer.
 		"""
-		input_layer_name_count = self.input_layer_name_count
-		input_layer_name_count += 1
-		name = self.input_layer_name_prefix + str(input_layer_name_count)
-		layer = Layer(None, link, activator)
-		self.add_link(name, layer)
-		self.input_layer_name_count = input_layer_name_count
+		del self.input_layer
+		layer = Layer(self, None, link, activator)
+		self.add_link('input_layer', layer)
 		return layer
+
+	def assign_output(self, output_layer):
+		"""出力レイヤを割り当てる.
+
+		Args:
+			output_layer: 出力とする Layer.
+		"""
+		del self.output_layer
+		self.add_link('output_layer', output_layer)
 
 	def layer(self, input_layer, link, activator=None):
 		"""中間レイヤを作成する.
 
 		Args:
-			input_layer: Layer を継承する入力レイヤ.
+			input_layer: 入力側の Layer を継承する入力レイヤ.
 			link: 学習対象の重みを持つ chainer.links.Convolution2D など chainer.link.Link を継承するもの.
 			activator: 活性化関数、chainer.functions.relu など.
 
 		Returns:
-			レイヤ.
+			Layer.
 		"""
-		layer_name_count = self.layer_name_count
-		layer_name_count += 1
-		name = self.layer_name_prefix + str(layer_name_count)
-		layer = Layer(input_layer, link, activator)
+		name = 'layer_' + str(len(self.layers))
+		layer = Layer(self, input_layer, link, activator)
 		self.add_link(name, layer)
-		self.layer_name_count = layer_name_count
+		self.layers.append(layer)
+		self.nodes.add(layer)
 		return layer
 
-	def output(self, input_layer, link, activator=None):
-		"""出力レイヤを作成する.
+	def glue(self, input_layers, func):
+		"""レイヤ同士を結合する Glue を作成する.
+
+		使用例）
+			m = dnn.Model(chainer.optimizers.Adam())
+			l = m.input(L.Linear(32, 32))
+			g = m.glue([l], separate) # ２つに分ける
+			g = m.glue([g.output(L.Linear(16, 16)), g.output(L.Linear(16, 16))], concat) # ２つを１つに結合する
+			m.assign_output(g.output(L.Linear(32, 32)))
+			m.build()
 
 		Args:
-			input_layer: Layer を継承する入力レイヤ.
-			link: 学習対象の重みを持つ chainer.links.Convolution2D など chainer.link.Link を継承するもの.
-			activator: 活性化関数、chainer.functions.relu など.
+			input_layers: 入力側の Layer を継承する入力レイヤのリスト.
+			func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(glue, x, output_layers).
 
 		Returns:
-			レイヤ.
+			Glue.
 		"""
-		layer = Layer(input_layer, link, activator)
-		del self.output_layer
-		with self.init_scope():
-			self.output_layer = layer
-		return layer
+		glue = Glue(self, input_layers, func)
+		name = 'glue_' + str(len(self.glues))
+		setattr(self, name, glue)
+		glue.name = name
+		self.glues.append(glue)
+		self.nodes.add(glue)
+		return glue
+
+	def build(self):
+		"""モデルの推論用関数をビルドする.
+		"""
+		self.code.append('def prediction(self, x):')
+		self.dot_code.insert(0, 'digraph {\n')
+		self.output_layer.build(0)
+		self.dot_code.append('}')
+		self.code.append('\treturn {}\n'.format(self.get_local_variable_name(self.output_layer.get_output_variable_id(None))))
+		self.code = '\n'.join(self.code)
+
+		l = {}
+		exec(self.code, globals(), l)
+		self.prediction = types.MethodType(l['prediction'], self)
+
+		self.optimizer.setup(self)
 
 	def __call__(self, x):
 		"""計算を実行する.
@@ -219,12 +366,46 @@ class Model(chainer.Chain):
 		Returns:
 			結果.
 		"""
-		return self.output_layer(x)
+		return self.prediction(x)
 
-	def compile(self):
-		"""モデルの構築が完了後、計算準備の最終処理を行う.
+	def new_local_variable_id(self):
+		"""モデルの推論用関数内で使用されるローカル変数のIDを生成する.
+
+		Returns:
+			ローカル変数ID.
 		"""
-		self.optimizer.setup(self)
+		ids = self.local_variable_ids
+		id = 1
+		while id in ids:
+			id += 1
+		ids.add(id)
+		return id
+
+	def del_local_variable_id(self, id):
+		"""モデルの推論用関数内で使用されるローカル変数を削除する.
+
+		Args:
+			id: ローカル変数ID.
+		"""
+		if id == 0:
+			return
+		self.local_variable_ids.remove(id)
+
+	def get_local_variable_name(self, id):
+		"""モデルの推論用関数内で使用されるローカル変数名を取得する.
+
+		Args:
+			id: ローカル変数ID.
+
+		Returns:
+			ローカル変数名.
+		"""
+		if id == 0:
+			return 'x'
+		if id in self.local_variable_ids:
+			return 'x' + str(id)
+		else:
+			raise LookupError('There is no variable with the specified ID ' + str(id) + '.')
 
 
 def startup(gpu, train=True):
