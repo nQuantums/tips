@@ -1,13 +1,11 @@
 import dnn
-from dnn import np
-from dnn import cp
 from dnn import chainer
 from dnn import F
 from dnn import L
 from dnn import Variable
 import chainer.computational_graph as ccg
 
-dnn.startup(0)
+dnn.startup(0) # 0番のGPU使用
 xp = dnn.xp
 
 def separate(g, x, out):
@@ -26,8 +24,10 @@ g = m.glue([g.output(L.Linear(16, 16)), g.output(L.Linear(16, 16))], concat) # �
 m.assign_output(g.output(L.Linear(32, 32)))
 m.build()
 
+# 計算速度のためGPUメモリに転送
 m = dnn.to_gpu(m)
 
+# とりあえず入力値を単純に10倍にするネットを目標とする
 for i in range(10):
 	m.zerograds()
 	x = Variable(xp.random.uniform(0, 1, (1, 32)).astype(xp.float32))
@@ -38,6 +38,7 @@ for i in range(10):
 	print(loss)
 	m.optimizer.update()
 
+# 保存時はCPUメモリにしないとだめ
 m = dnn.to_cpu(m)
 dnn.save("modeldata", m)
 
