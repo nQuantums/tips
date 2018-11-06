@@ -19,18 +19,17 @@
 		h = F.concat((x[0], x[1]), axis=1)
 		return out[0](h)
 
-	m = dnn.Model(chainer.optimizers.Adam())
-	l = m.input(L.Linear(32, 32))
-	g = m.glue([l], separate) # ２つに分ける
-	g = m.glue([g.output(L.Linear(16, 16)), g.output(L.Linear(16, 16))], concat) # ２つを１つに結合する
-	m.assign_output(g.output(L.Linear(32, 32)))
+	m = dnn.Model(chainer.optimizers.Adam()) # とりあえず Model 作る
+	g = m.glue([m.linear(32, 32).relu()], separate) # 全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Glue 作る
+	g = m.glue([g.linear(16, 16), g.linear(16, 16)], concat) # ２つの入力を１つに結合する Glue 作る
+	m.assign_output(g.linear(32, 32)) # 全結合層を１つ作ってそれを出力とする
 	m.build()
 
-	# 計算速度のためGPUメモリに転送
-	m = dnn.to_gpu(m)
+	# 所定のデバイスメモリに転送
+	m = dnn.to_xp(m)
 
 	# とりあえず入力値を単純に10倍にするネットを目標とする
-	for i in range(10):
+	for i in range(10000):
 		m.zerograds()
 		x = Variable(xp.random.uniform(0, 1, (1, 32)).astype(xp.float32))
 		y = m(x)
@@ -45,9 +44,10 @@
 	dnn.save("modeldata", m)
 """
 import types
-# import inspect
+import inspect
 import numpy as np, chainer, chainer.functions as F, chainer.links as L
 from chainer import Variable
+from chainer import Chain
 from chainer.link import Link
 
 xp = None
@@ -56,30 +56,79 @@ cuda = None
 test = False
 
 
-class Layer(chainer.Chain):
+class LayerFactory:
+	"""出力側のレイヤを生成する機能を提供するクラス.
+
+	Args:
+		model: Layer の所有者となる Model.
+	"""
+
+	def __init__(self, model):
+		self.model = model
+
+	def layer(self, link, input=None):
+		"""自分を入力とする出力 Layer を生成する.
+
+		Args:
+			link: レイヤーの計算のメインとなる Link.
+			input: None.
+
+		Returns:
+			Layer.
+		"""
+		return self.model.layer(link, self)
+
+	def linear(self, in_size, out_size=None, nobias=False, initialW=None, initial_bias=None):
+		return self.layer(L.Linear(in_size, out_size, nobias, initialW, initial_bias))
+
+	def conv2d(self, in_channels, out_channels, ksize=None, stride=1, pad=0, nobias=False, initialW=None, initial_bias=None):
+		return self.layer(L.Convolution2D(in_channels, out_channels, ksize, stride, pad, nobias, initialW, initial_bias))
+
+	def deconv2d(self, in_channels, out_channels, ksize=None, stride=1, pad=0, nobias=False, outsize=None, initialW=None, initial_bias=None):
+		return self.layer(L.Deconvolution2D(in_channels, out_channels, ksize, stride, pad, nobias, outsize, initialW, initial_bias))
+
+
+class ActivatorHolder:
+	"""活性化関数を生成し保持する機能を提供するクラス.
+	"""
+
+	def __init__(self):
+		self.activator = None
+
+	def relu(self):
+		self.activator = F.relu
+		return self
+
+	def sigmoid(self):
+		self.activator = F.sigmoid
+		return self
+
+
+class Layer(Chain, LayerFactory, ActivatorHolder):
 	"""レイヤ、学習対象の重み、活性化関数、入力レイヤへの参照を持つ.
 
 	Args:
 		model: このレイヤをメンバ変数として持つモデル.
-		input: 入力レイヤ、Layer を継承するものまたは None.
 		link: 学習対象の重みを持つ chainer.links.Convolution2D など chainer.link.Link を継承するもの.
-		activator: 活性化関数、chainer.functions.relu など.
+		input: 入力レイヤ、Layer を継承するものまたは None.
 	"""
 
-	def __init__(self, model, input, link, activator):
+	def __init__(self, model, link, input=None):
 		if input is not None and not isinstance(input, Layer) and not isinstance(input, Glue):
 			raise TypeError("Invalid argument. 'input' must be Layer or Glue.")
 		if not isinstance(link, Link):
 			raise TypeError('Cannot register a non-link object as a child')
-		super().__init__()
-		self.model = model
+
+		Chain.__init__(self)
+		LayerFactory.__init__(self, model)
+		ActivatorHolder.__init__(self)
+
 		self.input = input
 		self.output_variable_id = None
 		self.is_uner_build = False
 		self.is_built = False
 		with self.init_scope():
 			self.link = link
-			self.activator = activator
 
 	def __str__(self):
 		return self.name
@@ -160,7 +209,7 @@ class Layer(chainer.Chain):
 		self.input.collect_glue(self, depth + 1, glue_set)
 
 
-class Glue:
+class Glue(LayerFactory):
 	"""指定値を１～複数の出力レイヤーで変換する、複数対複数のレイヤーをくっつける役割を持つ.
 
 	使用例）
@@ -182,7 +231,8 @@ class Glue:
 			if not isinstance(i, Layer):
 				raise TypeError("Invalid argument. 'inputs' element must be Layer.")
 
-		self.model = model
+		LayerFactory.__init__(self, model)
+
 		self.name = None
 		self.inputs = inputs
 		self.func = func
@@ -208,17 +258,17 @@ class Glue:
 		"""
 		return self.func(self, x, self.outputs)
 
-	def output(self, link, activator=None):
-		"""この Glue の出力レイヤを作成する.
+	def layer(self, link, input=None):
+		"""自分を入力とする出力 Layer を生成する.
 
 		Args:
-			link: 学習対象の重みを持つ chainer.links.Convolution2D など chainer.link.Link を継承するもの.
-			activator: 活性化関数、chainer.functions.relu など.
+			link: レイヤーの計算のメインとなる Link.
+			input: None.
 
 		Returns:
-			出力に結び付けられた Layer.
+			Layer.
 		"""
-		layer = self.model.layer(self, link, activator)
+		layer = LayerFactory.layer(self, link)
 		self.outputs.append(layer)
 		return layer
 
@@ -297,7 +347,7 @@ class Glue:
 			glue_set.add((self, depth))
 
 
-class Model(chainer.Chain):
+class Model(Chain, LayerFactory):
 	"""モデル、 input() 、 layer() 、 output() により複数のレイヤを保持する事が可能.
 
 	Args:
@@ -305,11 +355,11 @@ class Model(chainer.Chain):
 	"""
 
 	def __init__(self, optimizer):
-		super().__init__()
+		Chain.__init__(self)
+		LayerFactory.__init__(self, self)
+
 		self.optimizer = optimizer
-		self.input_layer = None
 		self.output_layer = None
-		self.nodes = set()
 		self.layers = []
 		self.glues = []
 		self.local_variable_ids = set()
@@ -317,19 +367,20 @@ class Model(chainer.Chain):
 		self.dot_code = []
 		self.prediction = None
 
-	def input(self, link, activator=None):
-		"""入力レイヤを作成する.
+	def layer(self, link, input=None):
+		"""入力レイヤーを生成する.
 
 		Args:
-			link: 学習対象の重みを持つ chainer.links.Convolution2D など chainer.link.Link を継承するもの.
-			activator: 活性化関数、chainer.functions.relu など.
-
-		Returns:
-			Layer.
+			link: レイヤーの計算のメインとなる Link.
+			input: 入力となる Layer または None.
 		"""
-		del self.input_layer
-		layer = Layer(self, None, link, activator)
-		self.add_link('input_layer', layer)
+		if input is None:
+			name = 'input_layer'
+		else:
+			name = 'layer_' + str(len(self.layers)) + '_' + type(link).__name__
+		layer = Layer(self, link, input)
+		self.add_link(name, layer)
+		self.layers.append(layer)
 		return layer
 
 	def assign_output(self, output_layer):
@@ -338,26 +389,8 @@ class Model(chainer.Chain):
 		Args:
 			output_layer: 出力とする Layer.
 		"""
-		del self.output_layer
-		self.add_link('output_layer', output_layer)
-
-	def layer(self, input_layer, link, activator=None):
-		"""中間レイヤを作成する.
-
-		Args:
-			input_layer: 入力側の Layer を継承する入力レイヤ.
-			link: 学習対象の重みを持つ chainer.links.Convolution2D など chainer.link.Link を継承するもの.
-			activator: 活性化関数、chainer.functions.relu など.
-
-		Returns:
-			Layer.
-		"""
-		name = 'layer_' + str(len(self.layers))
-		layer = Layer(self, input_layer, link, activator)
-		self.add_link(name, layer)
-		self.layers.append(layer)
-		self.nodes.add(layer)
-		return layer
+		self.add_link('output_layer_' + type(output_layer.link).__name__, output_layer)
+		self.output_layer = output_layer
 
 	def glue(self, input_layers, func):
 		"""レイヤ同士を結合する Glue を作成する.
@@ -382,7 +415,6 @@ class Model(chainer.Chain):
 		setattr(self, name, glue)
 		glue.name = name
 		self.glues.append(glue)
-		self.nodes.add(glue)
 		return glue
 
 	def build(self):
@@ -392,6 +424,7 @@ class Model(chainer.Chain):
 		self.dot_code.insert(0, 'digraph {\n')
 		self.output_layer.build(0)
 		self.dot_code.append('}')
+		self.dot_code = '\n'.join(self.dot_code)
 		self.code.append('\treturn {}\n'.format(self.get_local_variable_name(self.output_layer.get_output_variable_id(None))))
 		self.code = '\n'.join(self.code)
 
@@ -532,6 +565,17 @@ def to_cpu(x):
 		return cuda.to_cpu(x)
 	else:
 		return x
+
+
+def to_xp(x):
+	"""オブジェクトを startup() 関数に指定したデバイスメモリに変換する.
+
+	Args:
+		x: 変換対象オブジェクト.
+	Returns:
+		変換後のオブジェクト.
+	"""
+	return to_gpu(x) if xp is cp else to_cpu(x)
 
 
 def save(file_name, model):
