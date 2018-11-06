@@ -175,6 +175,8 @@ class Layer(Chain, LayerFactory, ActivatorHolder):
 		self.output_variable_id = out_id
 
 		self.model.code.append('\t{} = self.{}({})'.format(out_name, self.name, in_name))
+		if self.activator is not None:
+			self.model.dot_code.append('{} [label="{}\\n{}"];'.format(self.name, self.name, self.activator.__name__))
 		if self.input is not None:
 			self.model.dot_code.append('{} -> {} [label="{}"];'.format(self.input.name, self.name, in_name))
 
@@ -375,7 +377,7 @@ class Model(Chain, LayerFactory):
 			input: 入力となる Layer または None.
 		"""
 		if input is None:
-			name = 'input_layer'
+			name = 'input_layer' + '_' + type(link).__name__
 		else:
 			name = 'layer_' + str(len(self.layers)) + '_' + type(link).__name__
 		layer = Layer(self, link, input)
