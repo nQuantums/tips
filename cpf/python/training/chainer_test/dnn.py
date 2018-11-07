@@ -6,22 +6,23 @@
 	from dnn import F
 	from dnn import L
 	from dnn import Variable
+	import chainer.computational_graph as ccg
 
-	dnn.startup(0) # 0番のGPU使用
-	xp = dnn.xp
+	dnn.startup(-1) # 0番のGPU使用
+	xp = dnn.xp # numpy または cupy
 
-	def separate(g, x, out):
+	def separate(x, out):
 		shape = x.shape
 		x = x.reshape((2, shape[0], shape[1] // 2))
 		return out[0](x[0]), out[1](x[1])
 
-	def concat(g, x, out):
+	def concat(x, out):
 		h = F.concat((x[0], x[1]), axis=1)
 		return out[0](h)
 
 	m = dnn.Model(chainer.optimizers.Adam()) # とりあえず Model 作る
-	g = m.glue([m.linear(32, 32).relu()], separate) # 全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Glue 作る
-	g = m.glue([g.linear(16, 16), g.linear(16, 16)], concat) # ２つの入力を１つに結合する Glue 作る
+	g = m.gate(separate, m.linear(32, 32).relu().linear(32, 32).relu()) # 全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Gate 作る
+	g = m.gate(concat, g.linear(16, 16), g.linear(16, 16)) # ２つの入力を１つに結合する Gate 作る
 	m.assign_output(g.linear(32, 32)) # 全結合層を１つ作ってそれを出力とする
 	m.build()
 
@@ -81,11 +82,14 @@ class LayerFactory:
 	def linear(self, in_size, out_size=None, nobias=False, initialW=None, initial_bias=None):
 		return self.layer(L.Linear(in_size, out_size, nobias, initialW, initial_bias))
 
-	def conv2d(self, in_channels, out_channels, ksize=None, stride=1, pad=0, nobias=False, initialW=None, initial_bias=None):
-		return self.layer(L.Convolution2D(in_channels, out_channels, ksize, stride, pad, nobias, initialW, initial_bias))
+	def conv2d(self, in_channels, out_channels, ksize=None, stride=1, pad=0, nobias=False, initialW=None, initial_bias=None, **kwargs):
+		return self.layer(L.Convolution2D(in_channels, out_channels, ksize, stride, pad, nobias, initialW, initial_bias, **kwargs))
 
-	def deconv2d(self, in_channels, out_channels, ksize=None, stride=1, pad=0, nobias=False, outsize=None, initialW=None, initial_bias=None):
-		return self.layer(L.Deconvolution2D(in_channels, out_channels, ksize, stride, pad, nobias, outsize, initialW, initial_bias))
+	def deconv2d(self, in_channels, out_channels, ksize=None, stride=1, pad=0, nobias=False, outsize=None, initialW=None, initial_bias=None, **kwargs):
+		return self.layer(L.Deconvolution2D(in_channels, out_channels, ksize, stride, pad, nobias, outsize, initialW, initial_bias, **kwargs))
+
+	def batchnorm(self, size=None, decay=0.9, eps=2e-5, dtype=None, use_gamma=True, use_beta=True, initial_gamma=None, initial_beta=None, axis=None, initial_avg_mean=None, initial_avg_var=None):
+		return self.layer(L.BatchNormalization(size, decay, eps, dtype, use_gamma, use_beta, initial_gamma, initial_beta, axis, initial_avg_mean, initial_avg_var))
 
 
 class ActivatorHolder:
@@ -97,6 +101,10 @@ class ActivatorHolder:
 
 	def relu(self):
 		self.activator = F.relu
+		return self
+
+	def leaky_relu(self):
+		self.activator = F.leaky_relu
 		return self
 
 	def sigmoid(self):
@@ -114,8 +122,8 @@ class Layer(Chain, LayerFactory, ActivatorHolder):
 	"""
 
 	def __init__(self, model, link, input=None):
-		if input is not None and not isinstance(input, Layer) and not isinstance(input, Glue):
-			raise TypeError("Invalid argument. 'input' must be Layer or Glue.")
+		if input is not None and not isinstance(input, Layer) and not isinstance(input, Gate):
+			raise TypeError("Invalid argument. 'input' must be Layer or Gate.")
 		if not isinstance(link, Link):
 			raise TypeError('Cannot register a non-link object as a child')
 
@@ -199,36 +207,28 @@ class Layer(Chain, LayerFactory, ActivatorHolder):
 			return self.output_variable_id
 
 	def collect_glue(self, output, depth, glue_set):
-		"""入力側の直近の複数出力 Glue を集める.
+		"""入力側の直近の複数出力 Gate を集める.
 
 		Args:
 			output: 呼び出し元出力側レイヤ.
 			depth: 関数呼び出し深さ.
-			glue_set: Glue 収集先 set.
+			glue_set: Gate 収集先 set.
 		"""
 		if self.input is None:
 			return
 		self.input.collect_glue(self, depth + 1, glue_set)
 
 
-class Glue(LayerFactory):
+class Gate(LayerFactory):
 	"""指定値を１～複数の出力レイヤーで変換する、複数対複数のレイヤーをくっつける役割を持つ.
-
-	使用例）
-		m = dnn.Model(chainer.optimizers.Adam())
-		l = m.input(L.Linear(32, 32))
-		g = m.glue([l], separate) # ２つに分ける
-		g = m.glue([g.output(L.Linear(16, 16)), g.output(L.Linear(16, 16))], concat) # ２つを１つに結合する
-		m.assign_output(g.output(L.Linear(32, 32)))
-		m.build()
 
 	Args:
 		model: このレイヤをメンバ変数として持つモデル.
-		inputs: 入力レイヤーリスト.
-		func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(glue, x, output_layers).
+		func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(x, output_layers).
+		inputs: 入力レイヤー列.
 	"""
 
-	def __init__(self, model, inputs, func):
+	def __init__(self, model, func, *inputs):
 		for i in inputs:
 			if not isinstance(i, Layer):
 				raise TypeError("Invalid argument. 'inputs' element must be Layer.")
@@ -258,7 +258,7 @@ class Glue(LayerFactory):
 		Returns:
 			変換後の値.
 		"""
-		return self.func(self, x, self.outputs)
+		return self.func(x, self.outputs)
 
 	def layer(self, link, input=None):
 		"""自分を入力とする出力 Layer を生成する.
@@ -338,12 +338,12 @@ class Glue(LayerFactory):
 			return id
 
 	def collect_glue(self, output, depth, glue_set):
-		"""入力側の直近の複数出力 Glue を集める.
+		"""入力側の直近の複数出力 Gate を集める.
 
 		Args:
 			output: 呼び出し元出力側レイヤ.
 			depth: 関数呼び出し深さ.
-			glue_set: Glue 収集先 set.
+			glue_set: Gate 収集先 set.
 		"""
 		if 2 <= len(self.outputs):
 			glue_set.add((self, depth))
@@ -394,30 +394,22 @@ class Model(Chain, LayerFactory):
 		self.add_link('output_layer_' + type(output_layer.link).__name__, output_layer)
 		self.output_layer = output_layer
 
-	def glue(self, input_layers, func):
-		"""レイヤ同士を結合する Glue を作成する.
-
-		使用例）
-			m = dnn.Model(chainer.optimizers.Adam())
-			l = m.input(L.Linear(32, 32))
-			g = m.glue([l], separate) # ２つに分ける
-			g = m.glue([g.output(L.Linear(16, 16)), g.output(L.Linear(16, 16))], concat) # ２つを１つに結合する
-			m.assign_output(g.output(L.Linear(32, 32)))
-			m.build()
+	def gate(self, func, *inputs):
+		"""レイヤ同士を結合する Gate を作成する.
 
 		Args:
-			input_layers: 入力側の Layer を継承する入力レイヤのリスト.
-			func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(glue, x, output_layers).
+			func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(gate, x, output_layers).
+			inputs: 入力レイヤー列.
 
 		Returns:
-			Glue.
+			Gate.
 		"""
-		glue = Glue(self, input_layers, func)
+		gate = Gate(self, func, *inputs)
 		name = 'glue_' + str(len(self.glues))
-		setattr(self, name, glue)
-		glue.name = name
-		self.glues.append(glue)
-		return glue
+		setattr(self, name, gate)
+		gate.name = name
+		self.glues.append(gate)
+		return gate
 
 	def build(self):
 		"""モデルの推論用関数をビルドする.

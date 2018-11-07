@@ -6,20 +6,20 @@ from dnn import Variable
 import chainer.computational_graph as ccg
 
 dnn.startup(-1) # 0番のGPU使用
-xp = dnn.xp
+xp = dnn.xp # numpy または cupy
 
-def separate(g, x, out):
+def separate(x, out):
 	shape = x.shape
 	x = x.reshape((2, shape[0], shape[1] // 2))
 	return out[0](x[0]), out[1](x[1])
 
-def concat(g, x, out):
+def concat(x, out):
 	h = F.concat((x[0], x[1]), axis=1)
 	return out[0](h)
 
 m = dnn.Model(chainer.optimizers.Adam()) # とりあえず Model 作る
-g = m.glue([m.linear(32, 32).relu()], separate) # 全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Glue 作る
-g = m.glue([g.linear(16, 16), g.linear(16, 16)], concat) # ２つの入力を１つに結合する Glue 作る
+g = m.gate(separate, m.linear(32, 32).relu().linear(32, 32).relu()) # 全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Glue 作る
+g = m.gate(concat, g.linear(16, 16), g.linear(16, 16)) # ２つの入力を１つに結合する Glue 作る
 m.assign_output(g.linear(32, 32)) # 全結合層を１つ作ってそれを出力とする
 m.build()
 
@@ -32,7 +32,7 @@ with open("dnn_test_prediction.py", mode='w') as f:
 m = dnn.to_xp(m)
 
 # とりあえず入力値を単純に10倍にするネットを目標とする
-for i in range(10000):
+for i in range(10):
 	m.zerograds()
 	x = Variable(xp.random.uniform(0, 1, (1, 32)).astype(xp.float32))
 	y = m(x)
