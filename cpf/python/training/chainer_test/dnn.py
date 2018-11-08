@@ -57,15 +57,58 @@ cuda = None
 test = False
 
 
-class LayerFactory:
-	"""出力側のレイヤを生成する機能を提供するクラス.
+class ModelNode:
+	"""モデルを構成するノード、レイヤを生成する機能を提供するクラス.
 
 	Args:
-		model: Layer の所有者となる Model.
+		parent_model: 所有者となる SubModel.
 	"""
 
-	def __init__(self, model):
-		self.model = model
+	def __init__(self, parent_model):
+		self.parent_model = parent_model # 親 SubModel
+		self.name = None # 所有者 SubModel 内での自身の名前
+		self.output_variable_ids = {} # 出力レイヤーをキーとしたローカル変数ID列、None がキーにする場合全てのレイヤーに優先する
+		self.is_built = False # 既にビルドされたかどうか
+		self.is_uner_build = False # ビルド途中かどうか
+
+		# ルート SubModel の取得
+		node = self
+		while True:
+			p = node.parent_model
+			if p is None:
+				break
+			node = p
+		self.root_model = node # ルート SubModel
+
+	def __str__(self):
+		return self.name
+
+	def __repr__(self):
+		return self.name
+
+	def get_full_name(self):
+		"""ルート SubModel からのフル名称を取得する.
+		"""
+		names = [self.name]
+		node = self.parent_model
+		while node is not None:
+			nm = node.name
+			if nm is not None and len(nm) != 0:
+				names.append(nm)
+			node = node.parent_model
+		return '.'.join(reversed(names))
+
+	def get_dot_name(self):
+		"""dot 内での名称(エンティティ名)を取得する.
+		"""
+		names = [self.name]
+		node = self.parent_model
+		while node is not None:
+			nm = node.name
+			if nm is not None and len(nm) != 0:
+				names.append(nm)
+			node = node.parent_model
+		return '_'.join(reversed(names))
 
 	def layer(self, link, input=None):
 		"""自分を入力とする出力 Layer を生成する.
@@ -77,7 +120,52 @@ class LayerFactory:
 		Returns:
 			Layer.
 		"""
-		return self.model.layer(link, self)
+		return self.parent_model.layer(link, self)
+
+	def model(self, input=None):
+		"""自分を入力とする出力 SubModel を生成する.
+
+		Args:
+			input: None.
+
+		Returns:
+			SubModel.
+		"""
+		return self.parent_model.model(self)
+
+	def get_output_variable_id(self, layer):
+		"""このレイヤから指定レイヤへの出力を一時的に保持するローカル変数IDを取得する.
+
+		Args:
+			layer: 出力先レイヤ.
+
+		Returns:
+			ローカル変数ID.
+		"""
+		if None in self.output_variable_ids:
+			return self.output_variable_ids[None]
+		if layer in self.output_variable_ids:
+			return self.output_variable_ids[layer]
+		else:
+			id = self.root_model.new_local_variable_id()
+			self.output_variable_ids[layer] = id
+			return id
+
+	def build(self, depth):
+		"""コード生成を行う.
+
+		Args:
+			depth: 関数呼び出し深さ.
+		"""
+
+	def collect_gate(self, output, depth, gate_set):
+		"""入力側の直近の複数出力 Gate を集める.
+
+		Args:
+			output: 呼び出し元出力側レイヤ.
+			depth: 関数呼び出し深さ.
+			gate_set: Gate 収集先 set.
+		"""
 
 	def linear(self, in_size, out_size=None, nobias=False, initialW=None, initial_bias=None):
 		return self.layer(L.Linear(in_size, out_size, nobias, initialW, initial_bias))
@@ -92,57 +180,64 @@ class LayerFactory:
 		return self.layer(L.BatchNormalization(size, decay, eps, dtype, use_gamma, use_beta, initial_gamma, initial_beta, axis, initial_avg_mean, initial_avg_var))
 
 
-class ActivatorHolder:
-	"""活性化関数を生成し保持する機能を提供するクラス.
+class FuncsHolder:
+	"""関数を生成し保持する機能を提供するクラス.
 	"""
 
 	def __init__(self):
-		self.activator = None
+		self.funcs = []
 
 	def relu(self):
-		self.activator = F.relu
+		self.funcs.append(F.relu)
 		return self
 
 	def leaky_relu(self):
-		self.activator = F.leaky_relu
+		self.funcs.append(F.leaky_relu)
 		return self
 
 	def sigmoid(self):
-		self.activator = F.sigmoid
+		self.funcs.append(F.sigmoid)
+		return self
+
+	def dropout(self, ratio=.5, **kwargs):
+
+		def dropout(x):
+			return F.dropout(x, ratio, **kwargs)
+
+		self.funcs.append(dropout)
+		return self
+
+	def unpool2d(self, ksize, stride=None, pad=0, outsize=None, cover_all=True):
+
+		def unpool2d(x):
+			return F.unpooling_2d(x, ksize, stride, pad, outsize, cover_all)
+
+		self.funcs.append(unpool2d)
 		return self
 
 
-class Layer(Chain, LayerFactory, ActivatorHolder):
+class Layer(Chain, ModelNode, FuncsHolder):
 	"""レイヤ、学習対象の重み、活性化関数、入力レイヤへの参照を持つ.
 
 	Args:
-		model: このレイヤをメンバ変数として持つモデル.
+		parent_model: 所有者となる SubModel.
 		link: 学習対象の重みを持つ chainer.links.Convolution2D など chainer.link.Link を継承するもの.
 		input: 入力レイヤ、Layer を継承するものまたは None.
 	"""
 
-	def __init__(self, model, link, input=None):
+	def __init__(self, parent_model, link, input=None):
 		if input is not None and not isinstance(input, Layer) and not isinstance(input, Gate):
 			raise TypeError("Invalid argument. 'input' must be Layer or Gate.")
 		if not isinstance(link, Link):
 			raise TypeError('Cannot register a non-link object as a child')
 
 		Chain.__init__(self)
-		LayerFactory.__init__(self, model)
-		ActivatorHolder.__init__(self)
+		ModelNode.__init__(self, parent_model)
+		FuncsHolder.__init__(self)
 
 		self.input = input
-		self.output_variable_id = None
-		self.is_uner_build = False
-		self.is_built = False
 		with self.init_scope():
 			self.link = link
-
-	def __str__(self):
-		return self.name
-
-	def __repr__(self):
-		return self.name
 
 	def __call__(self, x=None):
 		"""指定値をレイヤーで変換する.
@@ -154,8 +249,8 @@ class Layer(Chain, LayerFactory, ActivatorHolder):
 			変換後の値.
 		"""
 		x = self.link(x)
-		if self.activator is not None:
-			x = self.activator(x)
+		for f in self.funcs:
+			x = f(x)
 		return x
 
 	def build(self, depth):
@@ -170,84 +265,67 @@ class Layer(Chain, LayerFactory, ActivatorHolder):
 			raise Exception()
 		self.is_uner_build = True
 
+		# 入力側を先にビルドと入力値を保持している変数ID取得
 		if self.input is None:
 			in_id = 0
 		else:
 			self.input.build(depth + 1)
 			in_id = self.input.get_output_variable_id(self)
-		in_name = self.model.get_local_variable_name(in_id)
-		self.model.del_local_variable_id(in_id)
+		in_name = self.root_model.get_local_variable_name(in_id)
+		self.root_model.del_local_variable_id(in_id) # 名前取得済みなので削除
 
-		out_id = self.model.new_local_variable_id()
-		out_name = self.model.get_local_variable_name(out_id)
-		self.output_variable_id = out_id
+		# 出力値の代入先変数確保
+		out_id = self.root_model.new_local_variable_id()
+		out_name = self.root_model.get_local_variable_name(out_id)
+		self.output_variable_ids[None] = out_id
 
-		self.model.code.append('\t{} = self.{}({})'.format(out_name, self.name, in_name))
-		if self.activator is not None:
-			self.model.dot_code.append('{} [label="{}\\n{}"];'.format(self.name, self.name, self.activator.__name__))
+		# コードの追加
+		self_name = self.get_full_name()
+		self.root_model.code.append('\t{} = self.{}({})'.format(out_name, self_name, in_name))
+
+		dot_name = self.get_dot_name()
+		if len(self.funcs) != 0:
+			self.root_model.dot_code.append('{} [label="{}\\n{}"];'.format(dot_name, self_name, ', '.join([f.__name__ for f in self.funcs])))
+		else:
+			self.root_model.dot_code.append('{} [label="{}"];'.format(dot_name, self_name))
 		if self.input is not None:
-			self.model.dot_code.append('{} -> {} [label="{}"];'.format(self.input.name, self.name, in_name))
+			self.root_model.dot_code.append('{} -> {} [label="{}"];'.format(self.input.get_dot_name(), dot_name, in_name))
 
 		self.is_built = True
 		self.is_uner_build = False
 
-	def get_output_variable_id(self, layer):
-		"""このレイヤから指定レイヤへの出力を一時的に保持するローカル変数IDを取得する.
-
-		Args:
-			layer: 出力先レイヤ.
-
-		Returns:
-			ローカル変数ID.
-		"""
-		if self.output_variable_id is not None:
-			return self.output_variable_id
-		else:
-			self.output_variable_id = self.model.new_local_variable_id()
-			return self.output_variable_id
-
-	def collect_glue(self, output, depth, glue_set):
+	def collect_gate(self, output, depth, gate_set):
 		"""入力側の直近の複数出力 Gate を集める.
 
 		Args:
 			output: 呼び出し元出力側レイヤ.
 			depth: 関数呼び出し深さ.
-			glue_set: Gate 収集先 set.
+			gate_set: Gate 収集先 set.
 		"""
 		if self.input is None:
 			return
-		self.input.collect_glue(self, depth + 1, glue_set)
+		self.input.collect_gate(self, depth + 1, gate_set)
 
 
-class Gate(LayerFactory):
+class Gate(ModelNode):
 	"""指定値を１～複数の出力レイヤーで変換する、複数対複数のレイヤーをくっつける役割を持つ.
 
 	Args:
-		model: このレイヤをメンバ変数として持つモデル.
+		parent_model: 所有者となる SubModel.
 		func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(x, output_layers).
 		inputs: 入力レイヤー列.
 	"""
 
-	def __init__(self, model, func, *inputs):
+	def __init__(self, parent_model, func, *inputs):
 		for i in inputs:
 			if not isinstance(i, Layer):
 				raise TypeError("Invalid argument. 'inputs' element must be Layer.")
 
-		LayerFactory.__init__(self, model)
+		ModelNode.__init__(self, parent_model)
 
-		self.name = None
 		self.inputs = inputs
 		self.func = func
 		self.outputs = []
-		self.output_variable_ids = {}
-		self.is_built = False
-		self.is_uner_build = False
-
-	def __str__(self):
-		return self.name
-
-	def __repr__(self):
-		return self.name
 
 	def __call__(self, x):
 		"""指定値をユーザー指定処理で変換する.
@@ -270,7 +348,7 @@ class Gate(LayerFactory):
 		Returns:
 			Layer.
 		"""
-		layer = LayerFactory.layer(self, link)
+		layer = ModelNode.layer(self, link)
 		self.outputs.append(layer)
 		return layer
 
@@ -286,70 +364,134 @@ class Gate(LayerFactory):
 			raise Exception()
 		self.is_uner_build = True
 
+		# 入力側にある複数出力の Gate を収集し、呼び出しが早い方からビルドしていく
 		depth += 1
 
-		glue_set = set()
+		gate_set = set()
 		for i in self.inputs:
-			i.collect_glue(self, depth, glue_set)
-		glues_list = [g for g in glue_set]
+			i.collect_gate(self, depth, gate_set)
+		glues_list = [g for g in gate_set]
 		glues_list.sort(key=lambda g: g[1])
 		for g in reversed(glues_list):
 			g[0].build(g[1])
 
+		# 入力側を先にビルドと入力値を保持している変数ID取得
 		in_ids = []
 		for i in self.inputs:
 			i.build(depth)
 			in_ids.append(i.get_output_variable_id(self))
 
+		# 出力値の代入先変数確保
 		out_ids = [self.get_output_variable_id(o) for o in self.outputs]
 
-		in_names = ', '.join([self.model.get_local_variable_name(id) for id in in_ids])
-		out_names = ', '.join([self.model.get_local_variable_name(id) for id in out_ids])
-		self.model.code.append('\t{} = self.{}(({}))'.format(out_names, self.name, in_names))
+		# コードの追加
+		self_name = self.get_full_name()
+		in_names = ', '.join([self.root_model.get_local_variable_name(id) for id in in_ids])
+		out_names = ', '.join([self.root_model.get_local_variable_name(id) for id in out_ids])
+		self.root_model.code.append('\t{} = self.{}(({}))'.format(out_names, self_name, in_names))
+
+		dot_name = self.get_dot_name()
+		self.root_model.dot_code.append('{} [label="{}\\n{}"];'.format(dot_name, self_name, self.func.__name__))
+		for i in self.inputs:
+			self.root_model.dot_code.append('{} -> {} [label="{}"];'.format(i.get_dot_name(), dot_name, self.root_model.get_local_variable_name(i.get_output_variable_id(self))))
 
 		# func_code = inspect.getsource(self.func)
 		# func_code = func_code.replace('\n', '\\n')
 		# func_code = func_code.replace('\t', '\\t')
-		# self.model.dot_code.append('{} [label="{}"];'.format(self.name, func_code))
-
-		for i in self.inputs:
-			self.model.dot_code.append('{} -> {} [label="{}"];'.format(i.name, self.name, self.model.get_local_variable_name(i.get_output_variable_id(self))))
+		# self.root_model.dot_code.append('{} [label="{}"];'.format(dot_name, func_code))
 
 		for id in in_ids:
-			self.model.del_local_variable_id(id)
+			self.root_model.del_local_variable_id(id) # 名前取得済みなので削除
 
 		self.is_built = True
 		self.is_uner_build = False
 
-	def get_output_variable_id(self, layer):
-		"""このレイヤから指定レイヤへの出力を一時的に保持するローカル変数IDを取得する.
-
-		Args:
-			layer: 出力先レイヤ.
-
-		Returns:
-			ローカル変数ID.
-		"""
-		if layer in self.output_variable_ids:
-			return self.output_variable_ids[layer]
-		else:
-			id = self.model.new_local_variable_id()
-			self.output_variable_ids[layer] = id
-			return id
-
-	def collect_glue(self, output, depth, glue_set):
+	def collect_gate(self, output, depth, gate_set):
 		"""入力側の直近の複数出力 Gate を集める.
 
 		Args:
 			output: 呼び出し元出力側レイヤ.
 			depth: 関数呼び出し深さ.
-			glue_set: Gate 収集先 set.
+			gate_set: Gate 収集先 set.
 		"""
 		if 2 <= len(self.outputs):
-			glue_set.add((self, depth))
+			gate_set.add((self, depth))
 
 
-class Model(Chain, LayerFactory):
+class SubModel(Chain, ModelNode):
+	"""モデルのサブセット、layer()、gate() によりレイヤを生成し保持する.
+
+	Args:
+		parent_model: 親となる Model.
+		input: 入力レイヤ、Layer を継承するものまたは None.
+	"""
+
+	def __init__(self, parent_model, input=None):
+		if input is not None and not isinstance(input, Layer) and not isinstance(input, Gate):
+			raise TypeError("Invalid argument. 'input' must be Layer or Gate.")
+
+		Chain.__init__(self)
+		ModelNode.__init__(self, parent_model)
+
+		self.parent_model = parent_model
+		self.input = input
+		self.layers = []
+		self.glues = []
+		self.submodels = []
+
+	def layer(self, link, input=None):
+		"""レイヤーを生成する.
+
+		Args:
+			link: レイヤーの計算のメインとなる Link.
+			input: 入力となる Layer または None.
+		"""
+		if input is None and self.input is not None:
+			input = self.input
+			self.input = None
+		name = 'layer_' + str(len(self.layers)) + '_' + type(link).__name__
+		layer = Layer(self, link, input)
+		self.add_link(name, layer)
+		self.layers.append(layer)
+		return layer
+
+	def gate(self, func, *inputs):
+		"""レイヤ同士を結合する Gate を作成する.
+
+		Args:
+			func: 入力値を出力レイヤーに通す処理、 def func(gate, x, output_layers).
+			inputs: 入力レイヤー列.
+
+		Returns:
+			Gate.
+		"""
+		gate = Gate(self, func, *inputs)
+		name = 'gate_' + str(len(self.glues))
+		setattr(self, name, gate)
+		gate.name = name
+		self.glues.append(gate)
+		return gate
+
+	def model(self, input=None):
+		"""子の SubModel を作成する.
+
+		Args:
+			input: 入力レイヤー.
+
+		Returns:
+			SubModel.
+		"""
+		if input is None and self.input is not None:
+			input = self.input
+			self.input = None
+		name = 'model_' + str(len(self.submodels))
+		model = SubModel(self, input)
+		self.add_link(name, model)
+		self.submodels.append(model)
+		return model
+
+
+class Model(SubModel):
 	"""モデル、 input() 、 layer() 、 output() により複数のレイヤを保持する事が可能.
 
 	Args:
@@ -357,33 +499,14 @@ class Model(Chain, LayerFactory):
 	"""
 
 	def __init__(self, optimizer):
-		Chain.__init__(self)
-		LayerFactory.__init__(self, self)
+		SubModel.__init__(self, None)
 
 		self.optimizer = optimizer
 		self.output_layer = None
-		self.layers = []
-		self.glues = []
 		self.local_variable_ids = set()
 		self.code = []
 		self.dot_code = []
 		self.prediction = None
-
-	def layer(self, link, input=None):
-		"""入力レイヤーを生成する.
-
-		Args:
-			link: レイヤーの計算のメインとなる Link.
-			input: 入力となる Layer または None.
-		"""
-		if input is None:
-			name = 'input_layer' + '_' + type(link).__name__
-		else:
-			name = 'layer_' + str(len(self.layers)) + '_' + type(link).__name__
-		layer = Layer(self, link, input)
-		self.add_link(name, layer)
-		self.layers.append(layer)
-		return layer
 
 	def assign_output(self, output_layer):
 		"""出力レイヤを割り当てる.
@@ -391,25 +514,7 @@ class Model(Chain, LayerFactory):
 		Args:
 			output_layer: 出力とする Layer.
 		"""
-		self.add_link('output_layer_' + type(output_layer.link).__name__, output_layer)
 		self.output_layer = output_layer
-
-	def gate(self, func, *inputs):
-		"""レイヤ同士を結合する Gate を作成する.
-
-		Args:
-			func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(gate, x, output_layers).
-			inputs: 入力レイヤー列.
-
-		Returns:
-			Gate.
-		"""
-		gate = Gate(self, func, *inputs)
-		name = 'glue_' + str(len(self.glues))
-		setattr(self, name, gate)
-		gate.name = name
-		self.glues.append(gate)
-		return gate
 
 	def build(self):
 		"""モデルの推論用関数をビルドする.
