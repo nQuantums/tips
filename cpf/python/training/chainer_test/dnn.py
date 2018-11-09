@@ -11,7 +11,7 @@
 	dnn.startup(-1) # 0番のGPU使用
 	xp = dnn.xp # numpy または cupy
 
-	def separate(x, out):
+	def split(x, out):
 		shape = x.shape
 		x = x.reshape((2, shape[0], shape[1] // 2))
 		return out[0](x[0]), out[1](x[1])
@@ -21,16 +21,16 @@
 		return out[0](h)
 
 	m = dnn.Model(chainer.optimizers.Adam()) # とりあえず Model 作る
-	g = m.gate(separate, m.linear(32, 32).relu().linear(32, 32).relu()) # 全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Gate 作る
-	g = m.gate(concat, g.linear(16, 16), g.linear(16, 16)) # ２つの入力を１つに結合する Gate 作る
-	m.assign_output(g.linear(32, 32)) # 全結合層を１つ作ってそれを出力とする
+	g = m.gate(split, m.dense(32, 32).relu().dense(32, 32).relu()) # 全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Gate 作る
+	g = m.gate(concat, g.dense(16, 16), g.dense(16, 16)) # ２つの入力を１つに結合する Gate 作る
+	m.assign_output(g.dense(32, 32)) # 全結合層を１つ作ってそれを出力とする
 	m.build()
 
 	# 所定のデバイスメモリに転送
 	m = dnn.to_xp(m)
 
 	# とりあえず入力値を単純に10倍にするネットを目標とする
-	for i in range(10000):
+	for i in range(10):
 		m.zerograds()
 		x = Variable(xp.random.uniform(0, 1, (1, 32)).astype(xp.float32))
 		y = m(x)
@@ -55,129 +55,6 @@ xp = None
 cp = None
 cuda = None
 test = False
-
-
-class ModelNode:
-	"""モデルを構成するノード、レイヤを生成する機能を提供するクラス.
-
-	Args:
-		parent_model: 所有者となる SubModel.
-	"""
-
-	def __init__(self, parent_model):
-		self.parent_model = parent_model # 親 SubModel
-		self.name = None # 所有者 SubModel 内での自身の名前
-		self.output_variable_ids = {} # 出力レイヤーをキーとしたローカル変数ID列、None がキーにする場合全てのレイヤーに優先する
-		self.is_built = False # 既にビルドされたかどうか
-		self.is_uner_build = False # ビルド途中かどうか
-
-		# ルート SubModel の取得
-		node = self
-		while True:
-			p = node.parent_model
-			if p is None:
-				break
-			node = p
-		self.root_model = node # ルート SubModel
-
-	def __str__(self):
-		return self.name
-
-	def __repr__(self):
-		return self.name
-
-	def get_full_name(self):
-		"""ルート SubModel からのフル名称を取得する.
-		"""
-		names = [self.name]
-		node = self.parent_model
-		while node is not None:
-			nm = node.name
-			if nm is not None and len(nm) != 0:
-				names.append(nm)
-			node = node.parent_model
-		return '.'.join(reversed(names))
-
-	def get_dot_name(self):
-		"""dot 内での名称(エンティティ名)を取得する.
-		"""
-		names = [self.name]
-		node = self.parent_model
-		while node is not None:
-			nm = node.name
-			if nm is not None and len(nm) != 0:
-				names.append(nm)
-			node = node.parent_model
-		return '_'.join(reversed(names))
-
-	def layer(self, link, input=None):
-		"""自分を入力とする出力 Layer を生成する.
-
-		Args:
-			link: レイヤーの計算のメインとなる Link.
-			input: None.
-
-		Returns:
-			Layer.
-		"""
-		return self.parent_model.layer(link, self)
-
-	def model(self, input=None):
-		"""自分を入力とする出力 SubModel を生成する.
-
-		Args:
-			input: None.
-
-		Returns:
-			SubModel.
-		"""
-		return self.parent_model.model(self)
-
-	def get_output_variable_id(self, layer):
-		"""このレイヤから指定レイヤへの出力を一時的に保持するローカル変数IDを取得する.
-
-		Args:
-			layer: 出力先レイヤ.
-
-		Returns:
-			ローカル変数ID.
-		"""
-		if None in self.output_variable_ids:
-			return self.output_variable_ids[None]
-		if layer in self.output_variable_ids:
-			return self.output_variable_ids[layer]
-		else:
-			id = self.root_model.new_local_variable_id()
-			self.output_variable_ids[layer] = id
-			return id
-
-	def build(self, depth):
-		"""コード生成を行う.
-
-		Args:
-			depth: 関数呼び出し深さ.
-		"""
-
-	def collect_gate(self, output, depth, gate_set):
-		"""入力側の直近の複数出力 Gate を集める.
-
-		Args:
-			output: 呼び出し元出力側レイヤ.
-			depth: 関数呼び出し深さ.
-			gate_set: Gate 収集先 set.
-		"""
-
-	def linear(self, in_size, out_size=None, nobias=False, initialW=None, initial_bias=None):
-		return self.layer(L.Linear(in_size, out_size, nobias, initialW, initial_bias))
-
-	def conv2d(self, in_channels, out_channels, ksize=None, stride=1, pad=0, nobias=False, initialW=None, initial_bias=None, **kwargs):
-		return self.layer(L.Convolution2D(in_channels, out_channels, ksize, stride, pad, nobias, initialW, initial_bias, **kwargs))
-
-	def deconv2d(self, in_channels, out_channels, ksize=None, stride=1, pad=0, nobias=False, outsize=None, initialW=None, initial_bias=None, **kwargs):
-		return self.layer(L.Deconvolution2D(in_channels, out_channels, ksize, stride, pad, nobias, outsize, initialW, initial_bias, **kwargs))
-
-	def batchnorm(self, size=None, decay=0.9, eps=2e-5, dtype=None, use_gamma=True, use_beta=True, initial_gamma=None, initial_beta=None, axis=None, initial_avg_mean=None, initial_avg_var=None):
-		return self.layer(L.BatchNormalization(size, decay, eps, dtype, use_gamma, use_beta, initial_gamma, initial_beta, axis, initial_avg_mean, initial_avg_var))
 
 
 class FuncsHolder:
@@ -216,23 +93,226 @@ class FuncsHolder:
 		return self
 
 
-class Layer(Chain, ModelNode, FuncsHolder):
+class Node:
+	"""モデルを構成するノード、レイヤを生成する機能を提供するクラス.
+
+	Args:
+		owner: このノードの所有者となる Node.
+		node_generator: このノードが生成するノードの所有者となる Node.
+		kind_name: 種類名.
+	"""
+
+	def __init__(self, owner, node_generator, kind_name):
+		self.owner = owner # このノードの所有者となる Node.
+		self.node_generator = node_generator # このノードが生成するノードの所有者となる Node.
+		self.kind_name = kind_name # 種類名
+		self.name = None # 所有者 Node 内での自身の名前
+		self.dot_param = '' # グラフ内に表示するパラメータ文字列
+		self.output_variable_ids = {} # 出力ノードをキーとしたローカル変数ID列、None がキーにする場合全てのレイヤーに優先する
+		self.is_built = False # 既にビルドされたかどうか
+		self.is_uner_build = False # ビルド途中かどうか
+
+		# ルート Node の取得
+		node = self
+		while True:
+			p = node.owner
+			if p is None:
+				break
+			node = p
+		self.root_node = node # ルート Node
+
+	def __str__(self):
+		return self.name
+
+	def __repr__(self):
+		return self.name
+
+	def get_full_name(self):
+		"""ルート Node からのフル名称を取得する.
+		"""
+		names = [self.name]
+		node = self.owner
+		while node is not None:
+			nm = node.name
+			if nm is not None and len(nm) != 0:
+				names.append(nm)
+			node = node.owner
+		return '.'.join(reversed(names))
+
+	def _own_node(self, kind_name, node):
+		"""指定 Node を所有する.
+
+		Args:
+			kind_name: 種類名.
+			node: 所有する Node.
+
+		Returns:
+			指定された Node.
+		"""
+		return self.node_generator._own_node(kind_name, node)
+
+	def model(self, kind_name, input=None):
+		"""自分を入力とする出力 SubModel を生成する.
+
+		Args:
+			kind_name: 種類名.
+			input: None.
+
+		Returns:
+			SubModel.
+		"""
+		if input is None:
+			input = self
+		if input == self.node_generator:
+			input = None
+		return self._own_node(kind_name, SubModel(self.node_generator, kind_name, input))
+
+	def layer(self, kind_name, link, input=None):
+		"""自分を入力とする出力 Layer を生成する.
+
+		Args:
+			kind_name: 種類名.
+			link: レイヤーの計算のメインとなる Link.
+			input: None.
+
+		Returns:
+			Layer.
+		"""
+		if input is None:
+			input = self
+		if input == self.node_generator:
+			input = None
+		return self._own_node(kind_name, Layer(self.node_generator, kind_name, link, input))
+
+	def gate(self, func, *inputs):
+		"""レイヤ同士を結合する Gate を作成する.
+
+		Args:
+			func: 入力値を出力レイヤーに通す処理、 def func(gate, x, output_layers).
+			inputs: 入力レイヤー列.
+
+		Returns:
+			Gate.
+		"""
+		return self._own_node('Gate', Gate(self.node_generator, func, *inputs))
+
+	def get_output_variable_id(self, node):
+		"""このノードから指定ノードへの出力を一時的に保持するローカル変数IDを取得する.
+
+		Args:
+			node: 出力先 Node.
+
+		Returns:
+			ローカル変数ID.
+		"""
+		if None in self.output_variable_ids:
+			return self.output_variable_ids[None]
+		if node in self.output_variable_ids:
+			return self.output_variable_ids[node]
+		else:
+			id = self.root_node.new_local_variable_id()
+			self.output_variable_ids[node] = id
+			return id
+
+	def get_output_variable_name(self, node):
+		"""このノードから指定ノードへの出力を一時的に保持するローカル変数名を取得する.
+
+		Args:
+			node: 出力先 Node.
+
+		Returns:
+			ローカル変数名.
+		"""
+		return self.root_node.get_local_variable_name(self.get_output_variable_id(node))
+
+	def _build_begin(self):
+		"""コード生成開始.
+
+		Returns:
+			ビルド開始成功したら True それ以外は False.
+		"""
+		if self.is_built:
+			return False
+		if self.is_uner_build:
+			raise Exception()
+		self.is_uner_build = True
+		return True
+
+	def _build_end(self):
+		"""コード生成終了.
+		"""
+		self.is_built = True
+		self.is_uner_build = False
+
+	def build(self, depth):
+		"""コード生成を行う.
+
+		Args:
+			depth: 関数呼び出し深さ.
+		"""
+
+	def get_inputs(self):
+		"""入力ノード集合を取得する.
+
+		Returns:
+			入力 Node の set.
+		"""
+
+	def set_inputs(self, inputs):
+		"""入力ノード集合を設定する.
+
+		Args:
+			inputs: 入力 Node 集合
+		"""
+
+	def collect_gate(self, output, depth, gate_set):
+		"""入力側の直近の複数出力 Gate を集める.
+
+		Args:
+			output: 呼び出し元出力側レイヤ.
+			depth: 関数呼び出し深さ.
+			gate_set: Gate 収集先 set.
+		"""
+
+	def dense(self, in_size, out_size=None, nobias=False, initialW=None, initial_bias=None):
+		l = self.layer('dense', L.Linear(in_size, out_size, nobias, initialW, initial_bias))
+		l.dot_param = '(in:{}, out:{})'.format(in_size, out_size)
+		return l
+
+	def conv2d(self, in_channels, out_channels, ksize=None, stride=1, pad=0, nobias=False, initialW=None, initial_bias=None, **kwargs):
+		l = self.layer('conv2d', L.Convolution2D(in_channels, out_channels, ksize, stride, pad, nobias, initialW, initial_bias, **kwargs))
+		l.dot_param = '(in:{}, out:{})'.format(in_channels, out_channels)
+		return l
+
+	def deconv2d(self, in_channels, out_channels, ksize=None, stride=1, pad=0, nobias=False, outsize=None, initialW=None, initial_bias=None, **kwargs):
+		l = self.layer('deconv2d', L.Deconvolution2D(in_channels, out_channels, ksize, stride, pad, nobias, outsize, initialW, initial_bias, **kwargs))
+		l.dot_param = '(in:{}, out:{})'.format(in_channels, out_channels)
+		return l
+
+	def batchnorm(self, size=None, decay=0.9, eps=2e-5, dtype=None, use_gamma=True, use_beta=True, initial_gamma=None, initial_beta=None, axis=None, initial_avg_mean=None, initial_avg_var=None):
+		l = self.layer('batchnorm', L.BatchNormalization(size, decay, eps, dtype, use_gamma, use_beta, initial_gamma, initial_beta, axis, initial_avg_mean, initial_avg_var))
+		l.dot_param = '(size:{})'.format(size)
+		return l
+
+
+class Layer(Chain, Node, FuncsHolder):
 	"""レイヤ、学習対象の重み、活性化関数、入力レイヤへの参照を持つ.
 
 	Args:
-		parent_model: 所有者となる SubModel.
+		owner: 所有者となる Node.
+		kind_name: 種類名.
 		link: 学習対象の重みを持つ chainer.links.Convolution2D など chainer.link.Link を継承するもの.
 		input: 入力レイヤ、Layer を継承するものまたは None.
 	"""
 
-	def __init__(self, parent_model, link, input=None):
-		if input is not None and not isinstance(input, Layer) and not isinstance(input, Gate):
-			raise TypeError("Invalid argument. 'input' must be Layer or Gate.")
+	def __init__(self, owner, kind_name, link, input=None):
+		if input is not None and not isinstance(input, Node):
+			raise TypeError("Invalid argument. 'input' must be Node.")
 		if not isinstance(link, Link):
 			raise TypeError('Cannot register a non-link object as a child')
 
 		Chain.__init__(self)
-		ModelNode.__init__(self, parent_model)
+		Node.__init__(self, owner, owner, kind_name)
 		FuncsHolder.__init__(self)
 
 		self.input = input
@@ -259,11 +339,8 @@ class Layer(Chain, ModelNode, FuncsHolder):
 		Args:
 			depth: 関数呼び出し深さ.
 		"""
-		if self.is_built:
+		if not self._build_begin():
 			return
-		if self.is_uner_build:
-			raise Exception()
-		self.is_uner_build = True
 
 		# 入力側を先にビルドと入力値を保持している変数ID取得
 		if self.input is None:
@@ -271,28 +348,48 @@ class Layer(Chain, ModelNode, FuncsHolder):
 		else:
 			self.input.build(depth + 1)
 			in_id = self.input.get_output_variable_id(self)
-		in_name = self.root_model.get_local_variable_name(in_id)
-		self.root_model.del_local_variable_id(in_id) # 名前取得済みなので削除
+		in_name = self.root_node.get_local_variable_name(in_id)
+		self.root_node.del_local_variable_id(in_id) # 名前取得済みなので削除
 
 		# 出力値の代入先変数確保
-		out_id = self.root_model.new_local_variable_id()
-		out_name = self.root_model.get_local_variable_name(out_id)
+		out_id = self.root_node.new_local_variable_id()
+		out_name = self.root_node.get_local_variable_name(out_id)
 		self.output_variable_ids[None] = out_id
 
 		# コードの追加
 		self_name = self.get_full_name()
-		self.root_model.code.append('\t{} = self.{}({})'.format(out_name, self_name, in_name))
+		self.root_node.code.append('\t{} = self.{}({})'.format(out_name, self_name, in_name))
 
-		dot_name = self.get_dot_name()
+		# グラフ用コードの追加
+		dot_id = self_name.replace('.', '_')
 		if len(self.funcs) != 0:
-			self.root_model.dot_code.append('{} [label="{}\\n{}"];'.format(dot_name, self_name, ', '.join([f.__name__ for f in self.funcs])))
+			self.root_node.dot_code.append('{} [label="{}{}\\n{}"];'.format(dot_id, self_name, self.dot_param, ', '.join([f.__name__ for f in self.funcs])))
 		else:
-			self.root_model.dot_code.append('{} [label="{}"];'.format(dot_name, self_name))
+			self.root_node.dot_code.append('{} [label="{}{}"];'.format(dot_id, self_name, self.dot_param))
 		if self.input is not None:
-			self.root_model.dot_code.append('{} -> {} [label="{}"];'.format(self.input.get_dot_name(), dot_name, in_name))
+			self.root_node.dot_code.append('{} -> {} [label="{}"];'.format(self.input.get_full_name().replace('.', '_'), dot_id, in_name))
 
-		self.is_built = True
-		self.is_uner_build = False
+		self._build_end()
+
+	def get_inputs(self):
+		"""入力ノード集合を取得する.
+
+		Returns:
+			入力 Node の set.
+		"""
+		return set([self.input]) if self.input is not None else set()
+
+	def set_inputs(self, inputs):
+		"""入力ノード集合を設定する.
+
+		Args:
+			inputs: 入力 Node 集合
+		"""
+		self.input = None
+		if inputs is not None:
+			for i in inputs:
+				self.input = i
+				break
 
 	def collect_gate(self, output, depth, gate_set):
 		"""入力側の直近の複数出力 Gate を集める.
@@ -307,21 +404,21 @@ class Layer(Chain, ModelNode, FuncsHolder):
 		self.input.collect_gate(self, depth + 1, gate_set)
 
 
-class Gate(ModelNode):
+class Gate(Node):
 	"""指定値を１～複数の出力レイヤーで変換する、複数対複数のレイヤーをくっつける役割を持つ.
 
 	Args:
-		parent_model: 所有者となる SubModel.
+		owner: 所有者となる Node.
 		func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(x, output_layers).
 		inputs: 入力レイヤー列.
 	"""
 
-	def __init__(self, parent_model, func, *inputs):
+	def __init__(self, owner, func, *inputs):
 		for i in inputs:
-			if not isinstance(i, Layer):
-				raise TypeError("Invalid argument. 'inputs' element must be Layer.")
+			if not isinstance(i, Node):
+				raise TypeError("Invalid argument. 'inputs' element must be Node.")
 
-		ModelNode.__init__(self, parent_model)
+		Node.__init__(self, owner, owner, 'Gate')
 
 		self.inputs = inputs
 		self.func = func
@@ -338,19 +435,20 @@ class Gate(ModelNode):
 		"""
 		return self.func(x, self.outputs)
 
-	def layer(self, link, input=None):
-		"""自分を入力とする出力 Layer を生成する.
+	def _own_node(self, kind_name, node):
+		"""指定 Node を所有する.
 
 		Args:
-			link: レイヤーの計算のメインとなる Link.
-			input: None.
+			kind_name: 種類名.
+			node: 所有する Node.
 
 		Returns:
-			Layer.
+			指定された Node.
 		"""
-		layer = ModelNode.layer(self, link)
-		self.outputs.append(layer)
-		return layer
+		# 生成されるノードは全て出力側となる
+		Node._own_node(self, kind_name, node)
+		self.outputs.append(node)
+		return node
 
 	def build(self, depth):
 		"""コード生成を行う.
@@ -358,11 +456,11 @@ class Gate(ModelNode):
 		Args:
 			depth: 関数呼び出し深さ.
 		"""
-		if self.is_built:
+		if not self._build_begin():
 			return
-		if self.is_uner_build:
-			raise Exception()
-		self.is_uner_build = True
+
+		if len(self.outputs) == 0:
+			raise Exception('Gate must have one or more outputs.')
 
 		# 入力側にある複数出力の Gate を収集し、呼び出しが早い方からビルドしていく
 		depth += 1
@@ -370,9 +468,9 @@ class Gate(ModelNode):
 		gate_set = set()
 		for i in self.inputs:
 			i.collect_gate(self, depth, gate_set)
-		glues_list = [g for g in gate_set]
-		glues_list.sort(key=lambda g: g[1])
-		for g in reversed(glues_list):
+		gate_list = [g for g in gate_set]
+		gate_list.sort(key=lambda g: g[1])
+		for g in reversed(gate_list):
 			g[0].build(g[1])
 
 		# 入力側を先にビルドと入力値を保持している変数ID取得
@@ -386,25 +484,44 @@ class Gate(ModelNode):
 
 		# コードの追加
 		self_name = self.get_full_name()
-		in_names = ', '.join([self.root_model.get_local_variable_name(id) for id in in_ids])
-		out_names = ', '.join([self.root_model.get_local_variable_name(id) for id in out_ids])
-		self.root_model.code.append('\t{} = self.{}(({}))'.format(out_names, self_name, in_names))
+		in_names = ', '.join([self.root_node.get_local_variable_name(id) for id in in_ids])
+		out_names = ', '.join([self.root_node.get_local_variable_name(id) for id in out_ids])
+		self.root_node.code.append('\t{} = self.{}(({}))'.format(out_names, self_name, in_names))
 
-		dot_name = self.get_dot_name()
-		self.root_model.dot_code.append('{} [label="{}\\n{}"];'.format(dot_name, self_name, self.func.__name__))
+		# グラフ用コードの追加
+		dot_id = self_name.replace('.', '_')
+		self.root_node.dot_code.append('{} [label="{}\\n{}"];'.format(dot_id, self_name, self.func.__name__))
 		for i in self.inputs:
-			self.root_model.dot_code.append('{} -> {} [label="{}"];'.format(i.get_dot_name(), dot_name, self.root_model.get_local_variable_name(i.get_output_variable_id(self))))
+			self.root_node.dot_code.append('{} -> {} [label="{}"];'.format(i.get_full_name().replace('.', '_'), dot_id, i.get_output_variable_name(self)))
 
 		# func_code = inspect.getsource(self.func)
 		# func_code = func_code.replace('\n', '\\n')
 		# func_code = func_code.replace('\t', '\\t')
-		# self.root_model.dot_code.append('{} [label="{}"];'.format(dot_name, func_code))
+		# self.root_node.dot_code.append('{} [label="{}"];'.format(dot_id, func_code))
 
 		for id in in_ids:
-			self.root_model.del_local_variable_id(id) # 名前取得済みなので削除
+			self.root_node.del_local_variable_id(id) # 名前取得済みなので削除
 
-		self.is_built = True
-		self.is_uner_build = False
+		self._build_end()
+
+	def get_inputs(self):
+		"""入力ノード集合を取得する.
+
+		Returns:
+			入力 Node の set.
+		"""
+		return set(self.inputs)
+
+	def set_inputs(self, inputs):
+		"""入力ノード集合を設定する.
+
+		Args:
+			inputs: 入力 Node 集合
+		"""
+		if inputs is not None:
+			self.inputs = list(inputs)
+		else:
+			self.inputs = []
 
 	def collect_gate(self, output, depth, gate_set):
 		"""入力側の直近の複数出力 Gate を集める.
@@ -418,77 +535,132 @@ class Gate(ModelNode):
 			gate_set.add((self, depth))
 
 
-class SubModel(Chain, ModelNode):
+class SubModel(Chain, Node):
 	"""モデルのサブセット、layer()、gate() によりレイヤを生成し保持する.
 
 	Args:
-		parent_model: 親となる Model.
-		input: 入力レイヤ、Layer を継承するものまたは None.
+		owner: 親となる Model.
+		kind_name: 種類名.
+		input: 入力 Node または None.
 	"""
 
-	def __init__(self, parent_model, input=None):
-		if input is not None and not isinstance(input, Layer) and not isinstance(input, Gate):
-			raise TypeError("Invalid argument. 'input' must be Layer or Gate.")
+	def __init__(self, owner, kind_name, input=None):
+		if input is not None and not isinstance(input, Node):
+			raise TypeError("Invalid argument. 'input' must be Node.")
 
 		Chain.__init__(self)
-		ModelNode.__init__(self, parent_model)
+		Node.__init__(self, owner, self, kind_name)
 
-		self.parent_model = parent_model
 		self.input = input
-		self.layers = []
-		self.glues = []
-		self.submodels = []
+		self.output = None
+		self.nodes = []
 
-	def layer(self, link, input=None):
-		"""レイヤーを生成する.
-
-		Args:
-			link: レイヤーの計算のメインとなる Link.
-			input: 入力となる Layer または None.
-		"""
-		if input is None and self.input is not None:
-			input = self.input
-			self.input = None
-		name = 'layer_' + str(len(self.layers)) + '_' + type(link).__name__
-		layer = Layer(self, link, input)
-		self.add_link(name, layer)
-		self.layers.append(layer)
-		return layer
-
-	def gate(self, func, *inputs):
-		"""レイヤ同士を結合する Gate を作成する.
+	def _own_node(self, kind_name, node):
+		"""指定 Node を所有する.
 
 		Args:
-			func: 入力値を出力レイヤーに通す処理、 def func(gate, x, output_layers).
-			inputs: 入力レイヤー列.
+			kind_name: 種類名.
+			node: 所有する Node.
 
 		Returns:
-			Gate.
+			指定された Node.
 		"""
-		gate = Gate(self, func, *inputs)
-		name = 'gate_' + str(len(self.glues))
-		setattr(self, name, gate)
-		gate.name = name
-		self.glues.append(gate)
-		return gate
+		name = kind_name + str(len(self.nodes))
+		if isinstance(node, Link):
+			self.add_link(name, node)
+		else:
+			setattr(self, name, node)
+			node.name = name
+		self.nodes.append(node)
+		return node
 
-	def model(self, input=None):
-		"""子の SubModel を作成する.
+	def get_output_variable_id(self, node):
+		"""このノードから指定ノードへの出力を一時的に保持するローカル変数IDを取得する.
 
 		Args:
-			input: 入力レイヤー.
+			node: 出力先 Node.
 
 		Returns:
-			SubModel.
+			ローカル変数ID.
 		"""
-		if input is None and self.input is not None:
-			input = self.input
-			self.input = None
-		name = 'model_' + str(len(self.submodels))
-		model = SubModel(self, input)
-		self.add_link(name, model)
-		self.submodels.append(model)
-		return model
+		return self.output.get_output_variable_id(node)
+
+	def build(self, depth):
+		"""コード生成を行う.
+
+		Args:
+			depth: 関数呼び出し深さ.
+		"""
+		if not self._build_begin():
+			return
+
+		all_nodes = set(self.nodes)
+		nodewise_inputs = {}
+		for n in all_nodes:
+			nodewise_inputs[n] = n.get_inputs()
+
+		all_inputs = set()
+		for n, inputs in nodewise_inputs.items():
+			for i in inputs:
+				all_inputs.add(i)
+
+		# モデル外ノードを入力としていたらエラーとする
+		for n, inputs in nodewise_inputs.items():
+			if len(inputs.difference(all_nodes)) != 0:
+				raise Exception('Child nodes of SubModel can not input external nodes.')
+
+		# 入力ノードを集める
+		inputs = [n for n, inputs in nodewise_inputs.items() if len(inputs) == 0]
+		if len(inputs) == 0:
+			raise Exception('SubModel must have a one input.')
+		if len(inputs) != 1:
+			raise Exception('SubModel does not support multiple inputs.')
+
+		# 出力ノード（入力とされていないノード）を集める
+		outputs = [n for n in all_nodes if n not in all_inputs]
+		if len(outputs) == 0:
+			raise Exception('SubModel must have a one output.')
+		if len(outputs) != 1:
+			raise Exception('SubModel does not support multiple outputs.')
+
+		# ビルド
+		inputs[0].set_inputs(self.input)
+		self.output = outputs[0]
+		self.output.build(depth)
+
+		self._build_end()
+
+	def get_inputs(self):
+		"""入力ノード集合を取得する.
+
+		Returns:
+			入力 Node の set.
+		"""
+		return set([self.input]) if self.input is not None else set()
+
+	def set_inputs(self, inputs):
+		"""入力ノード集合を設定する.
+
+		Args:
+			inputs: 入力 Node 集合
+		"""
+		self.input = None
+		if inputs is not None:
+			for i in inputs:
+				self.input = i
+				break
+
+	def collect_gate(self, output, depth, gate_set):
+		"""入力側の直近の複数出力 Gate を集める.
+
+		Args:
+			output: 呼び出し元出力側レイヤ.
+			depth: 関数呼び出し深さ.
+			gate_set: Gate 収集先 set.
+		"""
+		if self.input is None:
+			return
+		self.input.collect_gate(self, depth + 1, gate_set)
 
 
 class Model(SubModel):
@@ -499,32 +671,26 @@ class Model(SubModel):
 	"""
 
 	def __init__(self, optimizer):
-		SubModel.__init__(self, None)
+		SubModel.__init__(self, None, 'root')
 
 		self.optimizer = optimizer
-		self.output_layer = None
 		self.local_variable_ids = set()
 		self.code = []
 		self.dot_code = []
 		self.prediction = None
-
-	def assign_output(self, output_layer):
-		"""出力レイヤを割り当てる.
-
-		Args:
-			output_layer: 出力とする Layer.
-		"""
-		self.output_layer = output_layer
 
 	def build(self):
 		"""モデルの推論用関数をビルドする.
 		"""
 		self.code.append('def prediction(self, x):')
 		self.dot_code.insert(0, 'digraph {\n')
-		self.output_layer.build(0)
+		self.dot_code.insert(1, 'node [shape=box]\n')
+
+		SubModel.build(self, 0)
+
 		self.dot_code.append('}')
 		self.dot_code = '\n'.join(self.dot_code)
-		self.code.append('\treturn {}\n'.format(self.get_local_variable_name(self.output_layer.get_output_variable_id(None))))
+		self.code.append('\treturn {}\n'.format(self.output.get_output_variable_name(None)))
 		self.code = '\n'.join(self.code)
 
 		l = {}
