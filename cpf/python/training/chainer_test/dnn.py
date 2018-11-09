@@ -624,7 +624,7 @@ class SubModel(Chain, Node):
 			raise Exception('SubModel does not support multiple outputs.')
 
 		# ビルド
-		inputs[0].set_inputs(self.input)
+		inputs[0].set_inputs(set([self.input]))
 		self.output = outputs[0]
 		self.output.build(depth)
 
