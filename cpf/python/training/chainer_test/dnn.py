@@ -20,7 +20,7 @@
 		return out[0](h)
 
 	m = dnn.Model(chainer.optimizers.Adam()) # とりあえず Model 作る
-	g = m.gate(split, m.model_child('sub').dense(32, 32).relu().dense(32, 32).relu().owner) # サブモデル内に全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Gate 作る
+	g = m.gate(split, m.submodel('sub').dense(32, 32).relu().dense(32, 32).relu().owner) # サブモデル内に全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Gate 作る
 	g = m.gate(concat, g.dense(16, 16), g.dense(16, 16)) # ２つの入力を１つに結合する Gate 作る
 	g = m.gate((lambda x, out: out[0](x * 2)), g.dense(32, 32)) # ２倍
 	g.dense(32, 32)
@@ -451,6 +451,14 @@ class Layer(Chain, Node, FuncsHolder):
 		with self.init_scope():
 			self.link = link
 
+	def get_dot_node_label(self):
+		"""dot 内でのノードのラベルの取得.
+
+		Returns:
+			ノードのラベル.
+		"""
+		return '{}\\n{}'.format(self.get_dot_node_name(), ', '.join(f.__name__ for f in self.funcs))
+
 	def __call__(self, x=None):
 		"""指定値をレイヤーで変換する.
 
@@ -476,17 +484,28 @@ class Gate(Node):
 	"""
 
 	def __init__(self, owner, func, *inputs):
+		inputs = tuple([(i if i != owner else None) for i in inputs ])		
+
 		for i in inputs:
-			if not isinstance(i, Node):
+			if i is not None and not isinstance(i, Node):
 				raise TypeError("Invalid argument. 'inputs' element must be Node.")
 
 		Node.__init__(self, owner, owner, 'Gate')
 
 		for input in inputs:
-			input.add_ouput(self)
-			self.add_input(input)
+			if input is not None:
+				input.add_ouput(self)
+				self.add_input(input)
 
 		self.func = func
+
+	def get_dot_node_label(self):
+		"""dot 内でのノードのラベルの取得.
+
+		Returns:
+			ノードのラベル.
+		"""
+		return '{}\\n{}'.format(self.get_dot_node_name(), self.func.__name__)
 
 	def __call__(self, x):
 		"""指定値をユーザー指定処理で変換する.
@@ -550,11 +569,11 @@ class SubModel(Chain, Node):
 			SubModel.
 		"""
 		if self.owner is None:
-			return self.model_child(kind_name, input)
+			return self.submodel(kind_name, input)
 		else:
 			return self.owner._own_node(kind_name, SubModel(self.owner, kind_name, self))
 
-	def model_child(self, kind_name, input=None):
+	def submodel(self, kind_name, input=None):
 		"""子 SubModel を生成する.
 
 		Args:
