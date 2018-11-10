@@ -139,6 +139,14 @@ class Node:
 			node = node.owner
 		return '.'.join(reversed(names))
 
+	def get_dot_node_name(self):
+		"""dot 内でのノード名の取得.
+
+		Returns:
+			ノード名.
+		"""
+		return self.get_full_name().replace('.', '_')
+
 	def _own_node(self, kind_name, node):
 		"""指定 Node を所有する.
 
@@ -161,11 +169,7 @@ class Node:
 		Returns:
 			SubModel.
 		"""
-		if input is None:
-			input = self
-		if input == self.node_generator:
-			input = None
-		return self._own_node(kind_name, SubModel(self.node_generator, kind_name, input))
+		return self._own_node(kind_name, SubModel(self.node_generator, kind_name, self))
 
 	def layer(self, kind_name, link, input=None):
 		"""自分を入力とする出力 Layer を生成する.
@@ -178,11 +182,7 @@ class Node:
 		Returns:
 			Layer.
 		"""
-		if input is None:
-			input = self
-		if input == self.node_generator:
-			input = None
-		return self._own_node(kind_name, Layer(self.node_generator, kind_name, link, input))
+		return self._own_node(kind_name, Layer(self.node_generator, kind_name, link, self))
 
 	def gate(self, func, *inputs):
 		"""レイヤ同士を結合する Gate を作成する.
@@ -251,6 +251,16 @@ class Node:
 			depth: 関数呼び出し深さ.
 		"""
 
+	def add_ouputs(self, node):
+		"""出力ノードを追加する.
+
+		Args:
+			node: 出力 Node.
+
+		Returns:
+			入力 Node の set.
+		"""
+
 	def get_inputs(self):
 		"""入力ノード集合を取得する.
 
@@ -306,6 +316,9 @@ class Layer(Chain, Node, FuncsHolder):
 	"""
 
 	def __init__(self, owner, kind_name, link, input=None):
+		if input == owner:
+			input = None
+
 		if input is not None and not isinstance(input, Node):
 			raise TypeError("Invalid argument. 'input' must be Node.")
 		if not isinstance(link, Link):
@@ -315,7 +328,11 @@ class Layer(Chain, Node, FuncsHolder):
 		Node.__init__(self, owner, owner, kind_name)
 		FuncsHolder.__init__(self)
 
+		if input is not None:
+			input.add_ouputs(self)
+
 		self.input = input
+		self.output = None
 		with self.init_scope():
 			self.link = link
 
@@ -361,15 +378,28 @@ class Layer(Chain, Node, FuncsHolder):
 		self.root_node.code.append('\t{} = self.{}({})'.format(out_name, self_name, in_name))
 
 		# グラフ用コードの追加
-		dot_id = self_name.replace('.', '_')
+		dot_id = self.get_dot_node_name()
 		if len(self.funcs) != 0:
 			self.root_node.dot_code.append('{} [label="{}{}\\n{}"];'.format(dot_id, self_name, self.dot_param, ', '.join([f.__name__ for f in self.funcs])))
 		else:
 			self.root_node.dot_code.append('{} [label="{}{}"];'.format(dot_id, self_name, self.dot_param))
 		if self.input is not None:
-			self.root_node.dot_code.append('{} -> {} [label="{}"];'.format(self.input.get_full_name().replace('.', '_'), dot_id, in_name))
+			self.root_node.dot_code.append('{} -> {} [label="{}"];'.format(self.input.get_dot_node_name(), dot_id, in_name))
 
 		self._build_end()
+
+	def add_ouputs(self, node):
+		"""出力ノードを追加する.
+
+		Args:
+			node: 出力 Node.
+
+		Returns:
+			入力 Node の set.
+		"""
+		if self.output is not None:
+			raise Exception('Layer can not have multiple outputs.')
+		self.output = node
 
 	def get_inputs(self):
 		"""入力ノード集合を取得する.
@@ -419,6 +449,9 @@ class Gate(Node):
 				raise TypeError("Invalid argument. 'inputs' element must be Node.")
 
 		Node.__init__(self, owner, owner, 'Gate')
+
+		for input in inputs:
+			input.add_ouputs(self)
 
 		self.inputs = inputs
 		self.func = func
@@ -489,10 +522,10 @@ class Gate(Node):
 		self.root_node.code.append('\t{} = self.{}(({}))'.format(out_names, self_name, in_names))
 
 		# グラフ用コードの追加
-		dot_id = self_name.replace('.', '_')
+		dot_id = self.get_dot_node_name()
 		self.root_node.dot_code.append('{} [label="{}\\n{}"];'.format(dot_id, self_name, self.func.__name__))
 		for i in self.inputs:
-			self.root_node.dot_code.append('{} -> {} [label="{}"];'.format(i.get_full_name().replace('.', '_'), dot_id, i.get_output_variable_name(self)))
+			self.root_node.dot_code.append('{} -> {} [label="{}"];'.format(i.get_dot_node_name(), dot_id, i.get_output_variable_name(self)))
 
 		# func_code = inspect.getsource(self.func)
 		# func_code = func_code.replace('\n', '\\n')
@@ -503,6 +536,18 @@ class Gate(Node):
 			self.root_node.del_local_variable_id(id) # 名前取得済みなので削除
 
 		self._build_end()
+
+	def add_ouputs(self, node):
+		"""出力ノードを追加する.
+
+		Args:
+			node: 出力 Node.
+
+		Returns:
+			入力 Node の set.
+		"""
+		if node not in self.outputs:
+			self.outputs.append(node)
 
 	def get_inputs(self):
 		"""入力ノード集合を取得する.
@@ -545,15 +590,22 @@ class SubModel(Chain, Node):
 	"""
 
 	def __init__(self, owner, kind_name, input=None):
+		if input == owner:
+			input = None
+
 		if input is not None and not isinstance(input, Node):
 			raise TypeError("Invalid argument. 'input' must be Node.")
 
 		Chain.__init__(self)
 		Node.__init__(self, owner, self, kind_name)
 
+		if input is not None:
+			input.add_ouputs(self)
+
 		self.input = input
 		self.output = None
 		self.nodes = []
+		self.kindwise_count = {}
 
 	def _own_node(self, kind_name, node):
 		"""指定 Node を所有する.
@@ -565,14 +617,57 @@ class SubModel(Chain, Node):
 		Returns:
 			指定された Node.
 		"""
-		name = kind_name + str(len(self.nodes))
+		if kind_name in self.kindwise_count:
+			count = self.kindwise_count[kind_name]
+			count += 1
+		else:
+			count = 1
+
+		name = kind_name + str(count)
 		if isinstance(node, Link):
 			self.add_link(name, node)
 		else:
 			setattr(self, name, node)
 			node.name = name
 		self.nodes.append(node)
+		self.kindwise_count[kind_name] = count
+
 		return node
+
+	def get_dot_node_name(self):
+		"""dot 内でのノード名の取得.
+
+		Returns:
+			ノード名.
+		"""
+		return self.output.get_dot_node_name()
+
+	def model(self, kind_name, input=None):
+		"""自分を入力とする出力 SubModel を生成する.
+
+		Args:
+			kind_name: 種類名.
+			input: 入力 Node.
+
+		Returns:
+			SubModel.
+		"""
+		if self.owner is None:
+			return self.model_child(kind_name, input)
+		else:
+			return self.owner._own_node(kind_name, SubModel(self.owner, kind_name, self))
+
+	def model_child(self, kind_name, input=None):
+		"""子 SubModel を生成する.
+
+		Args:
+			kind_name: 種類名.
+			input: 入力 Node.
+
+		Returns:
+			SubModel.
+		"""
+		return self._own_node(kind_name, SubModel(self.node_generator, kind_name, input))
 
 	def get_output_variable_id(self, node):
 		"""このノードから指定ノードへの出力を一時的に保持するローカル変数IDを取得する.
@@ -628,7 +723,28 @@ class SubModel(Chain, Node):
 		self.output = outputs[0]
 		self.output.build(depth)
 
+		# 使用ノードをサブグラフとする
+		if self.owner is not None:
+			dot_node_name = self.get_dot_node_name()
+			self.root_node.dot_code.append('subgraph cluster_{} {{ label="{}"'.format(dot_node_name, dot_node_name))
+			for node in self.nodes:
+				self.root_node.dot_code.append('{};'.format(node.get_dot_node_name()))
+			self.root_node.dot_code.append('}')
+
 		self._build_end()
+
+	def add_ouputs(self, node):
+		"""出力ノードを追加する.
+
+		Args:
+			node: 出力 Node.
+
+		Returns:
+			入力 Node の set.
+		"""
+		if self.output is not None:
+			raise Exception('SubModel can not have multiple outputs.')
+		self.output = node
 
 	def get_inputs(self):
 		"""入力ノード集合を取得する.
