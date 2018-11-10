@@ -6,7 +6,6 @@
 	from dnn import F
 	from dnn import L
 	from dnn import Variable
-	import chainer.computational_graph as ccg
 
 	dnn.startup(-1) # 0番のGPU使用
 	xp = dnn.xp # numpy または cupy
@@ -21,10 +20,16 @@
 		return out[0](h)
 
 	m = dnn.Model(chainer.optimizers.Adam()) # とりあえず Model 作る
-	g = m.gate(split, m.dense(32, 32).relu().dense(32, 32).relu()) # 全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Gate 作る
+	g = m.gate(split, m.model_child('sub').dense(32, 32).relu().dense(32, 32).relu().owner) # サブモデル内に全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Gate 作る
 	g = m.gate(concat, g.dense(16, 16), g.dense(16, 16)) # ２つの入力を１つに結合する Gate 作る
-	m.assign_output(g.dense(32, 32)) # 全結合層を１つ作ってそれを出力とする
+	g = m.gate((lambda x, out: out[0](x * 2)), g.dense(32, 32)) # ２倍
+	g.dense(32, 32)
 	m.build()
+
+	with open("dnn_test.dot", mode='w') as f:
+		f.write(m.dot_code)
+	with open("dnn_test_prediction.py", mode='w') as f:
+		f.write(m.code)
 
 	# 所定のデバイスメモリに転送
 	m = dnn.to_xp(m)
@@ -251,7 +256,7 @@ class Node:
 			depth: 関数呼び出し深さ.
 		"""
 
-	def add_ouputs(self, node):
+	def add_ouput(self, node):
 		"""出力ノードを追加する.
 
 		Args:
@@ -329,7 +334,7 @@ class Layer(Chain, Node, FuncsHolder):
 		FuncsHolder.__init__(self)
 
 		if input is not None:
-			input.add_ouputs(self)
+			input.add_ouput(self)
 
 		self.input = input
 		self.output = None
@@ -388,7 +393,7 @@ class Layer(Chain, Node, FuncsHolder):
 
 		self._build_end()
 
-	def add_ouputs(self, node):
+	def add_ouput(self, node):
 		"""出力ノードを追加する.
 
 		Args:
@@ -451,7 +456,7 @@ class Gate(Node):
 		Node.__init__(self, owner, owner, 'Gate')
 
 		for input in inputs:
-			input.add_ouputs(self)
+			input.add_ouput(self)
 
 		self.inputs = inputs
 		self.func = func
@@ -467,21 +472,6 @@ class Gate(Node):
 			変換後の値.
 		"""
 		return self.func(x, self.outputs)
-
-	def _own_node(self, kind_name, node):
-		"""指定 Node を所有する.
-
-		Args:
-			kind_name: 種類名.
-			node: 所有する Node.
-
-		Returns:
-			指定された Node.
-		"""
-		# 生成されるノードは全て出力側となる
-		Node._own_node(self, kind_name, node)
-		self.outputs.append(node)
-		return node
 
 	def build(self, depth):
 		"""コード生成を行う.
@@ -537,7 +527,7 @@ class Gate(Node):
 
 		self._build_end()
 
-	def add_ouputs(self, node):
+	def add_ouput(self, node):
 		"""出力ノードを追加する.
 
 		Args:
@@ -600,7 +590,7 @@ class SubModel(Chain, Node):
 		Node.__init__(self, owner, self, kind_name)
 
 		if input is not None:
-			input.add_ouputs(self)
+			input.add_ouput(self)
 
 		self.input = input
 		self.output = None
@@ -725,7 +715,7 @@ class SubModel(Chain, Node):
 
 		# 使用ノードをサブグラフとする
 		if self.owner is not None:
-			dot_node_name = self.get_dot_node_name()
+			dot_node_name = Node.get_dot_node_name(self)
 			self.root_node.dot_code.append('subgraph cluster_{} {{ label="{}"'.format(dot_node_name, dot_node_name))
 			for node in self.nodes:
 				self.root_node.dot_code.append('{};'.format(node.get_dot_node_name()))
@@ -733,7 +723,7 @@ class SubModel(Chain, Node):
 
 		self._build_end()
 
-	def add_ouputs(self, node):
+	def add_ouput(self, node):
 		"""出力ノードを追加する.
 
 		Args:
