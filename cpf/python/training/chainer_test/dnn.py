@@ -67,6 +67,45 @@ cuda = None
 test = False
 
 
+class Base:
+	"""全ノードに提供される共通メソッドの定義.
+	"""
+
+	def funcs(self, kind_name, funcs):
+		"""自分を入力とする出力 Funcs を生成する.
+
+		Args:
+			kind_name: 種類名.
+			funcs: 関数列、各関数は def func(x): return x * 2 の様な形式.
+
+		Returns:
+			Node.
+		"""
+
+	def relu(self):
+		return self.funcs('relu', F.relu)
+
+	def leaky_relu(self):
+		return self.funcs('leaky_relu', F.leaky_relu)
+
+	def sigmoid(self):
+		return self.funcs('sigmoid', F.sigmoid)
+
+	def dropout(self, ratio=.5, **kwargs):
+
+		def dropout(x):
+			return F.dropout(x, ratio, **kwargs)
+
+		return self.funcs('dropout', dropout)
+
+	def unpool2d(self, ksize, stride=None, pad=0, outsize=None, cover_all=True):
+
+		def unpool2d(x):
+			return F.unpooling_2d(x, ksize, stride, pad, outsize, cover_all)
+
+		return self.funcs('unpool2d', unpool2d)
+
+
 class FuncsHolder:
 	"""関数を生成し保持する機能を提供するクラス.
 	"""
@@ -74,47 +113,39 @@ class FuncsHolder:
 	def __init__(self):
 		self.func_list = []
 
-	def relu(self):
-		self.func_list.append(F.relu)
-		return self
+	def funcs(self, kind_name, funcs):
+		"""自分を入力とする出力 Funcs を生成する.
 
-	def leaky_relu(self):
-		self.func_list.append(F.leaky_relu)
-		return self
+		Args:
+			kind_name: 種類名.
+			funcs: 関数列、各関数は def func(x): return x * 2 の様な形式.
 
-	def sigmoid(self):
-		self.func_list.append(F.sigmoid)
-		return self
-
-	def dropout(self, ratio=.5, **kwargs):
-
-		def dropout(x):
-			return F.dropout(x, ratio, **kwargs)
-
-		self.func_list.append(dropout)
-		return self
-
-	def unpool2d(self, ksize, stride=None, pad=0, outsize=None, cover_all=True):
-
-		def unpool2d(x):
-			return F.unpooling_2d(x, ksize, stride, pad, outsize, cover_all)
-
-		self.func_list.append(unpool2d)
+		Returns:
+			Node.
+		"""
+		if not isinstance(funcs, list):
+			if not callable(funcs):
+				raise TypeError("Invalid argument. 'funcs' must be callable or callable list.")
+			funcs = [funcs]
+		for f in funcs:
+			if not callable(f):
+				raise TypeError("Invalid argument. 'funcs' must be callable or callable list.")
+		self.func_list.extend(funcs)
 		return self
 
 
-class Node:
+class Node(Base):
 	"""モデルを構成するノード、レイヤを生成する機能を提供するクラス.
 
 	Args:
 		owner: このノードの所有者となる Node.
-		node_generator: このノードが生成するノードの所有者となる Node.
+		nodes_owner: このノードが生成するノードの所有者となる Node.
 		kind_name: 種類名.
 	"""
 
-	def __init__(self, owner, node_generator, kind_name):
+	def __init__(self, owner, nodes_owner, kind_name):
 		self.owner = owner # このノードの所有者となる Node.
-		self.node_generator = node_generator # このノードが生成するノードの所有者となる Node.
+		self.nodes_owner = nodes_owner # このノードが生成するノードの所有者となる Node.
 		self.kind_name = kind_name # 種類名
 		self.name = None # 所有者 Node 内での自身の名前
 		self.inputs = [] # 入力元ノード列
@@ -256,54 +287,48 @@ class Node:
 				nodes[index] = after
 				break
 
-	def model(self, kind_name, input=None):
+	def model(self, kind_name):
 		"""自分を入力とする出力 SubModel を生成する.
 
 		Args:
 			kind_name: 種類名.
-			input: None.
 
 		Returns:
 			SubModel.
 		"""
-		return self._own_node(kind_name, SubModel(self.node_generator, kind_name, self))
+		return self._on_new_node(kind_name, SubModel(self.nodes_owner, kind_name, self))
 
-	def nop(self, input=None):
+	def nop(self):
 		"""自分を入力とする出力 NoOp を生成する.
-
-		Args:
-			input: None.
 
 		Returns:
 			NoOp.
 		"""
-		return self._own_node('nop', NoOp(self.node_generator, 'nop', self))
+		return self._on_new_node('nop', NoOp(self.nodes_owner, 'nop', self))
 
-	def funcs(self, kind_name, funcs, input=None):
+	def funcs(self, kind_name, funcs):
 		"""自分を入力とする出力 Funcs を生成する.
 
 		Args:
 			kind_name: 種類名.
 			funcs: 関数列、各関数は def func(x): return x * 2 の様な形式.
-			input: None.
 
 		Returns:
 			Funcs.
 		"""
-		return self._own_node(kind_name, Funcs(self.node_generator, kind_name, funcs, self))
+		return self._on_new_node(kind_name, Funcs(self.nodes_owner, kind_name, funcs, self))
 
-	def layer(self, kind_name, link, input=None):
+	def layer(self, kind_name, link):
 		"""自分を入力とする出力 Layer を生成する.
 
 		Args:
 			kind_name: 種類名.
 			link: レイヤーの計算のメインとなる Link.
-			input: None.
 
 		Returns:
 			Layer.
 		"""
-		return self._own_node(kind_name, Layer(self.node_generator, kind_name, link, self))
+		return self._on_new_node(kind_name, Layer(self.nodes_owner, kind_name, link, self))
 
 	def gate(self, func, *inputs):
 		"""レイヤ同士を結合する Gate を作成する.
@@ -317,7 +342,7 @@ class Node:
 		"""
 		if len(inputs) == 0:
 			inputs = (self,)
-		return self._own_node('Gate', Gate(self.node_generator, func, *inputs))
+		return self._on_new_node('gate', Gate(self.nodes_owner, func, *inputs))
 
 	def named_gate(self, kind_name, func, *inputs):
 		"""レイヤ同士を結合する Gate を作成する.
@@ -332,7 +357,7 @@ class Node:
 		"""
 		if len(inputs) == 0:
 			inputs = (self,)
-		return self._own_node(kind_name, Gate(self.node_generator, func, *inputs))
+		return self._on_new_node(kind_name, Gate(self.nodes_owner, func, *inputs))
 
 	def dense(self, in_size, out_size=None, nobias=False, initialW=None, initial_bias=None):
 		l = self.layer('dense', L.Linear(in_size, out_size, nobias, initialW, initial_bias))
@@ -354,8 +379,8 @@ class Node:
 		l.dot_param = '(size:{})'.format(size)
 		return l
 
-	def _own_node(self, kind_name, node):
-		"""指定 Node を所有する.
+	def _on_new_node(self, kind_name, node):
+		"""新規 Node 生成後の処理、指定 Node は適切な Node に所有される.
 
 		Args:
 			kind_name: 種類名.
@@ -364,7 +389,7 @@ class Node:
 		Returns:
 			指定された Node.
 		"""
-		return self.node_generator._own_node(kind_name, node)
+		return self.nodes_owner._on_new_node(kind_name, node)
 
 	def _build_begin(self):
 		"""コード生成開始.
@@ -488,7 +513,6 @@ class NoOp(Node):
 			raise TypeError("Invalid argument. 'input' must be Node.")
 
 		Node.__init__(self, owner, owner, kind_name)
-		FuncsHolder.__init__(self)
 
 		self.allow_multi_inputs = False
 		self.output_same_value = True
@@ -519,7 +543,7 @@ class NoOp(Node):
 			self.root.code.append('\t{} = {}'.format(out_tuple_str, in_tuple_str))
 
 
-class Funcs(Node, FuncsHolder):
+class Funcs(FuncsHolder, Node):
 	"""関数列.
 
 	Args:
@@ -577,7 +601,7 @@ class Funcs(Node, FuncsHolder):
 		return x
 
 
-class Layer(Chain, Node, FuncsHolder):
+class Layer(Chain, FuncsHolder, Node):
 	"""レイヤ、学習対象の重み、活性化関数.
 
 	Args:
@@ -704,10 +728,36 @@ class SubModel(Chain, Node):
 			input.add_ouput(self)
 			self.add_input(input)
 
-		self.nodes = []
-		self.kindwise_count = {}
+		self.nodes = [] # 子ノード列
+		self.kindwise_count = {} # 種類毎の子ノード数
 		self.firsts = None # 最初のノード列
 		self.lasts = None # 最後のノード列
+		self.assembly_depth = 0 # これが 0 以外ならノード生成時に子ノードとして登録される、0 なら self.owner の子ノードとして登録される
+
+	def __enter__(self):
+		self.assembly_depth += 1
+		return self
+
+	def __exit__(self, type, value, traceback):
+		self.assembly_depth -= 1
+
+	# def begin(self):
+	# 	"""子ノードの登録を開始する、 with と一緒に使うことを想定.
+	# 	"""
+
+	# 	class assembly:
+
+	# 		def __init__(self, model):
+	# 			self.model = model
+
+	# 		def __enter__(self):
+	# 			self.model.assembly_depth += 1
+	# 			return self.model
+
+	# 		def __exit__(self, type, value, traceback):
+	# 			self.model.assembly_depth -= 1
+
+	# 	return assembly(self)
 
 	def get_dot_node_name(self):
 		"""dot 内でのノード名の取得.
@@ -717,35 +767,8 @@ class SubModel(Chain, Node):
 		"""
 		return self.outputs[0].get_dot_node_name()
 
-	def model(self, kind_name, input=None):
-		"""自分を入力とする出力 SubModel を生成する.
-
-		Args:
-			kind_name: 種類名.
-			input: 入力 Node.
-
-		Returns:
-			SubModel.
-		"""
-		if self.owner is None:
-			return self.submodel(kind_name, input)
-		else:
-			return self.owner._own_node(kind_name, SubModel(self.owner, kind_name, self))
-
-	def submodel(self, kind_name, input=None):
-		"""子 SubModel を生成する.
-
-		Args:
-			kind_name: 種類名.
-			input: 入力 Node.
-
-		Returns:
-			SubModel.
-		"""
-		return self._own_node(kind_name, SubModel(self.node_generator, kind_name, input))
-
-	def _own_node(self, kind_name, node):
-		"""指定 Node を所有する.
+	def _on_new_node(self, kind_name, node):
+		"""新規 Node 生成後の処理、指定 Node は適切な Node に所有される.
 
 		Args:
 			kind_name: 種類名.
@@ -754,12 +777,9 @@ class SubModel(Chain, Node):
 		Returns:
 			指定された Node.
 		"""
-		if kind_name in self.kindwise_count:
-			count = self.kindwise_count[kind_name]
-			count += 1
-		else:
-			count = 1
-
+		if self.assembly_depth == 0 and self.owner is not None:
+			return self.owner._on_new_node(kind_name, node)
+		count = self.kindwise_count[kind_name] + 1 if kind_name in self.kindwise_count else 1
 		name = kind_name + str(count)
 		if isinstance(node, Link):
 			self.add_link(name, node)
@@ -768,7 +788,6 @@ class SubModel(Chain, Node):
 			node.name = name
 		self.nodes.append(node)
 		self.kindwise_count[kind_name] = count
-
 		return node
 
 	def _search_ends(self):
@@ -778,14 +797,8 @@ class SubModel(Chain, Node):
 			return
 
 		all_nodes = set(self.nodes)
-		nodewise_inputs = {}
-		for n in all_nodes:
-			nodewise_inputs[n] = n.get_inputs()
-
-		all_inputs = set()
-		for n, inputs in nodewise_inputs.items():
-			for i in inputs:
-				all_inputs.add(i)
+		nodewise_inputs = {n: n.get_inputs() for n in all_nodes}
+		all_inputs = {i for inputs in nodewise_inputs.values() for i in inputs}
 
 		# モデル外ノードを入力としていたらエラーとする
 		for n, inputs in nodewise_inputs.items():
