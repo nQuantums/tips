@@ -268,6 +268,17 @@ class Node:
 		"""
 		return self._own_node(kind_name, SubModel(self.node_generator, kind_name, self))
 
+	def noop(self, input=None):
+		"""自分を入力とする出力 NoOp を生成する.
+
+		Args:
+			input: None.
+
+		Returns:
+			NoOp.
+		"""
+		return self._own_node('NoOp', NoOp(self.node_generator, 'NoOp', self))
+
 	def funcs(self, kind_name, funcs, input=None):
 		"""自分を入力とする出力 Funcs を生成する.
 
@@ -410,17 +421,12 @@ class Node:
 		out_vars = [root._get_var((self, o)) for o in self.outputs]
 
 		# コードの追加
-		self_name = self.get_full_name()
 		in_tuple_str = ', '.join(in_vars) if len(in_vars) != 0 else 'x'
 		if len(out_vars) != 0:
 			out_tuple_str = out_vars[0] if self.output_same_value else ', '.join(out_vars)
 		else:
 			out_tuple_str = root._get_var((self, None))
-
-		if self.allow_multi_inputs:
-			self.root.code.append('\t{} = self.{}(({}))'.format(out_tuple_str, self_name, in_tuple_str))
-		else:
-			self.root.code.append('\t{} = self.{}({})'.format(out_tuple_str, self_name, in_tuple_str))
+		self._add_code(out_tuple_str, '({})'.format(in_tuple_str) if self.allow_multi_inputs else in_tuple_str)
 
 		# グラフ用コードの追加
 		dot_name = self.get_dot_node_name()
@@ -429,6 +435,15 @@ class Node:
 			self.root.dot_code.append('{} -> {} [label="{}"];'.format(i.get_dot_node_name(), dot_name, var))
 
 		self._build_end()
+
+	def _add_code(self, out_tuple_str, in_tuple_str):
+		"""推論関数用コードを追加する.
+
+		Args:
+			out_tuple_str: 計算結果を格納する変数名.
+			in_tuple_str: 入力値を格納している変数名.
+		"""
+		self.root.code.append('\t{} = self.{}({})'.format(out_tuple_str, self.get_full_name(), in_tuple_str))
 
 	def _collect_multi_output_nodes(self, output, depth, node_set):
 		"""入力側の直近の複数出力 Node を集める.
@@ -454,6 +469,54 @@ class Node:
 		"""指定の出力先 Node に実際に繋がる Node の取得.
 		"""
 		return self
+
+
+class NoOp(Node, FuncsHolder):
+	"""何もしないノード、入力値 x をそのまま出力する.
+
+	Args:
+		owner: 所有者となる Node.
+		kind_name: 種類名.
+		input: 入力 Node または None.
+	"""
+
+	def __init__(self, owner, kind_name, input=None):
+		if input == owner:
+			input = None
+
+		if input is not None and not isinstance(input, Node):
+			raise TypeError("Invalid argument. 'input' must be Node.")
+
+		Node.__init__(self, owner, owner, kind_name)
+		FuncsHolder.__init__(self)
+
+		self.allow_multi_inputs = False
+		self.output_same_value = True
+
+		if input is not None:
+			input.add_ouput(self)
+			self.add_input(input)
+
+	def __call__(self, x=None):
+		"""指定値をレイヤーで変換する.
+
+		Args:
+			x: 入力値.
+
+		Returns:
+			変換後の値.
+		"""
+		return x
+
+	def _add_code(self, out_tuple_str, in_tuple_str):
+		"""推論関数用コードを追加する.
+
+		Args:
+			out_tuple_str: 計算結果を格納する変数名.
+			in_tuple_str: 入力値を格納している変数名.
+		"""
+		if out_tuple_str != in_tuple_str:
+			self.root.code.append('\t{} = {}'.format(out_tuple_str, in_tuple_str))
 
 
 class Funcs(Node, FuncsHolder):
