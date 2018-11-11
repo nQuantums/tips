@@ -25,14 +25,15 @@
 	def diamond(self, ch):
 		m = self.model('diamond')
 		g = m.gate(split)
-		g = m.gate(concat, g.dense(ch // 2, ch // 2).relu().dropout(), g.dense(ch // 2, ch // 2).relu().dropout())
+		g = m.gate(concat, g.dense(ch // 2, ch // 2).relu(), g.dense(ch // 2, ch // 2).relu())
 		return m
 
-	dnn.Node.diamond = diamond
-
+	# モデル構築
+	dnn.Node.diamond = diamond # 呼び出しが面倒なので Node に diamond 機能をもたせる
 	m = dnn.Model(chainer.optimizers.Adam()) # とりあえず Model 作る
-	g = m.dense(32, 8).gate(split) # dense 通して分割用 Gate に通る様に
-	m.gate(concat, g.diamond(4), g.diamond(4)).dense(8, 32) # 分割用 Gate で２つの diamond モデル通す様に分割してそれを結合する Gate を通る様にする
+	h = m.dense(32, 8).gate(split) # dense 通して分割用 Gate に通る様に
+	h = m.gate(concat, h.diamond(4), h.diamond(4)).dense(8, 32) # 分割用 Gate で２つの diamond モデル通す様に分割してそれを結合する Gate を通る様にする
+	h.funcs('mul2x', lambda x: x * 2) # 入力値を２倍にする
 	m.build()
 
 	# 所定のデバイスメモリに転送
@@ -71,18 +72,18 @@ class FuncsHolder:
 	"""
 
 	def __init__(self):
-		self.funcs = []
+		self.func_list = []
 
 	def relu(self):
-		self.funcs.append(F.relu)
+		self.func_list.append(F.relu)
 		return self
 
 	def leaky_relu(self):
-		self.funcs.append(F.leaky_relu)
+		self.func_list.append(F.leaky_relu)
 		return self
 
 	def sigmoid(self):
-		self.funcs.append(F.sigmoid)
+		self.func_list.append(F.sigmoid)
 		return self
 
 	def dropout(self, ratio=.5, **kwargs):
@@ -90,7 +91,7 @@ class FuncsHolder:
 		def dropout(x):
 			return F.dropout(x, ratio, **kwargs)
 
-		self.funcs.append(dropout)
+		self.func_list.append(dropout)
 		return self
 
 	def unpool2d(self, ksize, stride=None, pad=0, outsize=None, cover_all=True):
@@ -98,7 +99,7 @@ class FuncsHolder:
 		def unpool2d(x):
 			return F.unpooling_2d(x, ksize, stride, pad, outsize, cover_all)
 
-		self.funcs.append(unpool2d)
+		self.func_list.append(unpool2d)
 		return self
 
 
@@ -266,6 +267,19 @@ class Node:
 		"""
 		return self._own_node(kind_name, SubModel(self.node_generator, kind_name, self))
 
+	def funcs(self, kind_name, funcs, input=None):
+		"""自分を入力とする出力 Funcs を生成する.
+
+		Args:
+			kind_name: 種類名.
+			funcs: 関数列、各関数は def func(x): return x * 2 の様な形式.
+			input: None.
+
+		Returns:
+			Funcs.
+		"""
+		return self._own_node(kind_name, Funcs(self.node_generator, kind_name, funcs, self))
+
 	def layer(self, kind_name, link, input=None):
 		"""自分を入力とする出力 Layer を生成する.
 
@@ -422,14 +436,73 @@ class Node:
 		return self
 
 
+class Funcs(Node, FuncsHolder):
+	"""関数列.
+
+	Args:
+		owner: 所有者となる Node.
+		kind_name: 種類名.
+		funcs: 関数列、各関数は def func(x): return x * 2 の様な形式.
+		input: 入力 Node または None.
+	"""
+
+	def __init__(self, owner, kind_name, funcs, input=None):
+		if input == owner:
+			input = None
+
+		if input is not None and not isinstance(input, Node):
+			raise TypeError("Invalid argument. 'input' must be Node.")
+		if not isinstance(funcs, list):
+			if not callable(funcs):
+				raise TypeError("Invalid argument. 'funcs' must be callable or callable list.")
+			funcs = [funcs]
+		for f in funcs:
+			if not callable(f):
+				raise TypeError("Invalid argument. 'funcs' must be callable or callable list.")
+
+		Node.__init__(self, owner, owner, kind_name)
+		FuncsHolder.__init__(self)
+
+		self.allow_multi_inputs = False
+		self.allow_multi_outputs = False
+
+		if input is not None:
+			input.add_ouput(self)
+			self.add_input(input)
+
+		for f in self.func_list:
+			self.func_list.append(f)
+
+	def get_dot_node_label(self):
+		"""dot 内でのノードのラベルの取得.
+
+		Returns:
+			ノードのラベル.
+		"""
+		return '{}{}\\n{}'.format(self.get_dot_node_name(), self.dot_param, ', '.join(f.__name__ for f in self.func_list))
+
+	def __call__(self, x=None):
+		"""指定値をレイヤーで変換する.
+
+		Args:
+			x: 入力値.
+
+		Returns:
+			変換後の値.
+		"""
+		for f in self.func_list:
+			x = f(x)
+		return x
+
+
 class Layer(Chain, Node, FuncsHolder):
-	"""レイヤ、学習対象の重み、活性化関数、入力レイヤへの参照を持つ.
+	"""レイヤ、学習対象の重み、活性化関数.
 
 	Args:
 		owner: 所有者となる Node.
 		kind_name: 種類名.
 		link: 学習対象の重みを持つ chainer.links.Convolution2D など chainer.link.Link を継承するもの.
-		input: 入力レイヤ、Layer を継承するものまたは None.
+		input: 入力 Node または None.
 	"""
 
 	def __init__(self, owner, kind_name, link, input=None):
@@ -461,7 +534,7 @@ class Layer(Chain, Node, FuncsHolder):
 		Returns:
 			ノードのラベル.
 		"""
-		return '{}{}\\n{}'.format(self.get_dot_node_name(), self.dot_param, ', '.join(f.__name__ for f in self.funcs))
+		return '{}{}\\n{}'.format(self.get_dot_node_name(), self.dot_param, ', '.join(f.__name__ for f in self.func_list))
 
 	def __call__(self, x=None):
 		"""指定値をレイヤーで変換する.
@@ -473,7 +546,7 @@ class Layer(Chain, Node, FuncsHolder):
 			変換後の値.
 		"""
 		x = self.link(x)
-		for f in self.funcs:
+		for f in self.func_list:
 			x = f(x)
 		return x
 
@@ -488,7 +561,7 @@ class Gate(Node):
 	"""
 
 	def __init__(self, owner, func, *inputs):
-		inputs = tuple([(i if i != owner else None) for i in inputs ])		
+		inputs = tuple([(i if i != owner else None) for i in inputs])
 
 		for i in inputs:
 			if i is not None and not isinstance(i, Node):
