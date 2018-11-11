@@ -268,7 +268,7 @@ class Node:
 		"""
 		return self._own_node(kind_name, SubModel(self.node_generator, kind_name, self))
 
-	def noop(self, input=None):
+	def nop(self, input=None):
 		"""自分を入力とする出力 NoOp を生成する.
 
 		Args:
@@ -789,22 +789,23 @@ class SubModel(Chain, Node):
 
 		# モデル外ノードを入力としていたらエラーとする
 		for n, inputs in nodewise_inputs.items():
-			if len(inputs.difference(all_nodes)) != 0:
-				raise Exception("Child nodes of '{}' can not input external nodes.".format(self.get_full_name()))
+			dif = inputs.difference(all_nodes)
+			if len(dif) != 0:
+				raise Exception("Child nodes of '{}' can not input external nodes. {}".format(self.get_full_name(), ', '.join(i.get_full_name() for i in dif)))
 
 		# 最初のノードを集める
 		firsts = [n for n, firsts in nodewise_inputs.items() if len(firsts) == 0]
 		if len(firsts) == 0:
 			raise Exception("Node '{}' must have a one input.".format(self.get_full_name()))
 		if len(firsts) != 1:
-			raise Exception("Node '{}' does not support multiple inputs.".format(self.get_full_name()))
+			raise Exception("Node '{}' does not support multiple inputs. {}".format(self.get_full_name(), ', '.join(i.get_full_name() for i in firsts)))
 
 		# 最後のノード（入力とされていないノード）を集める
 		lasts = [n for n in all_nodes if n not in all_inputs]
 		if len(lasts) == 0:
 			raise Exception("Node '{}' must have a one output.".format(self.get_full_name()))
 		if len(lasts) != 1:
-			raise Exception("Node '{}' does not support multiple outputs.".format(self.get_full_name()))
+			raise Exception("Node '{}' does not support multiple outputs. {}".format(self.get_full_name(), ', '.join(i.get_full_name() for i in lasts)))
 
 		self.firsts = firsts
 		self.lasts = lasts
