@@ -139,13 +139,11 @@ class Node(Base):
 
 	Args:
 		owner: このノードの所有者となる Node.
-		nodes_owner: このノードが生成するノードの所有者となる Node.
 		kind_name: 種類名.
 	"""
 
-	def __init__(self, owner, nodes_owner, kind_name):
+	def __init__(self, owner, kind_name):
 		self.owner = owner # このノードの所有者となる Node.
-		self.nodes_owner = nodes_owner # このノードが生成するノードの所有者となる Node.
 		self.kind_name = kind_name # 種類名
 		self.name = None # 所有者 Node 内での自身の名前
 		self.inputs = [] # 入力元ノード列
@@ -296,7 +294,8 @@ class Node(Base):
 		Returns:
 			SubModel.
 		"""
-		return self._on_new_node(kind_name, SubModel(self.nodes_owner, kind_name, self))
+		nodes_owner = self._get_nodes_owner()
+		return nodes_owner._on_new_node(kind_name, SubModel(nodes_owner, kind_name, self))
 
 	def nop(self):
 		"""自分を入力とする出力 NoOp を生成する.
@@ -304,7 +303,8 @@ class Node(Base):
 		Returns:
 			NoOp.
 		"""
-		return self._on_new_node('nop', NoOp(self.nodes_owner, 'nop', self))
+		nodes_owner = self._get_nodes_owner()
+		return nodes_owner._on_new_node('nop', NoOp(nodes_owner, 'nop', self))
 
 	def funcs(self, kind_name, funcs):
 		"""自分を入力とする出力 Funcs を生成する.
@@ -316,7 +316,8 @@ class Node(Base):
 		Returns:
 			Funcs.
 		"""
-		return self._on_new_node(kind_name, Funcs(self.nodes_owner, kind_name, funcs, self))
+		nodes_owner = self._get_nodes_owner()
+		return nodes_owner._on_new_node(kind_name, Funcs(nodes_owner, kind_name, funcs, self))
 
 	def layer(self, kind_name, link):
 		"""自分を入力とする出力 Layer を生成する.
@@ -328,7 +329,8 @@ class Node(Base):
 		Returns:
 			Layer.
 		"""
-		return self._on_new_node(kind_name, Layer(self.nodes_owner, kind_name, link, self))
+		nodes_owner = self._get_nodes_owner()
+		return nodes_owner._on_new_node(kind_name, Layer(nodes_owner, kind_name, link, self))
 
 	def gate(self, func, *inputs):
 		"""レイヤ同士を結合する Gate を作成する.
@@ -342,7 +344,8 @@ class Node(Base):
 		"""
 		if len(inputs) == 0:
 			inputs = (self,)
-		return self._on_new_node('gate', Gate(self.nodes_owner, func, *inputs))
+		nodes_owner = self._get_nodes_owner()
+		return nodes_owner._on_new_node('gate', Gate(nodes_owner, func, *inputs))
 
 	def named_gate(self, kind_name, func, *inputs):
 		"""レイヤ同士を結合する Gate を作成する.
@@ -357,7 +360,8 @@ class Node(Base):
 		"""
 		if len(inputs) == 0:
 			inputs = (self,)
-		return self._on_new_node(kind_name, Gate(self.nodes_owner, func, *inputs))
+		nodes_owner = self._get_nodes_owner()
+		return nodes_owner._on_new_node(kind_name, Gate(nodes_owner, func, *inputs))
 
 	def dense(self, in_size, out_size=None, nobias=False, initialW=None, initial_bias=None):
 		l = self.layer('dense', L.Linear(in_size, out_size, nobias, initialW, initial_bias))
@@ -379,6 +383,14 @@ class Node(Base):
 		l.dot_param = '(size:{})'.format(size)
 		return l
 
+	def _get_nodes_owner(self):
+		"""新規 Node 生成時に親となる Node の取得.
+
+		Returns:
+			Node.
+		"""
+		return self if self.owner is None else self.owner
+
 	def _on_new_node(self, kind_name, node):
 		"""新規 Node 生成後の処理、指定 Node は適切な Node に所有される.
 
@@ -389,7 +401,6 @@ class Node(Base):
 		Returns:
 			指定された Node.
 		"""
-		return self.nodes_owner._on_new_node(kind_name, node)
 
 	def _build_begin(self):
 		"""コード生成開始.
@@ -512,7 +523,7 @@ class NoOp(Node):
 		if input is not None and not isinstance(input, Node):
 			raise TypeError("Invalid argument. 'input' must be Node.")
 
-		Node.__init__(self, owner, owner, kind_name)
+		Node.__init__(self, owner, kind_name)
 
 		self.allow_multi_inputs = False
 		self.output_same_value = True
@@ -567,7 +578,7 @@ class Funcs(FuncsHolder, Node):
 			if not callable(f):
 				raise TypeError("Invalid argument. 'funcs' must be callable or callable list.")
 
-		Node.__init__(self, owner, owner, kind_name)
+		Node.__init__(self, owner, kind_name)
 		FuncsHolder.__init__(self)
 
 		self.allow_multi_inputs = False
@@ -621,7 +632,7 @@ class Layer(Chain, FuncsHolder, Node):
 			raise TypeError('Cannot register a non-link object as a child')
 
 		Chain.__init__(self)
-		Node.__init__(self, owner, owner, kind_name)
+		Node.__init__(self, owner, kind_name)
 		FuncsHolder.__init__(self)
 
 		self.allow_multi_inputs = False
@@ -673,7 +684,7 @@ class Gate(Node):
 			if i is not None and not isinstance(i, Node):
 				raise TypeError("Invalid argument. 'inputs' element must be Node.")
 
-		Node.__init__(self, owner, owner, 'Gate')
+		Node.__init__(self, owner, 'Gate')
 
 		for input in inputs:
 			if input is not None:
@@ -719,7 +730,7 @@ class SubModel(Chain, Node):
 			raise TypeError("Invalid argument. 'input' must be Node.")
 
 		Chain.__init__(self)
-		Node.__init__(self, owner, self, kind_name)
+		Node.__init__(self, owner, kind_name)
 
 		self.allow_multi_inputs = False
 		self.output_same_value = True
@@ -741,24 +752,6 @@ class SubModel(Chain, Node):
 	def __exit__(self, type, value, traceback):
 		self.assembly_depth -= 1
 
-	# def begin(self):
-	# 	"""子ノードの登録を開始する、 with と一緒に使うことを想定.
-	# 	"""
-
-	# 	class assembly:
-
-	# 		def __init__(self, model):
-	# 			self.model = model
-
-	# 		def __enter__(self):
-	# 			self.model.assembly_depth += 1
-	# 			return self.model
-
-	# 		def __exit__(self, type, value, traceback):
-	# 			self.model.assembly_depth -= 1
-
-	# 	return assembly(self)
-
 	def get_dot_node_name(self):
 		"""dot 内でのノード名の取得.
 
@@ -766,6 +759,14 @@ class SubModel(Chain, Node):
 			ノード名.
 		"""
 		return self.outputs[0].get_dot_node_name()
+
+	def _get_nodes_owner(self):
+		"""新規 Node 生成時に親となる Node の取得.
+
+		Returns:
+			Node.
+		"""
+		return self if self.assembly_depth != 0 or self.owner is None else self.owner 
 
 	def _on_new_node(self, kind_name, node):
 		"""新規 Node 生成後の処理、指定 Node は適切な Node に所有される.
@@ -777,8 +778,6 @@ class SubModel(Chain, Node):
 		Returns:
 			指定された Node.
 		"""
-		if self.assembly_depth == 0 and self.owner is not None:
-			return self.owner._on_new_node(kind_name, node)
 		count = self.kindwise_count[kind_name] + 1 if kind_name in self.kindwise_count else 1
 		name = kind_name + str(count)
 		if isinstance(node, Link):
