@@ -277,7 +277,7 @@ class Node:
 		Returns:
 			NoOp.
 		"""
-		return self._own_node('NoOp', NoOp(self.node_generator, 'NoOp', self))
+		return self._own_node('nop', NoOp(self.node_generator, 'nop', self))
 
 	def funcs(self, kind_name, funcs, input=None):
 		"""自分を入力とする出力 Funcs を生成する.
@@ -471,7 +471,7 @@ class Node:
 		return self
 
 
-class NoOp(Node, FuncsHolder):
+class NoOp(Node):
 	"""何もしないノード、入力値 x をそのまま出力する.
 
 	Args:
@@ -561,7 +561,7 @@ class Funcs(Node, FuncsHolder):
 		Returns:
 			ノードのラベル.
 		"""
-		return '{}{}\\n{}'.format(self.get_dot_node_name(), self.dot_param, ', '.join(f.__name__ for f in self.func_list))
+		return '{}{}\\n{}'.format(self.get_full_name(), self.dot_param, ', '.join(f.__name__ for f in self.func_list))
 
 	def __call__(self, x=None):
 		"""指定値をレイヤーで変換する.
@@ -616,7 +616,7 @@ class Layer(Chain, Node, FuncsHolder):
 		Returns:
 			ノードのラベル.
 		"""
-		return '{}{}\\n{}'.format(self.get_dot_node_name(), self.dot_param, ', '.join(f.__name__ for f in self.func_list))
+		return '{}{}\\n{}'.format(self.get_full_name(), self.dot_param, ', '.join(f.__name__ for f in self.func_list))
 
 	def __call__(self, x=None):
 		"""指定値をレイヤーで変換する.
@@ -664,7 +664,7 @@ class Gate(Node):
 		Returns:
 			ノードのラベル.
 		"""
-		return '{}\\n{}'.format(self.get_dot_node_name(), self.func.__name__)
+		return '{}\\n{}'.format(self.get_full_name(), self.func.__name__)
 
 	def __call__(self, x):
 		"""指定値をユーザー指定処理で変換する.
