@@ -10,32 +10,36 @@
 	dnn.startup(-1) # 0番のGPU使用
 	xp = dnn.xp # numpy または cupy
 
+	# x を出力先ノード数分に分割する
 	def split(x, out):
+		n = len(out)
 		shape = x.shape
-		x = x.reshape((2, shape[0], shape[1] // 2))
-		return out[0](x[0]), out[1](x[1])
+		x = x.reshape((n, shape[0], shape[1] // n))
+		return tuple(e for e in x)
 
+	# 分割されている x を１つに結合する
 	def concat(x, out):
-		h = F.concat((x[0], x[1]), axis=1)
-		return out[0](h)
+		return F.concat(tuple(e for e in x), axis=1)
+
+	# 入力を２つに分割して dense 通して１つに結合するモデルを生成する
+	def diamond(self, ch):
+		m = self.model('diamond')
+		g = m.gate(split)
+		g = m.gate(concat, g.dense(ch // 2, ch // 2).relu().dropout(), g.dense(ch // 2, ch // 2).relu().dropout())
+		return m
+
+	dnn.Node.diamond = diamond
 
 	m = dnn.Model(chainer.optimizers.Adam()) # とりあえず Model 作る
-	g = m.gate(split, m.submodel('sub').dense(32, 32).relu().dense(32, 32).relu().owner) # サブモデル内に全結合層生成して relu 活性化関数セットしたものを入力し、それを２つに分ける Gate 作る
-	g = m.gate(concat, g.dense(16, 16), g.dense(16, 16)) # ２つの入力を１つに結合する Gate 作る
-	g = m.gate((lambda x, out: out[0](x * 2)), g.dense(32, 32)) # ２倍
-	g.dense(32, 32)
+	g = m.dense(32, 8).gate(split) # dense 通して分割用 Gate に通る様に
+	m.gate(concat, g.diamond(4), g.diamond(4)).dense(8, 32) # 分割用 Gate で２つの diamond モデル通す様に分割してそれを結合する Gate を通る様にする
 	m.build()
-
-	with open("dnn_test.dot", mode='w') as f:
-		f.write(m.dot_code)
-	with open("dnn_test_prediction.py", mode='w') as f:
-		f.write(m.code)
 
 	# 所定のデバイスメモリに転送
 	m = dnn.to_xp(m)
 
 	# とりあえず入力値を単純に10倍にするネットを目標とする
-	for i in range(10):
+	for i in range(100000):
 		m.zerograds()
 		x = Variable(xp.random.uniform(0, 1, (1, 32)).astype(xp.float32))
 		y = m(x)
@@ -131,10 +135,10 @@ class Node:
 		self.root = node # ルート Node
 
 	def __str__(self):
-		return self.name
+		return self.get_full_name()
 
 	def __repr__(self):
-		return self.name
+		return self.get_full_name()
 
 	def get_full_name(self):
 		"""ルート Node からのフル名称を取得する.
@@ -166,7 +170,7 @@ class Node:
 		Returns:
 			ノードのラベル.
 		"""
-		return self.get_dot_node_name()
+		return '{}{}'.format(self.get_full_name(), self.dot_param)
 
 	def get_inputs(self):
 		"""入力元ノード集合を取得する.
@@ -457,7 +461,7 @@ class Layer(Chain, Node, FuncsHolder):
 		Returns:
 			ノードのラベル.
 		"""
-		return '{}\\n{}'.format(self.get_dot_node_name(), ', '.join(f.__name__ for f in self.funcs))
+		return '{}{}\\n{}'.format(self.get_dot_node_name(), self.dot_param, ', '.join(f.__name__ for f in self.funcs))
 
 	def __call__(self, x=None):
 		"""指定値をレイヤーで変換する.
