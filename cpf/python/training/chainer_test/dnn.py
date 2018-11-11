@@ -111,7 +111,8 @@ class FuncsHolder:
 	"""
 
 	def __init__(self):
-		self.func_list = []
+		self.func_list = [] # 関数リスト、先頭から順に実行される
+		self.func_kind_names = {} # 関数をキーにした種類名マップ
 
 	def funcs(self, kind_name, funcs):
 		"""自分を入力とする出力 Funcs を生成する.
@@ -131,6 +132,8 @@ class FuncsHolder:
 			if not callable(f):
 				raise TypeError("Invalid argument. 'funcs' must be callable or callable list.")
 		self.func_list.extend(funcs)
+		for f in funcs:
+			self.func_kind_names[f] = kind_name if f.__name__ == '<lambda>' else f.__name__
 		return self
 
 
@@ -589,6 +592,8 @@ class Funcs(FuncsHolder, Node):
 			self.add_input(input)
 
 		self.func_list.extend(funcs)
+		for f in funcs:
+			self.func_kind_names[f] = kind_name if f.__name__ == '<lambda>' else f.__name__
 
 	def get_dot_node_label(self):
 		"""dot 内でのノードのラベルの取得.
@@ -596,7 +601,7 @@ class Funcs(FuncsHolder, Node):
 		Returns:
 			ノードのラベル.
 		"""
-		return '{}{}\\n{}'.format(self.get_full_name(), self.dot_param, ', '.join(f.__name__ for f in self.func_list))
+		return '{}{}\\n{}'.format(self.get_full_name(), self.dot_param, ', '.join(self.func_kind_names[f] for f in self.func_list))
 
 	def __call__(self, x=None):
 		"""指定値をレイヤーで変換する.
@@ -651,7 +656,7 @@ class Layer(Chain, FuncsHolder, Node):
 		Returns:
 			ノードのラベル.
 		"""
-		return '{}{}\\n{}'.format(self.get_full_name(), self.dot_param, ', '.join(f.__name__ for f in self.func_list))
+		return '{}{}\\n{}'.format(self.get_full_name(), self.dot_param, ', '.join(self.func_kind_names[f] for f in self.func_list))
 
 	def __call__(self, x=None):
 		"""指定値をレイヤーで変換する.
@@ -766,7 +771,7 @@ class SubModel(Chain, Node):
 		Returns:
 			Node.
 		"""
-		return self if self.assembly_depth != 0 or self.owner is None else self.owner 
+		return self if self.assembly_depth != 0 or self.owner is None else self.owner
 
 	def _on_new_node(self, kind_name, node):
 		"""新規 Node 生成後の処理、指定 Node は適切な Node に所有される.
