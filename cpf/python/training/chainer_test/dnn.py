@@ -125,6 +125,7 @@ class Node:
 		self.is_uner_build = False # ビルド途中かどうか
 		self.allow_multi_inputs = True # 複数の入力元ノードを許可するかどうか
 		self.allow_multi_outputs = True # 複数の出力先ノードを許可するかどうか
+		self.output_same_value = False # 全出力先ノードに同じ値を出力するかどうか
 
 		# ルート Node の取得
 		node = self
@@ -307,6 +308,21 @@ class Node:
 			inputs = (self,)
 		return self._own_node('Gate', Gate(self.node_generator, func, *inputs))
 
+	def named_gate(self, kind_name, func, *inputs):
+		"""レイヤ同士を結合する Gate を作成する.
+
+		Args:
+			kind_name: 種類名.
+			func: 入力値を出力レイヤーに通す処理、 def func(gate, x, output_layers).
+			inputs: 入力レイヤー列.
+
+		Returns:
+			Gate.
+		"""
+		if len(inputs) == 0:
+			inputs = (self,)
+		return self._own_node(kind_name, Gate(self.node_generator, func, *inputs))
+
 	def dense(self, in_size, out_size=None, nobias=False, initialW=None, initial_bias=None):
 		l = self.layer('dense', L.Linear(in_size, out_size, nobias, initialW, initial_bias))
 		l.dot_param = '(in:{}, out:{})'.format(in_size, out_size)
@@ -386,7 +402,7 @@ class Node:
 		in_vars = []
 		for i in self.inputs:
 			i._build(depth)
-			in_vars.append(root._get_var((i, self)))
+			in_vars.append(root._get_var((i, self), False))
 		for v in in_vars:
 			root._release_var(v)
 
@@ -396,7 +412,11 @@ class Node:
 		# コードの追加
 		self_name = self.get_full_name()
 		in_tuple_str = ', '.join(in_vars) if len(in_vars) != 0 else 'x'
-		out_tuple_str = ', '.join(out_vars) if len(out_vars) != 0 else root._get_var((self, None))
+		if len(out_vars) != 0:
+			out_tuple_str = out_vars[0] if self.output_same_value else ', '.join(out_vars)
+		else:
+			out_tuple_str = root._get_var((self, None))
+
 		if self.allow_multi_inputs:
 			self.root.code.append('\t{} = self.{}(({}))'.format(out_tuple_str, self_name, in_tuple_str))
 		else:
@@ -464,14 +484,13 @@ class Funcs(Node, FuncsHolder):
 		FuncsHolder.__init__(self)
 
 		self.allow_multi_inputs = False
-		self.allow_multi_outputs = False
+		self.output_same_value = True
 
 		if input is not None:
 			input.add_ouput(self)
 			self.add_input(input)
 
-		for f in self.func_list:
-			self.func_list.append(f)
+		self.func_list.extend(funcs)
 
 	def get_dot_node_label(self):
 		"""dot 内でのノードのラベルの取得.
@@ -519,7 +538,7 @@ class Layer(Chain, Node, FuncsHolder):
 		FuncsHolder.__init__(self)
 
 		self.allow_multi_inputs = False
-		self.allow_multi_outputs = False
+		self.output_same_value = True
 
 		if input is not None:
 			input.add_ouput(self)
@@ -616,7 +635,7 @@ class SubModel(Chain, Node):
 		Node.__init__(self, owner, self, kind_name)
 
 		self.allow_multi_inputs = False
-		self.allow_multi_outputs = False
+		self.output_same_value = True
 
 		if input is not None:
 			input.add_ouput(self)
@@ -827,11 +846,12 @@ class Model(SubModel):
 		"""
 		return self.prediction(x)
 
-	def _get_var(self, var_key):
-		"""モデルの推論用関数内で使用されるローカル変数名を生成する.
+	def _get_var(self, var_key, increment_refcount=True):
+		"""モデルの推論用関数内で使用されるローカル変数名を取得または生成する.
 
 		Args:
 			var_key: 入力元 Node と出力先 Node のタプル.
+			increment_refcount: 変数への参照カウントをインクリメントするかどうか.
 
 		Returns:
 			ローカル変数名.
@@ -841,16 +861,23 @@ class Model(SubModel):
 
 			def __init__(self, id):
 				self.id = id
+				self.refcount = 1
 
 			def get_var_name(self):
 				return 'x' + str(self.id)
 
+		# 実際に接続されるノード用の変数を作成する
 		i = var_key[0]
 		o = var_key[1]
 		var_key = (i._get_output_connected(o) if i is not None else i), (o._get_input_connected(i) if o is not None else o)
+		# 入力側からの出力が全て同じ値になるノードなら、出力先毎に変数変える必要は無い
+		if var_key[0] is not None and var_key[0].output_same_value:
+			var_key = var_key[0], var_key[0]
 
 		vars = self.vars
 		if var_key not in vars:
+			if not increment_refcount:
+				raise Exception("Internal error. Local variable for {} is not exists.".format(var_key))
 			id = 1
 			ids = [var.id for var in vars.values()]
 			while id in ids:
@@ -859,6 +886,8 @@ class Model(SubModel):
 			vars[var_key] = var
 		else:
 			var = vars[var_key]
+			if increment_refcount:
+				var.refcount += 1
 		return var.get_var_name()
 
 	def _release_var(self, var_name):
@@ -870,8 +899,10 @@ class Model(SubModel):
 		vars = self.vars
 		for k, v in vars.items():
 			if v.get_var_name() == var_name:
-				del vars[k]
-				break
+				v.refcount -= 1
+				if v.refcount <= 0:
+					del vars[k]
+					break
 
 
 def startup(gpu, train=True):
