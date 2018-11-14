@@ -56,6 +56,7 @@
 """
 import types
 import inspect
+import os
 import numpy as np, chainer, chainer.functions as F, chainer.links as L
 from chainer import Variable
 from chainer import Chain
@@ -65,6 +66,7 @@ xp = None
 cp = None
 cuda = None
 test = False
+dtype = np.float32
 
 
 class Base:
@@ -874,7 +876,7 @@ class Model(SubModel):
 	"""モデル、 input() 、 layer() 、 output() により複数のレイヤを保持する事が可能.
 
 	Args:
-		optimizer: 重み最適化処理方法、 chainer.optimizer.Optimizerr を継承するもの.
+		optimizer: 重み最適化処理方法、 chainer.optimizer.Optimizer を継承するもの.
 	"""
 
 	def __init__(self, optimizer):
@@ -986,6 +988,20 @@ class Model(SubModel):
 					break
 
 
+class Models:
+	"""複数の Model を所有するクラス.
+	"""
+
+	def __str__(self):
+		return self.get_all_model_names()
+
+	def __repr__(self):
+		return self.get_all_model_names()
+
+	def get_all_model_names(self):
+		return '\n'.join(v for k, v in vars(self).items())
+
+
 def startup(gpu, train=True):
 	"""環境を初期化する.
 
@@ -1035,6 +1051,12 @@ def to_gpu(x):
 			return tuple([to_gpu(e) for e in x])
 		if isinstance(x, list):
 			return [to_gpu(e) for e in x]
+		if isinstance(x, Models):
+			d = vars(x)
+			for k, v in d.items():
+				if isinstance(v, Model):
+					d[k] = to_gpu(v)
+			return x
 		return cuda.to_gpu(x)
 	else:
 		return x
@@ -1063,6 +1085,12 @@ def to_cpu(x):
 			return tuple([to_cpu(e) for e in x])
 		if isinstance(x, list):
 			return [to_cpu(e) for e in x]
+		if isinstance(x, Models):
+			d = vars(x)
+			for k, v in d.items():
+				if isinstance(v, Model):
+					d[k] = to_cpu(v)
+			return x
 		return cuda.to_cpu(x)
 	else:
 		return x
@@ -1079,17 +1107,72 @@ def to_xp(x):
 	return to_gpu(x) if xp is cp else to_cpu(x)
 
 
+def get_model_file_names(file_name, model):
+	d = {}
+
+	def get_file_name(fn, m):
+		if isinstance(m, Model):
+			d[m] = fn + '.mdl'
+			d[m.optimizer] = fn + '.opt'
+		elif isinstance(m, Models):
+			for k, v in vars(m).items():
+				if isinstance(v, Model):
+					get_file_name(fn + '.' + k, v)
+		else:
+			raise TypeError("Invalid argument. 'm' must be Model or Models type.")
+
+	get_file_name(file_name, model)
+
+	return d
+
+
 def save(file_name, model):
-	model = to_cpu(model)
-	chainer.serializers.save_npz(file_name + '.mdl', model)
-	chainer.serializers.save_npz(file_name + '.opt', model.optimizer)
+	if model.xp is not np:
+		model = to_cpu(model)
+
+	d = get_model_file_names(file_name, model)
+
+	def save_internal(fn, m):
+		if isinstance(m, Model):
+			chainer.serializers.save_npz(d[m], m)
+			chainer.serializers.save_npz(d[m.optimizer], m.optimizer)
+		elif isinstance(m, Models):
+			for k, v in vars(m).items():
+				if isinstance(v, Model):
+					save(fn + '.' + k, v)
+		else:
+			raise TypeError("Invalid argument. 'm' must be Model or Models type.")
+
+	save_internal(file_name, model)
 
 
 def load(file_name, model):
-	model = to_cpu(model)
-	chainer.serializers.load_npz(file_name + '.mdl', model)
-	chainer.serializers.load_npz(file_name + '.opt', model.optimizer)
-	return model
+	if model.xp is not np:
+		model = to_cpu(model)
+
+	d = get_model_file_names(file_name, model)
+
+	def load_internal(fn, m):
+		if isinstance(m, Model):
+			chainer.serializers.load_npz(d[m], m)
+			chainer.serializers.load_npz(d[m.optimizer], m.optimizer)
+			return m
+		elif isinstance(m, Models):
+			for k, v in vars(m).items():
+				if isinstance(v, Model):
+					load(fn + '.' + k, v)
+			return m
+		else:
+			raise TypeError("Invalid argument. 'm' must be Model or Models type.")
+
+	return load_internal(file_name, model)
+
+
+def load_if_exists(file_name, model):
+	for k, v in get_model_file_names(file_name, model).items():
+		if not os.path.exists(v):
+			return model
+	load(file_name, model)
 
 
 if __name__ == '__main__':
