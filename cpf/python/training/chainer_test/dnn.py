@@ -54,9 +54,10 @@
 	m = dnn.to_cpu(m)
 	dnn.save("modeldata", m)
 """
+import os
 import types
 import inspect
-import os
+from importlib.machinery import SourceFileLoader
 import numpy as np, chainer, chainer.functions as F, chainer.links as L
 from chainer import Variable
 from chainer import Chain
@@ -89,6 +90,9 @@ class Base:
 
 	def leaky_relu(self):
 		return self.funcs('leaky_relu', F.leaky_relu)
+
+	def tanh(self):
+		return self.funcs('tanh', F.tanh)
 
 	def sigmoid(self):
 		return self.funcs('sigmoid', F.sigmoid)
@@ -386,6 +390,11 @@ class Node(Base):
 	def batchnorm(self, size=None, decay=0.9, eps=2e-5, dtype=None, use_gamma=True, use_beta=True, initial_gamma=None, initial_beta=None, axis=None, initial_avg_mean=None, initial_avg_var=None):
 		l = self.layer('batchnorm', L.BatchNormalization(size, decay, eps, dtype, use_gamma, use_beta, initial_gamma, initial_beta, axis, initial_avg_mean, initial_avg_var))
 		l.dot_param = '(size:{})'.format(size)
+		return l
+
+	def prelu(self, shape=(), init=0.25):
+		l = self.layer('prelu', L.PReLU(shape, init))
+		l.dot_param = '(shape:{})'.format(shape)
 		return l
 
 	def _get_nodes_owner(self):
@@ -891,8 +900,12 @@ class Model(SubModel):
 
 		self.add_ouput(None)
 
-	def build(self):
+	def build(self, output_file_name=None, module_name=None):
 		"""モデルの推論用関数をビルドする.
+
+		Args:
+			output_file_name: 推論関数出力ソースファイル名、None 以外が指定されたらこのファイル作成してインポートされる、デバッグ用.
+			module_name: output_file_name ロード時に付与するモジュール名.
 		"""
 		self.code.append('def prediction(self, x):')
 		self.dot_code.insert(0, 'digraph {\n')
@@ -912,9 +925,17 @@ class Model(SubModel):
 		self.code.append('\treturn {}\n'.format(var_name))
 		self.code = '\n'.join(self.code)
 
-		l = {}
-		exec(self.code, globals(), l)
-		self.prediction = types.MethodType(l['prediction'], self)
+		if output_file_name is None:
+			l = {}
+			exec(self.code, globals(), l)
+			self.prediction = types.MethodType(l['prediction'], self)
+		else:
+			output_file_name = os.path.abspath(output_file_name)
+			with open(output_file_name, mode='w') as f:
+				f.write(self.code)
+			module = SourceFileLoader(module_name, output_file_name).load_module()
+			func = module.prediction
+			self.prediction = lambda x: func(self, x)
 
 		self.optimizer.setup(self)
 
@@ -999,7 +1020,20 @@ class Models:
 		return self.get_all_model_names()
 
 	def get_all_model_names(self):
-		return '\n'.join(v for k, v in vars(self).items())
+		return '\n'.join(v for k, v in vars(self).items() if isinstance(v, Model))
+
+	def build(self, output_file_name=None):
+		"""モデルの推論用関数をビルドする.
+
+		Args:
+			output_file_name: 推論関数出力ソースファイル名、None 以外が指定されたらこのファイル作成してインポートされる、デバッグ用.
+		"""
+		for k, v in vars(self).items():
+			if isinstance(v, Model):
+				if output_file_name is None:
+					v.build()
+				else:
+					v.build(output_file_name + '.' + k + '.py', k)
 
 
 def startup(gpu, train=True):
@@ -1127,8 +1161,7 @@ def get_model_file_names(file_name, model):
 
 
 def save(file_name, model):
-	if model.xp is not np:
-		model = to_cpu(model)
+	model = to_cpu(model)
 
 	d = get_model_file_names(file_name, model)
 
@@ -1147,8 +1180,7 @@ def save(file_name, model):
 
 
 def load(file_name, model):
-	if model.xp is not np:
-		model = to_cpu(model)
+	model = to_cpu(model)
 
 	d = get_model_file_names(file_name, model)
 
