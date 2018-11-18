@@ -114,6 +114,9 @@ class Base:
 
 		return self.funcs('unpool2d', unpool2d)
 
+	def flatten(self):
+		return self.funcs('flatten', F.flatten)
+
 
 class FuncsHolder:
 	"""関数を生成し保持する機能を提供するクラス.
@@ -309,6 +312,18 @@ class Node(Base):
 			if node == before:
 				nodes[index] = after
 				break
+
+	def trainables(self):
+		"""学習可能な Link オブジェクトを集める.
+
+		Returns:
+			Link を列挙するジェネレータ.
+		"""
+		if isinstance(self, Link):
+			for pl in self.namedlinks():
+				l = pl[1]
+				if 'W' in l.__dict__ and isinstance(l.W, Variable):
+					yield pl
 
 	def model(self, kind_name):
 		"""自分を入力とする出力 SubModel を生成する.
@@ -875,7 +890,7 @@ class SubModel(Chain, Node):
 
 		# ビルド
 		tmp_var = None
-		if self != self.root:
+		if self != self.root and 2 <= len(self.nodes):
 			tmp_var_mgr = self.root.tmp_var_mgr
 			tmp_var = tmp_var_mgr.get_var((self, self))
 			self.root.code.append('\t{} = {}'.format(tmp_var, self.get_code_node_name()))
@@ -1184,13 +1199,15 @@ def to_xp(x):
 	return to_gpu(x) if xp is cp else to_cpu(x)
 
 
-def get_model_file_names(file_name, model):
+def get_model_file_names(file_name, model, matcher=None):
 	d = {}
 
 	def get_file_name(fn, m):
 		if isinstance(m, Model):
-			d[m] = fn + '.mdl'
-			d[m.optimizer] = fn + '.opt'
+			if matcher is None or matcher(m):
+				d[m] = fn + '.mdl'
+			if matcher is None or matcher(m.optimizer):
+				d[m.optimizer] = fn + '.opt'
 		elif isinstance(m, Models):
 			for k, v in vars(m).items():
 				if isinstance(v, Model):
@@ -1203,51 +1220,30 @@ def get_model_file_names(file_name, model):
 	return d
 
 
-def save(file_name, model):
+def save(file_name, model, matcher=None):
 	model = to_cpu(model)
-
-	d = get_model_file_names(file_name, model)
-
-	def save_internal(fn, m):
-		if isinstance(m, Model):
-			chainer.serializers.save_npz(d[m], m)
-			chainer.serializers.save_npz(d[m.optimizer], m.optimizer)
-		elif isinstance(m, Models):
-			for k, v in vars(m).items():
-				if isinstance(v, Model):
-					save(fn + '.' + k, v)
-		else:
-			raise TypeError("Invalid argument. 'm' must be Model or Models type.")
-
-	save_internal(file_name, model)
+	d = get_model_file_names(file_name, model, matcher)
+	for k, v in d.items():
+		chainer.serializers.save_npz(v, k)
 
 
-def load(file_name, model):
+def load(file_name, model, matcher=None):
 	model = to_cpu(model)
-
-	d = get_model_file_names(file_name, model)
-
-	def load_internal(fn, m):
-		if isinstance(m, Model):
-			chainer.serializers.load_npz(d[m], m)
-			chainer.serializers.load_npz(d[m.optimizer], m.optimizer)
-			return m
-		elif isinstance(m, Models):
-			for k, v in vars(m).items():
-				if isinstance(v, Model):
-					load(fn + '.' + k, v)
-			return m
-		else:
-			raise TypeError("Invalid argument. 'm' must be Model or Models type.")
-
-	return load_internal(file_name, model)
+	d = get_model_file_names(file_name, model, matcher)
+	for k, v in d.items():
+		chainer.serializers.load_npz(v, k)
+	return model
 
 
-def load_if_exists(file_name, model):
-	for k, v in get_model_file_names(file_name, model).items():
+def load_if_exists(file_name, model, matcher=None):
+	model = to_cpu(model)
+	d = get_model_file_names(file_name, model, matcher)
+	for v in d.values():
 		if not os.path.exists(v):
 			return model
-	load(file_name, model)
+	for k, v in d.items():
+		chainer.serializers.load_npz(v, k)
+	return model
 
 
 if __name__ == '__main__':
