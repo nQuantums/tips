@@ -6,6 +6,7 @@
 	from dnn import F
 	from dnn import L
 	from dnn import Variable
+	# import chainer.computational_graph as ccg
 
 	dnn.startup(-1) # 0番のGPU使用
 	xp = dnn.xp # numpy または cupy
@@ -23,24 +24,26 @@
 
 	# 入力を２つに分割して dense 通して１つに結合するモデルを生成する
 	def diamond(self, ch):
-		m = self.model('diamond')
-		g = m.gate(split)
-		g = m.gate(concat, g.dense(ch // 2, ch // 2).relu(), g.dense(ch // 2, ch // 2).relu())
-		return m
+		with self.model('diamond') as m: 
+			g = m.gate(split)
+			g = m.gate(concat, g.dense(ch // 2, ch // 2).relu(), g.dense(ch // 2, ch // 2).relu())
+			return m
 
 	# モデル構築
 	dnn.Node.diamond = diamond # 呼び出しが面倒なので Node に diamond 機能をもたせる
-	m = dnn.Model(chainer.optimizers.Adam()) # とりあえず Model 作る
-	h = m.dense(32, 8).gate(split) # dense 通して分割用 Gate に通る様に
-	h = m.gate(concat, h.diamond(4), h.diamond(4)).dense(8, 32) # 分割用 Gate で２つの diamond モデル通す様に分割してそれを結合する Gate を通る様にする
-	h.funcs('mul2x', lambda x: x * 2) # 入力値を２倍にする
-	m.build()
+	with dnn.Model(chainer.optimizers.Adam()) as m: # とりあえず Model 作る
+		h = m.dense(32, 8).gate(split) # dense 通して分割用 Gate に通る様に
+		h = m.gate(concat, h.diamond(4), h.diamond(4)).dense(8, 32) # 分割用 Gate で２つの diamond モデル通す様に分割してそれを結合する Gate を通る様にする
+		m.build('dnn_build_test.py', 'predmodule')
+
+	# モデルデータが保存済みなら読み込み
+	dnn.load_if_exists("modeldata", m)
 
 	# 所定のデバイスメモリに転送
 	m = dnn.to_xp(m)
 
 	# とりあえず入力値を単純に10倍にするネットを目標とする
-	for i in range(100000):
+	for i in range(100):
 		m.zerograds()
 		x = Variable(xp.random.uniform(0, 1, (1, 32)).astype(xp.float32))
 		y = m(x)
@@ -164,6 +167,7 @@ class Node(Base):
 		self.allow_multi_inputs = True # 複数の入力元ノードを許可するかどうか
 		self.allow_multi_outputs = True # 複数の出力先ノードを許可するかどうか
 		self.output_same_value = False # 全出力先ノードに同じ値を出力するかどうか
+		self.tmp_code_node_name = None # None 以外が指定されると get_code_node_name() がこの値を返す
 
 		# ルート Node の取得
 		node = self
@@ -195,6 +199,18 @@ class Node(Base):
 				names.append(nm)
 			node = node.owner
 		return '.'.join(reversed(names))
+
+	def get_code_node_name(self):
+		"""生成される推論関数内でのこの Node の名称を取得する.
+		"""
+		if self.tmp_code_node_name is not None:
+			return self.tmp_code_node_name
+
+		root = self.root
+		if self == root:
+			return 'self'
+
+		return '{}.{}'.format(self.owner.get_code_node_name(), self.name)
 
 	def get_dot_node_name(self):
 		"""dot 内でのノード名の取得.
@@ -463,19 +479,19 @@ class Node(Base):
 		in_vars = []
 		for i in self.inputs:
 			i._build(depth)
-			in_vars.append(root._get_var((i, self), False))
+			in_vars.append(root.var_mgr.get_var((i, self), False))
 		for v in in_vars:
-			root._release_var(v)
+			root.var_mgr.release_var(v)
 
 		# 出力値の代入先変数確保
-		out_vars = [root._get_var((self, o)) for o in self.outputs]
+		out_vars = [root.var_mgr.get_var((self, o)) for o in self.outputs]
 
 		# コードの追加
 		in_tuple_str = ', '.join(in_vars) if len(in_vars) != 0 else 'x'
 		if len(out_vars) != 0:
 			out_tuple_str = out_vars[0] if self.output_same_value else ', '.join(out_vars)
 		else:
-			out_tuple_str = root._get_var((self, None))
+			out_tuple_str = root.var_mgr.get_var((self, None))
 		self._add_code(out_tuple_str, '({})'.format(in_tuple_str) if self.allow_multi_inputs else in_tuple_str)
 
 		# グラフ用コードの追加
@@ -493,7 +509,7 @@ class Node(Base):
 			out_tuple_str: 計算結果を格納する変数名.
 			in_tuple_str: 入力値を格納している変数名.
 		"""
-		self.root.code.append('\t{} = self.{}({})'.format(out_tuple_str, self.get_full_name(), in_tuple_str))
+		self.root.code.append('\t{} = {}({})'.format(out_tuple_str, self.get_code_node_name(), in_tuple_str))
 
 	def _collect_multi_output_nodes(self, output, depth, node_set):
 		"""入力側の直近の複数出力 Node を集める.
@@ -849,14 +865,27 @@ class SubModel(Chain, Node):
 
 		self._search_ends()
 
-		# モデル外ノードとの接続を付け替えてビルド
+		# モデル外ノードとの接続を付け替え
 		if len(self.inputs) != 0 and self.inputs[0] is not None:
 			self.inputs[0].replace_output(self, self.firsts[0])
 		if len(self.outputs) != 0 and self.outputs[0] is not None:
 			self.outputs[0].replace_input(self, self.lasts[0])
 		self.firsts[0].set_inputs(self.get_inputs())
 		self.lasts[0].set_outputs(self.get_outputs())
+
+		# ビルド
+		tmp_var = None
+		if self != self.root:
+			tmp_var_mgr = self.root.tmp_var_mgr
+			tmp_var = tmp_var_mgr.get_var((self, self))
+			self.root.code.append('\t{} = {}'.format(tmp_var, self.get_code_node_name()))
+			self.tmp_code_node_name = tmp_var
+
 		self.lasts[0]._build(depth)
+
+		if tmp_var is not None:
+			self.tmp_code_node_name = None
+			tmp_var_mgr.release_var(tmp_var)
 
 		# 使用ノードをサブグラフとする
 		if self.owner is not None:
@@ -881,6 +910,77 @@ class SubModel(Chain, Node):
 		return self.lasts[0]
 
 
+class VarMgr:
+	"""一時変数名管理クラス.
+
+	Args:
+		prefix: 一時変数名の先頭に付与される文字列.
+	"""
+
+	def __init__(self, prefix):
+		self.prefix = prefix
+		self.vars = {}
+
+	def get_var(self, var_key, increment_refcount=True):
+		"""モデルの推論用関数内で使用されるローカル変数名を取得または生成する.
+
+		Args:
+			var_key: 入力元 Node と出力先 Node のタプル.
+			increment_refcount: 変数への参照カウントをインクリメントするかどうか.
+
+		Returns:
+			ローカル変数名.
+		"""
+
+		class Var:
+
+			def __init__(self, id, prefix):
+				self.id = id
+				self.prefix = prefix
+				self.refcount = 1
+
+			def get_var_name(self):
+				return self.prefix + str(self.id)
+
+		# 実際に接続されるノード用の変数を作成する
+		i = var_key[0]
+		o = var_key[1]
+		var_key = (i._get_output_connected(o) if i is not None else i), (o._get_input_connected(i) if o is not None else o)
+		# 入力側からの出力が全て同じ値になるノードなら、出力先毎に変数変える必要は無い
+		if var_key[0] is not None and var_key[0].output_same_value:
+			var_key = var_key[0], var_key[0]
+
+		vars = self.vars
+		if var_key not in vars:
+			if not increment_refcount:
+				raise Exception("Internal error. Local variable for {} is not exists.".format(var_key))
+			id = 1
+			ids = [var.id for var in vars.values()]
+			while id in ids:
+				id += 1
+			var = Var(id, self.prefix)
+			vars[var_key] = var
+		else:
+			var = vars[var_key]
+			if increment_refcount:
+				var.refcount += 1
+		return var.get_var_name()
+
+	def release_var(self, var_name):
+		"""モデルの推論用関数内で使用されるローカル変数名を解放する.
+
+		Args:
+			var_name: 変数名.
+		"""
+		vars = self.vars
+		for k, v in vars.items():
+			if v.get_var_name() == var_name:
+				v.refcount -= 1
+				if v.refcount <= 0:
+					del vars[k]
+					break
+
+
 class Model(SubModel):
 	"""モデル、 input() 、 layer() 、 output() により複数のレイヤを保持する事が可能.
 
@@ -893,7 +993,8 @@ class Model(SubModel):
 
 		self.name = 'root'
 		self.optimizer = optimizer
-		self.vars = {}
+		self.var_mgr = VarMgr('x')
+		self.tmp_var_mgr = VarMgr('m')
 		self.code = []
 		self.dot_code = []
 		self.prediction = None
@@ -913,11 +1014,11 @@ class Model(SubModel):
 
 		SubModel._build(self, 0)
 
-		if len(self.vars) == 0:
+		if len(self.var_mgr.vars) == 0:
 			raise Exception("Internal error. No output exists after '{}' built.".format(self.get_full_name()))
-		if 2 <= len(self.vars):
+		if 2 <= len(self.var_mgr.vars):
 			raise Exception("Internal error. Multiple output exists after '{}' built.".format(self.get_full_name()))
-		for v in self.vars.values():
+		for v in self.var_mgr.vars.values():
 			var_name = v.get_var_name()
 
 		self.dot_code.append('}')
@@ -949,64 +1050,6 @@ class Model(SubModel):
 			結果.
 		"""
 		return self.prediction(x)
-
-	def _get_var(self, var_key, increment_refcount=True):
-		"""モデルの推論用関数内で使用されるローカル変数名を取得または生成する.
-
-		Args:
-			var_key: 入力元 Node と出力先 Node のタプル.
-			increment_refcount: 変数への参照カウントをインクリメントするかどうか.
-
-		Returns:
-			ローカル変数名.
-		"""
-
-		class Var:
-
-			def __init__(self, id):
-				self.id = id
-				self.refcount = 1
-
-			def get_var_name(self):
-				return 'x' + str(self.id)
-
-		# 実際に接続されるノード用の変数を作成する
-		i = var_key[0]
-		o = var_key[1]
-		var_key = (i._get_output_connected(o) if i is not None else i), (o._get_input_connected(i) if o is not None else o)
-		# 入力側からの出力が全て同じ値になるノードなら、出力先毎に変数変える必要は無い
-		if var_key[0] is not None and var_key[0].output_same_value:
-			var_key = var_key[0], var_key[0]
-
-		vars = self.vars
-		if var_key not in vars:
-			if not increment_refcount:
-				raise Exception("Internal error. Local variable for {} is not exists.".format(var_key))
-			id = 1
-			ids = [var.id for var in vars.values()]
-			while id in ids:
-				id += 1
-			var = Var(id)
-			vars[var_key] = var
-		else:
-			var = vars[var_key]
-			if increment_refcount:
-				var.refcount += 1
-		return var.get_var_name()
-
-	def _release_var(self, var_name):
-		"""モデルの推論用関数内で使用されるローカル変数名を解放する.
-
-		Args:
-			var_name: 変数名.
-		"""
-		vars = self.vars
-		for k, v in vars.items():
-			if v.get_var_name() == var_name:
-				v.refcount -= 1
-				if v.refcount <= 0:
-					del vars[k]
-					break
 
 
 class Models:
