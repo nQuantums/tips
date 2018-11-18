@@ -332,5 +332,5 @@ __pycache__/
 # MeCabDic
 **/NMeCabTest/dic/
 
-**/python/*.mdl
-**/python/*.opt
+**/python/**/*.mdl
+**/python/**/*.opt
