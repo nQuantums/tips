@@ -73,83 +73,7 @@ test = False
 dtype = np.float32
 
 
-class Base:
-	"""全ノードに提供される共通メソッドの定義.
-	"""
-
-	def funcs(self, kind_name, funcs):
-		"""自分を入力とする出力 Funcs を生成する.
-
-		Args:
-			kind_name: 種類名.
-			funcs: 関数列、各関数は def func(x): return x * 2 の様な形式.
-
-		Returns:
-			Node.
-		"""
-
-	def relu(self):
-		return self.funcs('relu', F.relu)
-
-	def leaky_relu(self):
-		return self.funcs('leaky_relu', F.leaky_relu)
-
-	def tanh(self):
-		return self.funcs('tanh', F.tanh)
-
-	def sigmoid(self):
-		return self.funcs('sigmoid', F.sigmoid)
-
-	def dropout(self, ratio=.5, **kwargs):
-
-		def dropout(x):
-			return F.dropout(x, ratio, **kwargs)
-
-		return self.funcs('dropout', dropout)
-
-	def unpool2d(self, ksize, stride=None, pad=0, outsize=None, cover_all=True):
-
-		def unpool2d(x):
-			return F.unpooling_2d(x, ksize, stride, pad, outsize, cover_all)
-
-		return self.funcs('unpool2d', unpool2d)
-
-	def flatten(self):
-		return self.funcs('flatten', F.flatten)
-
-
-class FuncsHolder:
-	"""関数を生成し保持する機能を提供するクラス.
-	"""
-
-	def __init__(self):
-		self.func_list = [] # 関数リスト、先頭から順に実行される
-		self.func_kind_names = {} # 関数をキーにした種類名マップ
-
-	def funcs(self, kind_name, funcs):
-		"""自分を入力とする出力 Funcs を生成する.
-
-		Args:
-			kind_name: 種類名.
-			funcs: 関数列、各関数は def func(x): return x * 2 の様な形式.
-
-		Returns:
-			Node.
-		"""
-		if not isinstance(funcs, list):
-			if not callable(funcs):
-				raise TypeError("Invalid argument. 'funcs' must be callable or callable list.")
-			funcs = [funcs]
-		for f in funcs:
-			if not callable(f):
-				raise TypeError("Invalid argument. 'funcs' must be callable or callable list.")
-		self.func_list.extend(funcs)
-		for f in funcs:
-			self.func_kind_names[f] = kind_name if f.__name__ == '<lambda>' else f.__name__
-		return self
-
-
-class Node(Base):
+class Node:
 	"""モデルを構成するノード、レイヤを生成する機能を提供するクラス.
 
 	Args:
@@ -229,7 +153,7 @@ class Node(Base):
 		Returns:
 			ノードのラベル.
 		"""
-		return '{}{}'.format(self.get_full_name(), self.dot_param)
+		return '{}\\n{}'.format(self.get_full_name(), self.dot_param)
 
 	def get_inputs(self):
 		"""入力元ノード集合を取得する.
@@ -428,6 +352,75 @@ class Node(Base):
 		l.dot_param = '(shape:{})'.format(shape)
 		return l
 
+	def relu(self):
+		return self.funcs('relu', F.relu)
+
+	def leaky_relu(self):
+		return self.funcs('leaky_relu', F.leaky_relu)
+
+	def tanh(self):
+		return self.funcs('tanh', F.tanh)
+
+	def sigmoid(self):
+		return self.funcs('sigmoid', F.sigmoid)
+
+	def dropout(self, ratio=.5, **kwargs):
+
+		def f(x):
+			return F.dropout(x, ratio, **kwargs)
+
+		f = self.funcs('dropout', f)
+		f.dot_param = '(ratio:{})'.format(ratio)
+		return f
+
+	def unpool2d(self, ksize, stride=None, pad=0, outsize=None, cover_all=True):
+
+		def f(x):
+			return F.unpooling_2d(x, ksize, stride, pad, outsize, cover_all)
+
+		f = self.funcs('unpool2d', f)
+		f.dot_param = '(ksize:{}, stride:{}, pad:{}, outsize:{}, cover_all:{})'.format(ksize, stride, pad, outsize, cover_all)
+		return f
+
+	def flatten(self):
+		return self.funcs('flatten', F.flatten)
+
+	def reshape(self, shape):
+
+		def f(x):
+			return F.reshape(x, shape)
+
+		f = self.funcs('reshape', f)
+		f.dot_param = '(shape:{})'.format(shape)
+		return f
+
+	def tile(self, reps):
+
+		def f(x):
+			return F.tile(x, reps)
+
+		f = self.funcs('tile', f)
+		f.dot_param = '(reps:{})'.format(reps)
+		return f
+
+	def repeat(self, repeats, axis=None):
+
+		def f(x):
+			return F.repeat(x, repeats, axis)
+
+		f = self.funcs('repeat', f)
+		f.dot_param = '(repeats={}, axis={})'.format(repeats, axis)
+		return f
+
+	def average(self, axis=None, weights=None, keepdims=False):
+
+		def average(x):
+			return F.average(x, axis, weights, keepdims)
+
+		f = self.funcs('average', average)
+		f.dot_param = '(axis:{}, weights:{}, keepdims:{})'.format(axis, weights, keepdims)
+		return f
+
 	def _get_nodes_owner(self):
 		"""新規 Node 生成時に親となる Node の取得.
 
@@ -599,7 +592,7 @@ class NoOp(Node):
 			self.root.code.append('\t{} = {}'.format(out_tuple_str, in_tuple_str))
 
 
-class Funcs(FuncsHolder, Node):
+class Funcs(Node):
 	"""関数列.
 
 	Args:
@@ -624,7 +617,8 @@ class Funcs(FuncsHolder, Node):
 				raise TypeError("Invalid argument. 'funcs' must be callable or callable list.")
 
 		Node.__init__(self, owner, kind_name)
-		FuncsHolder.__init__(self)
+
+		self.func_list = [] # 関数リスト、先頭から順に実行される
 
 		self.allow_multi_inputs = False
 		self.output_same_value = True
@@ -634,16 +628,6 @@ class Funcs(FuncsHolder, Node):
 			self.add_input(input)
 
 		self.func_list.extend(funcs)
-		for f in funcs:
-			self.func_kind_names[f] = kind_name if f.__name__ == '<lambda>' else f.__name__
-
-	def get_dot_node_label(self):
-		"""dot 内でのノードのラベルの取得.
-
-		Returns:
-			ノードのラベル.
-		"""
-		return '{}{}\\n{}'.format(self.get_full_name(), self.dot_param, ', '.join(self.func_kind_names[f] for f in self.func_list))
 
 	def __call__(self, x=None):
 		"""指定値をレイヤーで変換する.
@@ -659,7 +643,7 @@ class Funcs(FuncsHolder, Node):
 		return x
 
 
-class Layer(Chain, FuncsHolder, Node):
+class Layer(Chain, Node):
 	"""レイヤ、学習対象の重み、活性化関数.
 
 	Args:
@@ -680,7 +664,6 @@ class Layer(Chain, FuncsHolder, Node):
 
 		Chain.__init__(self)
 		Node.__init__(self, owner, kind_name)
-		FuncsHolder.__init__(self)
 
 		self.allow_multi_inputs = False
 		self.output_same_value = True
@@ -692,14 +675,6 @@ class Layer(Chain, FuncsHolder, Node):
 		with self.init_scope():
 			self.link = link
 
-	def get_dot_node_label(self):
-		"""dot 内でのノードのラベルの取得.
-
-		Returns:
-			ノードのラベル.
-		"""
-		return '{}{}\\n{}'.format(self.get_full_name(), self.dot_param, ', '.join(self.func_kind_names[f] for f in self.func_list))
-
 	def __call__(self, x=None):
 		"""指定値をレイヤーで変換する.
 
@@ -709,10 +684,7 @@ class Layer(Chain, FuncsHolder, Node):
 		Returns:
 			変換後の値.
 		"""
-		x = self.link(x)
-		for f in self.func_list:
-			x = f(x)
-		return x
+		return self.link(x)
 
 
 class Gate(Node):
@@ -746,7 +718,7 @@ class Gate(Node):
 		Returns:
 			ノードのラベル.
 		"""
-		return '{}\\n{}'.format(self.get_full_name(), self.func.__name__)
+		return '{} {}\\n{}'.format(self.get_full_name(), self.func.__name__, self.dot_param)
 
 	def __call__(self, x):
 		"""指定値をユーザー指定処理で変換する.
