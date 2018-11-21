@@ -296,10 +296,11 @@ class Node:
 		nodes_owner = self._get_nodes_owner()
 		return nodes_owner._on_new_node(kind_name, Layer(nodes_owner, kind_name, link, self))
 
-	def gate(self, func, *inputs):
+	def gate(self, kind_name, func, *inputs):
 		"""レイヤ同士を結合する Gate を作成する.
 
 		Args:
+			kind_name: 種類名.
 			func: 入力値を出力レイヤーに通す処理、 def func(gate, x, output_layers).
 			inputs: 入力レイヤー列.
 
@@ -309,7 +310,7 @@ class Node:
 		if len(inputs) == 0:
 			inputs = (self,)
 		nodes_owner = self._get_nodes_owner()
-		return nodes_owner._on_new_node('gate', Gate(nodes_owner, func, *inputs))
+		return nodes_owner._on_new_node(kind_name, Gate(nodes_owner, kind_name, func, *inputs))
 
 	def named_gate(self, kind_name, func, *inputs):
 		"""レイヤ同士を結合する Gate を作成する.
@@ -692,18 +693,19 @@ class Gate(Node):
 
 	Args:
 		owner: 所有者となる Node.
+		kind_name: 種類名.
 		func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(x, output_layers).
 		inputs: 入力レイヤー列.
 	"""
 
-	def __init__(self, owner, func, *inputs):
+	def __init__(self, owner, kind_name, func, *inputs):
 		inputs = tuple([(i if i != owner else None) for i in inputs])
 
 		for i in inputs:
 			if i is not None and not isinstance(i, Node):
 				raise TypeError("Invalid argument. 'inputs' element must be Node.")
 
-		Node.__init__(self, owner, 'Gate')
+		Node.__init__(self, owner, kind_name)
 
 		for input in inputs:
 			if input is not None:
