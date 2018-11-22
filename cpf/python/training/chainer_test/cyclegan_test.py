@@ -143,7 +143,7 @@ class CycleGan(dnn.Models):
 			self.dis_y = discriminator(in_ch)
 
 			# 推論の関数作成
-			self.build('build')
+			self.build('cyclegan.prediction')
 
 			# ハイパーパラメータセットアップ
 			self.lambda1 = lambda1
@@ -292,7 +292,7 @@ class CycleGan(dnn.Models):
 		# Returns:
 			出力データchainer.Variable
 		"""
-		return self.gen_g(x if isinstance(x, Variable) else Variable(x))
+		return self.gen_f(x if isinstance(x, Variable) else Variable(x))
 
 	def add_x_to_ring_and_get(self, data):
 		"""指定値をリングバッファに追加し、リングバッファ内からランダムに選んだ値を返す.
@@ -393,19 +393,17 @@ def run_train():
 	x_caps = []
 	t_caps = []
 	for b in range(batch_size):
-		cap = cv2.VideoCapture("c:/work/darksoulsR.mp4")
+		cap = cv2.VideoCapture("c:/work/Fortnite.mp4")
 		x_caps.append(cap)
 
 		cap = cv2.VideoCapture("c:/work/DarkSouls3Full.mp4")
 		t_caps.append(cap)
 
-	x_start_frame = 14000
+	x_start_frame = 0
 	x_end_frame = int(x_caps[0].get(cv2.CAP_PROP_FRAME_COUNT))
 	t_start_frame = 0
 	t_end_frame = int(t_caps[0].get(cv2.CAP_PROP_FRAME_COUNT))
 	frame_step = 100
-	x_cur_frames = [random.randint(x_start_frame, x_end_frame) for _ in range(batch_size)]
-	t_cur_frames = [random.randint(t_start_frame, t_end_frame) for _ in range(batch_size)]
 
 	# 学習ループ
 	request_quit = False
@@ -432,10 +430,6 @@ def run_train():
 			if success:
 				image = cv2.resize(image, (image_width, image_height), interpolation=cv2.INTER_AREA)
 				tcpu[i, :, :, :] = bgr_to_dnn(image)
-
-				t_cur_frames[i] += frame_step
-				if t_end_frame <= t_cur_frames[i]:
-					t_cur_frames[i] = t_start_frame
 
 		# 学習実行
 		m.train(dnn.to_xp(xcpu), dnn.to_xp(tcpu), iter_count % 10 == 0, iter_count % 10 == 0)
@@ -477,13 +471,13 @@ def run_test():
 	m = dnn.to_xp(m)
 
 	# データ用意
-	cap = cv2.VideoCapture("c:/work/darksoulsR.mp4")
+	cap = cv2.VideoCapture("c:/work/ds3tamanegi.mp4")
 	cap.set(cv2.CAP_PROP_POS_FRAMES, 14000)
 
 	# バッチサイズ分のCPU上でのメモリ領域、一旦ここに展開してから to_xp すると無駄が少ない
 	xcpu = np.zeros((batch_size, 3, image_height, image_width), dtype=dnn.dtype)
 
-	# 学習ループ
+	# 動画再生ループ
 	request_quit = False
 	while not request_quit:
 		success, image = cap.read()
