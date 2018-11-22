@@ -1004,12 +1004,17 @@ class Model(SubModel):
 			exec(self.code, globals(), l)
 			self.prediction = types.MethodType(l['prediction'], self)
 		else:
+			self.code = """import types
+
+{}
+def bind_prediction(model):
+	model.prediction = types.MethodType(prediction, model)
+""".format(self.code)
 			output_file_name = os.path.abspath(output_file_name)
 			with open(output_file_name, mode='w') as f:
 				f.write(self.code)
 			module = SourceFileLoader(module_name, output_file_name).load_module()
-			func = module.prediction
-			self.prediction = lambda x: func(self, x)
+			module.bind_prediction(self)
 
 		self.optimizer.setup(self)
 
