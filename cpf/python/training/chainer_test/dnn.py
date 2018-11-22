@@ -731,7 +731,7 @@ class Gate(Node):
 		Returns:
 			変換後の値.
 		"""
-		return self.func(x, self.outputs)
+		return self.func(*x, self.outputs) if isinstance(x, tuple) else self.func(x, self.outputs)
 
 
 class SubModel(Chain, Node):
