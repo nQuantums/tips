@@ -312,22 +312,6 @@ class Node:
 		nodes_owner = self._get_nodes_owner()
 		return nodes_owner._on_new_node(kind_name, Gate(nodes_owner, kind_name, func, *inputs))
 
-	def named_gate(self, kind_name, func, *inputs):
-		"""レイヤ同士を結合する Gate を作成する.
-
-		Args:
-			kind_name: 種類名.
-			func: 入力値を出力レイヤーに通す処理、 def func(gate, x, output_layers).
-			inputs: 入力レイヤー列.
-
-		Returns:
-			Gate.
-		"""
-		if len(inputs) == 0:
-			inputs = (self,)
-		nodes_owner = self._get_nodes_owner()
-		return nodes_owner._on_new_node(kind_name, Gate(nodes_owner, func, *inputs))
-
 	def dense(self, in_size, out_size=None, nobias=False, initialW=None, initial_bias=None):
 		l = self.layer('dense', L.Linear(in_size, out_size, nobias, initialW, initial_bias))
 		l.dot_param = '(in:{}, out:{})'.format(in_size, out_size)

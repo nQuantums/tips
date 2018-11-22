@@ -71,15 +71,15 @@ def cbr(self, ch0, ch1, bn=True, sample='down', activation=dnn.Node.prelu, dropo
 
 def resblk(self, ch, bn=True, activation=dnn.Node.prelu):
 	with self.model('resblk') as m:
-		nop = m.nop()
-		h = nop.conv2d(ch, ch, 3, 1, 1)
+		raw = m.nop()
+		h = raw.conv2d(ch, ch, 3, 1, 1)
 		if bn:
 			h = h.batchnorm(ch)
 		h = activation(h)
 		h = h.conv2d(ch, ch, 3, 1, 1)
 		if bn:
 			h = h.batchnorm(ch)
-		m.named_gate('add', (lambda x, _: x[0] + x[1]), h, nop)
+		m.gate('add', (lambda a, b, _: a + b), h, raw)
 		return m
 
 
