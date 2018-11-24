@@ -238,7 +238,7 @@ class Node:
 				break
 
 	def trainables(self):
-		"""学習可能な Link オブジェクトを集める.
+		"""学習可能な Link オブジェクトを列挙する.
 
 		Returns:
 			Link を列挙するジェネレータ.
@@ -248,6 +248,23 @@ class Node:
 				l = pl[1]
 				if 'W' in l.__dict__ and isinstance(l.W, Variable):
 					yield pl
+
+	def assign_trainables(self, trainables):
+		"""学習結果をアサインする.
+		"""
+		my_trainables = {kv[0]: kv[1] for kv in self.trainables()}
+		trainables = {kv[0]: kv[1] for kv in trainables}
+
+		if len(my_trainables) != len(trainables):
+			raise Exception('Trainable structure mismatch.')
+
+		for k, v in my_trainables.items():
+			if k not in trainables:
+				raise Exception("No trainable named '{}'.".format(k))
+			v2 = trainables[k]
+			v.W.data[:] = v2.W.data
+			if v.b is not None:
+				v.b.data[:] = v2.b.data
 
 	def model(self, kind_name):
 		"""自分を入力とする出力 SubModel を生成する.
