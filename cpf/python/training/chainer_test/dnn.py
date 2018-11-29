@@ -61,14 +61,16 @@ import os
 import types
 import inspect
 from importlib.machinery import SourceFileLoader
+import h5py
 import numpy as np, chainer, chainer.functions as F, chainer.links as L
 from chainer import Variable
 from chainer import Chain
 from chainer.link import Link
+from chainer import Optimizer
+import cupy as cp
+from chainer import cuda
 
 xp = None
-cp = None
-cuda = None
 test = False
 dtype = np.float32
 
@@ -971,6 +973,39 @@ class VarMgr:
 					break
 
 
+class DictSerializer:
+
+	def __init__(self, dictionary):
+		self.dictionary = dictionary
+
+	def __getitem__(self, key):
+		d = {}
+		self.dictionary[key] = d
+		return DictSerializer(d)
+
+	def __call__(self, key, value):
+		self.dictionary[key] = value
+
+
+class DictDeserializer:
+
+	def __init__(self, dictionary):
+		self.dictionary = dictionary
+
+	def __getitem__(self, key):
+		return DictDeserializer(self.dictionary[key])
+
+	def __call__(self, key, value):
+		value_in_dict = self.dictionary[key]
+		if value is None:
+			return value_in_dict
+		if isinstance(value, np.ndarray) or isinstance(value, cp.ndarray):
+			value[:] = value_in_dict
+		else:
+			value = type(value)(np.asarray(value_in_dict))
+		return value
+
+
 class Model(SubModel):
 	"""モデル、 input() 、 layer() 、 output() により複数のレイヤを保持する事が可能.
 
@@ -978,7 +1013,7 @@ class Model(SubModel):
 		optimizer: 重み最適化処理方法、 chainer.optimizer.Optimizer を継承するもの.
 	"""
 
-	def __init__(self, optimizer):
+	def __init__(self, optimizer=None):
 		SubModel.__init__(self, None, 'root')
 
 		self.name = 'root'
@@ -1033,7 +1068,31 @@ def bind_prediction(model):
 			module = SourceFileLoader(module_name, output_file_name).load_module()
 			module.bind_prediction(self)
 
-		self.optimizer.setup(self)
+		if self.optimizer is not None:
+			self.optimizer.setup(self)
+
+	def state_dict(self):
+		"""重み、パラメータなどモデルの状態を辞書に入れて返す.
+
+		Returns:
+			dict.
+		"""
+		d = {}
+		mo = {}
+		d['model'] = mo
+		self.serialize(DictSerializer(mo))
+		if self.optimizer is not None:
+			do = {}
+			d['optimizer'] = do
+			self.optimizer.serialize(DictSerializer(do))
+		return d
+
+	def load_state_dict(self, d):
+		"""state_dict() で取得した辞書から状態を復元する.
+		"""
+		self.serialize(DictDeserializer(d['model']))
+		if self.optimizer is not None:
+			self.optimizer.serialize(DictDeserializer(d['optimizer']))
 
 	def __call__(self, x):
 		"""計算を実行する.
@@ -1073,6 +1132,21 @@ class Models:
 				else:
 					v.build(output_file_name + '.' + k + '.py', k)
 
+	def state_dict(self):
+		d = {}
+		for k, v in vars(self).items():
+			if isinstance(v, Model):
+				d[k] = v.state_dict()
+		return d
+
+	def load_state_dict(self, d):
+		sd = self.__dict__
+		for k, v in d.items():
+			if k in sd:
+				sv = sd[k]
+				if isinstance(sv, Model) and isinstance(v, dict):
+					sv.load_state_dict(v)
+
 
 def startup(gpu, train=True):
 	"""環境を初期化する.
@@ -1080,7 +1154,7 @@ def startup(gpu, train=True):
 	Args:
 		gpu: 使用するGPUインデックス、負数ならGPU未使用となる.
 	"""
-	global test, xp, cp, cuda
+	global test, xp
 	if xp is not None:
 		return
 	test = not train
@@ -1089,10 +1163,6 @@ def startup(gpu, train=True):
 		chainer.config.no_backprop_mode()
 	if 0 <= gpu:
 		print(('Using cuda device {}.').format(gpu))
-		import cupy as _cp
-		from chainer import cuda as _cuda
-		cp = _cp
-		cuda = _cuda
 		cuda.get_device(gpu).use()
 		xp = cp
 	else:
@@ -1113,11 +1183,11 @@ def to_gpu(x):
 			m = x.to_gpu()
 			m.optimizer = x.optimizer
 			return m
-		if isinstance(x, chainer.Link):
+		if isinstance(x, Link):
 			return x.to_gpu()
-		if isinstance(x, chainer.Optimizer):
+		if isinstance(x, Optimizer):
 			return x
-		if isinstance(x, chainer.Variable):
+		if isinstance(x, Variable):
 			return x.to_gpu()
 		if isinstance(x, tuple):
 			return tuple([to_gpu(e) for e in x])
@@ -1147,11 +1217,11 @@ def to_cpu(x):
 			m = x.to_cpu()
 			m.optimizer = x.optimizer
 			return m
-		if isinstance(x, chainer.Link):
+		if isinstance(x, Link):
 			return x.to_cpu()
-		if isinstance(x, chainer.Optimizer):
+		if isinstance(x, Optimizer):
 			return x
-		if isinstance(x, chainer.Variable):
+		if isinstance(x, Variable):
 			return x.to_cpu()
 		if isinstance(x, tuple):
 			return tuple([to_cpu(e) for e in x])
@@ -1186,7 +1256,7 @@ def get_model_file_names(file_name, model, matcher=None):
 		if isinstance(m, Model):
 			if matcher is None or matcher(m):
 				d[m] = fn + '.mdl'
-			if matcher is None or matcher(m.optimizer):
+			if m.optimizer is not None and (matcher is None or matcher(m.optimizer)):
 				d[m.optimizer] = fn + '.opt'
 		elif isinstance(m, Models):
 			for k, v in vars(m).items():
@@ -1200,11 +1270,50 @@ def get_model_file_names(file_name, model, matcher=None):
 	return d
 
 
-def save(file_name, model, matcher=None):
+def save(file_name, model, extra_dict=None):
 	model = to_cpu(model)
-	d = get_model_file_names(file_name, model, matcher)
-	for k, v in d.items():
-		chainer.serializers.save_npz(v, k)
+
+	d = model.state_dict()
+
+	if extra_dict is not None:
+		for k, v in extra_dict.items():
+			d[k] = v
+
+	def assign(g, d):
+		for k, v in d.items():
+			if isinstance(v, Link) or isinstance(v, Optimizer):
+				s = chainer.serializers.HDF5Serializer(g)
+				s.save(v)
+			elif isinstance(v, dict):
+				assign(g.create_group(k), v)
+			else:
+				g.create_dataset(k, data=v)
+
+	with h5py.File(file_name, 'w') as f:
+		assign(f, d)
+
+
+def load(file_name, model, extra_dict=None):
+	model = to_cpu(model)
+
+	d = model.state_dict()
+
+	if extra_dict is not None:
+		for k, v in extra_dict.items():
+			d[k] = v
+
+	def assign(g, d):
+		for k, v in d.items():
+			if isinstance(v, Link) or isinstance(v, Optimizer):
+				s = chainer.serializers.HDF5Serializer(g)
+				s.save(v)
+			elif isinstance(v, dict):
+				assign(g.create_group(k), v)
+			else:
+				g.create_dataset(k, data=v)
+
+	with h5py.File(file_name, 'r') as f:
+		assign(f, d)
 
 
 def load(file_name, model, matcher=None):
