@@ -1,65 +1,96 @@
 """ディープラーニング関係ヘルパ、テンソルのCPU↔GPU変換処理など.
 
 使用例）
+	import math
+	import matplotlib.pyplot as plt
 	import dnn
+	from dnn import np
 	from dnn import chainer
 	from dnn import F
-	from dnn import L
 	from dnn import Variable
-	# import chainer.computational_graph as ccg
 
-	dnn.startup(-1) # 0番のGPU使用
+	dnn.startup(0) # 0番のGPU使用
 	xp = dnn.xp # numpy または cupy
+	itr = 0
 
-	# x を出力先ノード数分に分割する
-	def split(x, out):
-		n = len(out)
-		shape = x.shape
-		x = x.reshape((n, shape[0], shape[1] // n))
-		return tuple(e for e in x)
+	figx_in_pred, ax_in_pred = plt.subplots()
 
-	# 分割されている x を１つに結合する
-	def concat(x, out):
-		return F.concat(tuple(e for e in x), axis=1)
+	def calc_width_height(length):
+		w = int(math.sqrt(length))
+		while length % w != 0:
+			w += 1
+		h = length // w
+		return (h, w)
 
-	# 入力を２つに分割して dense 通して１つに結合するモデルを生成する
-	def diamond(self, ch):
-		with self.model('diamond') as m: 
-			g = m.gate(split)
-			g = m.gate(concat, g.dense(ch // 2, ch // 2).relu(), g.dense(ch // 2, ch // 2).relu())
-			return m
+	def plot(self, ax):
+		def proc(x):
+			img = dnn.to_cpu(x.data[0])
+			img = img.reshape(calc_width_height(img.size))
+			ax.cla()
+			ax.imshow(img)
+			ax.set_title("frame {}".format(itr))
+			return x
+		return self.funcs('plot', proc)
+
+	# Node にメソッド追加してみる
+	dnn.Node.plot = plot
 
 	# モデル構築
-	dnn.Node.diamond = diamond # 呼び出しが面倒なので Node に diamond 機能をもたせる
-	with dnn.Model(chainer.optimizers.Adam()) as m: # とりあえず Model 作る
-		h = m.dense(32, 8).gate(split) # dense 通して分割用 Gate に通る様に
-		h = m.gate(concat, h.diamond(4), h.diamond(4)).dense(8, 32) # 分割用 Gate で２つの diamond モデル通す様に分割してそれを結合する Gate を通る様にする
-		m.build('dnn_build_test.py', 'predmodule')
+	batch = 1
+	model = dnn.Model(chainer.optimizers.Adam())
+	with model.module as m:
+		m\
+		.conv2d(1, 1, 3, 1, 1).prelu()\
+		.conv2d(1, 1, 3, 1, 1).prelu()\
+		.conv2d(1, 1, 3, 1, 1).prelu()\
+		.reshape((batch, 1024))\
+		.dense(1024, 512).prelu()\
+		.dense(512, 512).prelu()\
+		.dense(512, 1024).prelu()\
+		.reshape((batch, 1, 32, 32)).prelu()\
+		.conv2d(1, 1, 3, 1, 1).prelu()\
+		.conv2d(1, 1, 3, 1, 1).prelu()\
+		.conv2d(1, 1, 3, 1, 1)
+
+	model.build('dnn_test_prediction.py')
 
 	# モデルデータが保存済みなら読み込み
-	dnn.load_if_exists("modeldata", m)
+	dnn.load_if_exists('dnn_test.h5', model)
+
+	with open("dnn_test.dot", mode='w') as f:
+		f.write(model.dot_code)
 
 	# 所定のデバイスメモリに転送
-	m = dnn.to_xp(m)
+	model = dnn.to_device(model)
+
+	figx, ax = plt.subplots()
 
 	# とりあえず入力値を単純に10倍にするネットを目標とする
-	for i in range(100):
-		m.zerograds()
-		x = Variable(xp.random.uniform(0, 1, (1, 32)).astype(xp.float32))
-		y = m(x)
+	for i in range(10000):
+		model.zero_grad()
+
+		x = Variable(xp.random.uniform(0, 1, (1, 1, 32, 32)).astype(xp.float32))
+		y = model(x)
 		t = x * 10
+
+		img = np.concatenate((dnn.to_cpu(x.data[0, 0]), dnn.to_cpu(y.data[0, 0])), axis=1)
+		ax.cla()
+		ax.imshow(img)
+		ax.set_title("frame {}".format(i))
+
+		plt.pause(0.01)
+
 		loss = F.mean_squared_error(y, t)
 		loss.backward()
 		print(loss)
-		m.optimizer.update()
+		model.step()
+
+		itr += 1
 
 	# 保存時はCPUメモリにしないとだめ
-	m = dnn.to_cpu(m)
-	dnn.save("modeldata", m)
+	dnn.save('dnn_test.h5', model)
 """
 import os
-import types
-import inspect
 from importlib.machinery import SourceFileLoader
 import h5py
 import numpy as np, chainer, chainer.functions as F, chainer.links as L
@@ -67,8 +98,9 @@ from chainer import Variable
 from chainer import Chain
 from chainer.link import Link
 from chainer import Optimizer
-import cupy as cp
 from chainer import cuda
+from chainer import optimizers
+import cupy as cp
 
 xp = None
 test = False
@@ -89,6 +121,7 @@ class Node:
 		self.name = None # 所有者 Node 内での自身の名前
 		self.inputs = [] # 入力元ノード列
 		self.outputs = [] # 出力先ノード列
+		self.is_observer = False # 途中でプロットするなど出力が無くても良いノードなら True
 		self.dot_param = '' # グラフ内に表示するパラメータ文字列
 		self.output_variable_ids = {} # 出力ノードをキーとしたローカル変数ID列、None がキーにする場合全てのレイヤーに優先する
 		self.is_built = False # 既にビルドされたかどうか
@@ -113,6 +146,11 @@ class Node:
 	def __repr__(self):
 		return self.get_full_name()
 
+	def get_model(self):
+		"""この Node が属する Model の取得.
+		"""
+		return self.root.get_model()
+
 	def get_full_name(self):
 		"""ルート Node からのフル名称を取得する.
 		"""
@@ -135,9 +173,8 @@ class Node:
 		if self.tmp_code_node_name is not None:
 			return self.tmp_code_node_name
 
-		root = self.root
-		if self == root:
-			return 'self'
+		if self == self.root:
+			return 'root'
 
 		return '{}.{}'.format(self.owner.get_code_node_name(), self.name)
 
@@ -268,17 +305,17 @@ class Node:
 			if v.b is not None:
 				v.b.data[:] = v2.b.data
 
-	def model(self, kind_name):
-		"""自分を入力とする出力 SubModel を生成する.
+	def module(self, kind_name):
+		"""自分を入力とする出力 Module を生成する.
 
 		Args:
 			kind_name: 種類名.
 
 		Returns:
-			SubModel.
+			Module.
 		"""
 		nodes_owner = self._get_nodes_owner()
-		return nodes_owner._on_new_node(kind_name, SubModel(nodes_owner, kind_name, self))
+		return nodes_owner._on_new_node(kind_name, Module(self.root.get_module(), nodes_owner, kind_name, self))
 
 	def nop(self):
 		"""自分を入力とする出力 NoOp を生成する.
@@ -315,13 +352,14 @@ class Node:
 		nodes_owner = self._get_nodes_owner()
 		return nodes_owner._on_new_node(kind_name, Layer(nodes_owner, kind_name, link, self))
 
-	def gate(self, kind_name, func, *inputs):
+	def gate(self, kind_name, func, *inputs, output_same_value=False):
 		"""レイヤ同士を結合する Gate を作成する.
 
 		Args:
 			kind_name: 種類名.
-			func: 入力値を出力レイヤーに通す処理、 def func(gate, x, output_layers).
+			func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(output_layers, x).
 			inputs: 入力レイヤー列.
+			output_same_value: 全出力先ノードに同じ値を出力するなら True.
 
 		Returns:
 			Gate.
@@ -329,7 +367,22 @@ class Node:
 		if len(inputs) == 0:
 			inputs = (self,)
 		nodes_owner = self._get_nodes_owner()
-		return nodes_owner._on_new_node(kind_name, Gate(nodes_owner, kind_name, func, *inputs))
+		return nodes_owner._on_new_node(kind_name, Gate(nodes_owner, kind_name, func, *inputs, output_same_value=output_same_value))
+
+	def observer(self, kind_name, func, *inputs):
+		"""推論関数の途中でプロット表示を行うなど出力を必要としない Gate を作成する.
+
+		Args:
+			kind_name: 種類名.
+			func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(output_layers, x).
+			inputs: 入力レイヤー列.
+
+		Returns:
+			Gate.
+		"""
+		o = self.gate(kind_name, func, *inputs)
+		o.is_observer = True
+		return o
 
 	def dense(self, in_size, out_size=None, nobias=False, initialW=None, initial_bias=None):
 		l = self.layer('dense', L.Linear(in_size, out_size, nobias, initialW, initial_bias))
@@ -369,20 +422,12 @@ class Node:
 		return self.funcs('sigmoid', F.sigmoid)
 
 	def dropout(self, ratio=.5, **kwargs):
-
-		def f(x):
-			return F.dropout(x, ratio, **kwargs)
-
-		f = self.funcs('dropout', f)
+		f = self.funcs('dropout', lambda x: F.dropout(x, ratio, **kwargs))
 		f.dot_param = '(ratio:{})'.format(ratio)
 		return f
 
 	def unpool2d(self, ksize, stride=None, pad=0, outsize=None, cover_all=True):
-
-		def f(x):
-			return F.unpooling_2d(x, ksize, stride, pad, outsize, cover_all)
-
-		f = self.funcs('unpool2d', f)
+		f = self.funcs('unpool2d', lambda x: F.unpooling_2d(x, ksize, stride, pad, outsize, cover_all))
 		f.dot_param = '(ksize:{}, stride:{}, pad:{}, outsize:{}, cover_all:{})'.format(ksize, stride, pad, outsize, cover_all)
 		return f
 
@@ -390,40 +435,39 @@ class Node:
 		return self.funcs('flatten', F.flatten)
 
 	def reshape(self, shape):
-
-		def f(x):
-			return F.reshape(x, shape)
-
-		f = self.funcs('reshape', f)
+		f = self.funcs('reshape', lambda x: F.reshape(x, shape))
 		f.dot_param = '(shape:{})'.format(shape)
 		return f
 
 	def tile(self, reps):
-
-		def f(x):
-			return F.tile(x, reps)
-
-		f = self.funcs('tile', f)
+		f = self.funcs('tile', lambda x: F.tile(x, reps))
 		f.dot_param = '(reps:{})'.format(reps)
 		return f
 
 	def repeat(self, repeats, axis=None):
-
-		def f(x):
-			return F.repeat(x, repeats, axis)
-
-		f = self.funcs('repeat', f)
+		f = self.funcs('repeat', lambda x: F.repeat(x, repeats, axis))
 		f.dot_param = '(repeats={}, axis={})'.format(repeats, axis)
 		return f
 
 	def average(self, axis=None, weights=None, keepdims=False):
-
-		def average(x):
-			return F.average(x, axis, weights, keepdims)
-
-		f = self.funcs('average', average)
+		f = self.funcs('average', lambda x: F.average(x, axis, weights, keepdims))
 		f.dot_param = '(axis:{}, weights:{}, keepdims:{})'.format(axis, weights, keepdims)
 		return f
+
+	def mean(self, axis=None, keepdims=False):
+		f = self.funcs('mean', lambda x: F.mean(x, axis, keepdims=keepdims))
+		f.dot_param = '(axis:{}, keepdims:{})'.format(axis, keepdims)
+		return f
+
+	def split(self, indices_or_sections, axis=0):
+		g = self.gate('split', lambda _, x: F.split_axis(x, indices_or_sections, axis))
+		return (g,) * (len(indices_or_sections) if isinstance(indices_or_sections, (tuple, list)) else indices_or_sections)
+
+	def concat(self, *inputs, axis=1):
+		return self.gate('concat', lambda _, *inputs: F.concat(inputs, axis), *inputs, output_same_value=True)
+
+	def tile_as(self, input, target):
+		return self.gate('tile_as', lambda _, x, t: F.tile(x, tuple([ts // xs for ts, xs in zip(t.shape, x.shape)])), input, target, output_same_value=True)
 
 	def _get_nodes_owner(self):
 		"""新規 Node 生成時に親となる Node の取得.
@@ -472,10 +516,11 @@ class Node:
 		if not self._build_begin():
 			return
 
-		if len(self.outputs) == 0:
+		if len(self.outputs) == 0 and not self.is_observer:
 			raise Exception("Node '{}' must have one or more outputs.".format(self.get_full_name()))
 
-		root = self.root
+		model = self.root.get_model()
+		old_depth = depth
 		depth += 1
 
 		# 入力側にある複数出力の Node を収集し、呼び出しが早い方からビルドしていく
@@ -491,28 +536,39 @@ class Node:
 		in_vars = []
 		for i in self.inputs:
 			i._build(depth)
-			in_vars.append(root.var_mgr.get_var((i, self), False))
+			in_vars.append(model.var_mgr.get_var((i, self), False))
 		for v in in_vars:
-			root.var_mgr.release_var(v)
+			model.var_mgr.release_var(v)
 
 		# 出力値の代入先変数確保
-		out_vars = [root.var_mgr.get_var((self, o)) for o in self.outputs]
+		if self.is_observer:
+			out_vars = None
+		else:
+			out_vars = [model.var_mgr.get_var((self, o)) for o in self.outputs]
 
 		# コードの追加
 		in_tuple_str = ', '.join(in_vars) if len(in_vars) != 0 else 'x'
-		if len(out_vars) != 0:
+		if out_vars is None:
+			out_tuple_str = None
+		elif len(out_vars) != 0:
 			out_tuple_str = out_vars[0] if self.output_same_value else ', '.join(out_vars)
 		else:
-			out_tuple_str = root.var_mgr.get_var((self, None))
+			out_tuple_str = model.var_mgr.get_var((self, None))
 		self._add_code(out_tuple_str, '({})'.format(in_tuple_str) if self.allow_multi_inputs else in_tuple_str)
 
 		# グラフ用コードの追加
 		dot_name = self.get_dot_node_name()
-		self.root.dot_code.append('{} [label="{}"];'.format(dot_name, self.get_dot_node_label()))
+		model.dot_code.append('{} [label="{}"];'.format(dot_name, self.get_dot_node_label()))
 		for i, var in zip(self.inputs, in_vars):
-			self.root.dot_code.append('{} -> {} [label="{}"];'.format(i.get_dot_node_name(), dot_name, var))
+			model.dot_code.append('{} -> {} [label="{}"];'.format(i.get_dot_node_name(), dot_name, var))
 
 		self._build_end()
+
+		# Observer は出力側から呼び出されないので入力側から呼び出しておく
+		depth = old_depth - 1
+		for o in self.outputs:
+			if o is not None and o.is_observer:
+				o._build(depth)
 
 	def _add_code(self, out_tuple_str, in_tuple_str):
 		"""推論関数用コードを追加する.
@@ -521,7 +577,10 @@ class Node:
 			out_tuple_str: 計算結果を格納する変数名.
 			in_tuple_str: 入力値を格納している変数名.
 		"""
-		self.root.code.append('\t{} = {}({})'.format(out_tuple_str, self.get_code_node_name(), in_tuple_str))
+		if out_tuple_str is None:
+			self.root.get_model().code.append('\t{}({})'.format(self.get_code_node_name(), in_tuple_str))
+		else:
+			self.root.get_model().code.append('\t{} = {}({})'.format(out_tuple_str, self.get_code_node_name(), in_tuple_str))
 
 	def _collect_multi_output_nodes(self, output, depth, node_set):
 		"""入力側の直近の複数出力 Node を集める.
@@ -593,7 +652,7 @@ class NoOp(Node):
 			in_tuple_str: 入力値を格納している変数名.
 		"""
 		if out_tuple_str != in_tuple_str:
-			self.root.code.append('\t{} = {}'.format(out_tuple_str, in_tuple_str))
+			self.root.get_model().code.append('\t{} = {}'.format(out_tuple_str, in_tuple_str))
 
 
 class Funcs(Node):
@@ -697,11 +756,12 @@ class Gate(Node):
 	Args:
 		owner: 所有者となる Node.
 		kind_name: 種類名.
-		func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(x, output_layers).
+		func: 引数を入力レイヤーを通しさらに出力レイヤーを通す処理、 def func(output_layers, x).
 		inputs: 入力レイヤー列.
+		output_same_value: 全出力先ノードに同じ値を出力するなら True.
 	"""
 
-	def __init__(self, owner, kind_name, func, *inputs):
+	def __init__(self, owner, kind_name, func, *inputs, output_same_value=False):
 		inputs = tuple([(i if i != owner else None) for i in inputs])
 
 		for i in inputs:
@@ -716,6 +776,7 @@ class Gate(Node):
 				self.add_input(input)
 
 		self.func = func
+		self.output_same_value = output_same_value
 
 	def get_dot_node_label(self):
 		"""dot 内でのノードのラベルの取得.
@@ -723,7 +784,8 @@ class Gate(Node):
 		Returns:
 			ノードのラベル.
 		"""
-		return '{} {}\\n{}'.format(self.get_full_name(), self.func.__name__, self.dot_param)
+		fn = ' {}'.format(self.func.__name__) if self.func.__name__ != '<lambda>' else ''
+		return '{}{}\\n{}'.format(self.get_full_name(), fn, self.dot_param)
 
 	def __call__(self, x):
 		"""指定値をユーザー指定処理で変換する.
@@ -734,19 +796,20 @@ class Gate(Node):
 		Returns:
 			変換後の値.
 		"""
-		return self.func(*x, self.outputs) if isinstance(x, tuple) else self.func(x, self.outputs)
+		return self.func(self.outputs, *x) if isinstance(x, tuple) else self.func(self.outputs, x)
 
 
-class SubModel(Chain, Node):
-	"""モデルのサブセット、layer()、gate() によりレイヤを生成し保持する.
+class Module(Chain, Node):
+	"""複数の子 Node を持つジュール.
 
 	Args:
-		owner: 親となる Model.
+		model: モジュールが属することになるモデル.
+		owner: 親となる Module、None が指定されたらルートとなる.
 		kind_name: 種類名.
 		input: 入力 Node または None.
 	"""
 
-	def __init__(self, owner, kind_name, input=None):
+	def __init__(self, model, owner=None, kind_name='root', input=None):
 		if input == owner:
 			input = None
 
@@ -763,6 +826,7 @@ class SubModel(Chain, Node):
 			input.add_ouput(self)
 			self.add_input(input)
 
+		self.model = model # この Module が属する Model
 		self.nodes = [] # 子ノード列
 		self.kindwise_count = {} # 種類毎の子ノード数
 		self.firsts = None # 最初のノード列
@@ -775,6 +839,11 @@ class SubModel(Chain, Node):
 
 	def __exit__(self, type, value, traceback):
 		self.assembly_depth -= 1
+
+	def get_model(self):
+		"""この Node が属する Model の取得.
+		"""
+		return self.model
 
 	def get_dot_node_name(self):
 		"""dot 内でのノード名の取得.
@@ -837,7 +906,7 @@ class SubModel(Chain, Node):
 			raise Exception("Node '{}' does not support multiple inputs. {}".format(self.get_full_name(), ', '.join(i.get_full_name() for i in firsts)))
 
 		# 最後のノード（入力とされていないノード）を集める
-		lasts = [n for n in all_nodes if n not in all_inputs]
+		lasts = [n for n in all_nodes if not n.is_observer and n not in all_inputs]
 		if len(lasts) == 0:
 			raise Exception("Node '{}' must have a one output.".format(self.get_full_name()))
 		if len(lasts) != 1:
@@ -866,26 +935,26 @@ class SubModel(Chain, Node):
 		self.lasts[0].set_outputs(self.get_outputs())
 
 		# ビルド
+		model = self.root.get_model()
 		tmp_var = None
 		if self != self.root and 2 <= len(self.nodes):
-			tmp_var_mgr = self.root.tmp_var_mgr
-			tmp_var = tmp_var_mgr.get_var((self, self))
-			self.root.code.append('\t{} = {}'.format(tmp_var, self.get_code_node_name()))
+			tmp_var = model.tmp_var_mgr.get_var((self, self))
+			model.code.append('\t{} = {}'.format(tmp_var, self.get_code_node_name()))
 			self.tmp_code_node_name = tmp_var
 
 		self.lasts[0]._build(depth)
 
 		if tmp_var is not None:
 			self.tmp_code_node_name = None
-			tmp_var_mgr.release_var(tmp_var)
+			model.tmp_var_mgr.release_var(tmp_var)
 
 		# 使用ノードをサブグラフとする
 		if self.owner is not None:
 			dot_node_name = Node.get_dot_node_name(self)
-			self.root.dot_code.append('subgraph cluster_{} {{ label="{}"'.format(dot_node_name, dot_node_name))
+			model.dot_code.append('subgraph cluster_{} {{ label="{}"'.format(dot_node_name, dot_node_name))
 			for node in self.nodes:
-				self.root.dot_code.append('{};'.format(node.get_dot_node_name()))
-			self.root.dot_code.append('}')
+				model.dot_code.append('{};'.format(node.get_dot_node_name()))
+			model.dot_code.append('}')
 
 		self._build_end()
 
@@ -902,8 +971,21 @@ class SubModel(Chain, Node):
 		return self.lasts[0]
 
 
+class Var:
+	"""生成する推論関数内で使用される一時変数.
+	"""
+
+	def __init__(self, id, prefix):
+		self.id = id
+		self.prefix = prefix
+		self.refcount = 1
+
+	def get_var_name(self):
+		return self.prefix + str(self.id)
+
+
 class VarMgr:
-	"""一時変数名管理クラス.
+	"""生成する推論関数内で使用される一時変数名の管理クラス.
 
 	Args:
 		prefix: 一時変数名の先頭に付与される文字列.
@@ -923,16 +1005,6 @@ class VarMgr:
 		Returns:
 			ローカル変数名.
 		"""
-
-		class Var:
-
-			def __init__(self, id, prefix):
-				self.id = id
-				self.prefix = prefix
-				self.refcount = 1
-
-			def get_var_name(self):
-				return self.prefix + str(self.id)
 
 		# 実際に接続されるノード用の変数を作成する
 		i = var_key[0]
@@ -979,12 +1051,18 @@ class DictSerializer:
 		self.dictionary = dictionary
 
 	def __getitem__(self, key):
+		key = key.replace('/', '.')
 		d = {}
 		self.dictionary[key] = d
 		return DictSerializer(d)
 
 	def __call__(self, key, value):
+		ret = value
+		if isinstance(value, cp.ndarray):
+			value = value.get()
+		value = np.asarray(value)
 		self.dictionary[key] = value
+		return ret
 
 
 class DictDeserializer:
@@ -993,56 +1071,62 @@ class DictDeserializer:
 		self.dictionary = dictionary
 
 	def __getitem__(self, key):
+		key = key.replace('/', '.')
 		return DictDeserializer(self.dictionary[key])
 
 	def __call__(self, key, value):
+		key = key.replace('.', '/')
 		value_in_dict = self.dictionary[key]
+
+		if value_in_dict[()] is None:
+			return None
 		if value is None:
 			return value_in_dict
-		if isinstance(value, np.ndarray) or isinstance(value, cp.ndarray):
-			value[:] = value_in_dict
+		if isinstance(value, np.ndarray):
+			np.copyto(value, value_in_dict)
+		elif isinstance(value, cp.ndarray):
+			value.set(np.asarray(value_in_dict, dtype=value.dtype))
 		else:
 			value = type(value)(np.asarray(value_in_dict))
 		return value
 
 
-class Model(SubModel):
-	"""モデル、 input() 、 layer() 、 output() により複数のレイヤを保持する事が可能.
+class Model:
+	"""モデル
 
 	Args:
 		optimizer: 重み最適化処理方法、 chainer.optimizer.Optimizer を継承するもの.
 	"""
 
 	def __init__(self, optimizer=None):
-		SubModel.__init__(self, None, 'root')
+		self.module = Module(self) # ニューラルネットワーク
+		self.optimizer = optimizer # 勾配の最適化用オブジェクト
+		self.tmp_var_mgr = VarMgr('m') # 生成する推論関数内での各ノードを格納する一時変数名を管理する
+		self.var_mgr = VarMgr('x') # 生成する推論関数内での各ノード出力を受け取る一時変数名を管理する
+		self.code = [] # 推論コード
+		self.dot_code = [] # Graphviz の .dot コード
+		self.prediction = None # 推論関数
 
-		self.name = 'root'
-		self.optimizer = optimizer
-		self.var_mgr = VarMgr('x')
-		self.tmp_var_mgr = VarMgr('m')
-		self.code = []
-		self.dot_code = []
-		self.prediction = None
+		self.module.name = 'root'
+		self.module.add_ouput(None)
 
-		self.add_ouput(None)
-
-	def build(self, output_file_name=None, module_name=None):
+	def build(self, output_file_name=None, module_name='Prediction'):
 		"""モデルの推論用関数をビルドする.
 
 		Args:
 			output_file_name: 推論関数出力ソースファイル名、None 以外が指定されたらこのファイル作成してインポートされる、デバッグ用.
 			module_name: output_file_name ロード時に付与するモジュール名.
 		"""
-		self.code.append('def prediction(self, x):')
+		self.code.append('def prediction(root, x):')
 		self.dot_code.insert(0, 'digraph {\n')
 		self.dot_code.insert(1, 'node [shape=box]\n')
 
-		SubModel._build(self, 0)
+		self.module._build(0)
 
 		if len(self.var_mgr.vars) == 0:
-			raise Exception("Internal error. No output exists after '{}' built.".format(self.get_full_name()))
+			raise Exception("Internal error. No output exists after '{}' built.".format(self.module.get_full_name()))
 		if 2 <= len(self.var_mgr.vars):
-			raise Exception("Internal error. Multiple output exists after '{}' built.".format(self.get_full_name()))
+			raise Exception("Internal error. Multiple output exists after '{}' built. Exists outputs is {}.".format(self.module.get_full_name(), self.var_mgr.vars))
 		for v in self.var_mgr.vars.values():
 			var_name = v.get_var_name()
 
@@ -1054,22 +1138,20 @@ class Model(SubModel):
 		if output_file_name is None:
 			l = {}
 			exec(self.code, globals(), l)
-			self.prediction = types.MethodType(l['prediction'], self)
+			self.prediction = l['prediction']
 		else:
-			self.code = """import types
-
-{}
+			self.code = """{}
 def bind_prediction(model):
-	model.prediction = types.MethodType(prediction, model)
+	model.prediction = prediction
 """.format(self.code)
 			output_file_name = os.path.abspath(output_file_name)
 			with open(output_file_name, mode='w') as f:
 				f.write(self.code)
-			module = SourceFileLoader(module_name, output_file_name).load_module()
-			module.bind_prediction(self)
+			m = SourceFileLoader(module_name, output_file_name).load_module()
+			m.bind_prediction(self)
 
 		if self.optimizer is not None:
-			self.optimizer.setup(self)
+			self.optimizer.setup(self.module)
 
 	def state_dict(self):
 		"""重み、パラメータなどモデルの状態を辞書に入れて返す.
@@ -1079,8 +1161,8 @@ def bind_prediction(model):
 		"""
 		d = {}
 		mo = {}
-		d['model'] = mo
-		self.serialize(DictSerializer(mo))
+		d['module'] = mo
+		self.module.serialize(DictSerializer(mo))
 		if self.optimizer is not None:
 			do = {}
 			d['optimizer'] = do
@@ -1090,9 +1172,15 @@ def bind_prediction(model):
 	def load_state_dict(self, d):
 		"""state_dict() で取得した辞書から状態を復元する.
 		"""
-		self.serialize(DictDeserializer(d['model']))
+		self.module.serialize(DictDeserializer(d['module']))
 		if self.optimizer is not None:
 			self.optimizer.serialize(DictDeserializer(d['optimizer']))
+
+	def zero_grad(self):
+		self.module.zerograds()
+
+	def step(self):
+		self.optimizer.update()
 
 	def __call__(self, x):
 		"""計算を実行する.
@@ -1103,7 +1191,7 @@ def bind_prediction(model):
 		Returns:
 			結果.
 		"""
-		return self.prediction(x)
+		return self.prediction(self.module, x)
 
 
 class Models:
@@ -1179,20 +1267,21 @@ def to_gpu(x):
 		変換後のオブジェクト.
 	"""
 	if xp is cp:
-		if isinstance(x, Model):
-			m = x.to_gpu()
-			m.optimizer = x.optimizer
-			return m
-		if isinstance(x, Link):
-			return x.to_gpu()
-		if isinstance(x, Optimizer):
-			return x
+		if isinstance(x, np.ndarray):
+			return cuda.to_gpu(x)
 		if isinstance(x, Variable):
 			return x.to_gpu()
 		if isinstance(x, tuple):
 			return tuple([to_gpu(e) for e in x])
 		if isinstance(x, list):
 			return [to_gpu(e) for e in x]
+		if isinstance(x, Link):
+			return x.to_gpu()
+		if isinstance(x, Optimizer):
+			return x
+		if isinstance(x, Model):
+			x.module = x.module.to_gpu()
+			return x
 		if isinstance(x, Models):
 			d = vars(x)
 			for k, v in d.items():
@@ -1213,20 +1302,21 @@ def to_cpu(x):
 		変換後のオブジェクト.
 	"""
 	if xp is cp:
-		if isinstance(x, Model):
-			m = x.to_cpu()
-			m.optimizer = x.optimizer
-			return m
-		if isinstance(x, Link):
-			return x.to_cpu()
-		if isinstance(x, Optimizer):
-			return x
+		if isinstance(x, cp.ndarray):
+			return cuda.to_cpu(x)
 		if isinstance(x, Variable):
 			return x.to_cpu()
 		if isinstance(x, tuple):
 			return tuple([to_cpu(e) for e in x])
 		if isinstance(x, list):
 			return [to_cpu(e) for e in x]
+		if isinstance(x, Link):
+			return x.to_cpu()
+		if isinstance(x, Optimizer):
+			return x
+		if isinstance(x, Model):
+			x.module = x.module.to_cpu()
+			return x
 		if isinstance(x, Models):
 			d = vars(x)
 			for k, v in d.items():
@@ -1238,7 +1328,7 @@ def to_cpu(x):
 		return x
 
 
-def to_xp(x):
+def to_device(x):
 	"""オブジェクトを startup() 関数に指定したデバイスメモリに変換する.
 
 	Args:
@@ -1249,90 +1339,94 @@ def to_xp(x):
 	return to_gpu(x) if xp is cp else to_cpu(x)
 
 
-def get_model_file_names(file_name, model, matcher=None):
-	d = {}
+def dict_to_hdf5(d, g, compression='gzip', compression_opts=9):
+	"""dict と同じ構造を h5py 内に作成する.
 
-	def get_file_name(fn, m):
-		if isinstance(m, Model):
-			if matcher is None or matcher(m):
-				d[m] = fn + '.mdl'
-			if m.optimizer is not None and (matcher is None or matcher(m.optimizer)):
-				d[m.optimizer] = fn + '.opt'
-		elif isinstance(m, Models):
-			for k, v in vars(m).items():
-				if isinstance(v, Model):
-					get_file_name(fn + '.' + k, v)
+	Args:
+		d: dict オブジェクト.
+		g: h5py のグループ.
+	"""
+	for k, v in d.items():
+		if isinstance(v, dict):
+			dict_to_hdf5(v, g.create_group(k), compression, compression_opts)
 		else:
-			raise TypeError("Invalid argument. 'm' must be Model or Models type.")
+			if isinstance(v, np.ndarray) and 256 <= v.size:
+				g.create_dataset(k, data=v, compression=compression, compression_opts=compression_opts)
+			else:
+				g.create_dataset(k, data=v)
 
-	get_file_name(file_name, model)
 
+def hdf5_to_dict(g):
+	"""h5py のグループを dict に変換する.
+
+	Args:
+		g: h5py のグループ.
+	"""
+	d = {}
+	for k, v in g.items():
+		if hasattr(v, 'value'):
+			d[k] = v.value
+		else:
+			d[k] = hdf5_to_dict(dict(v))
+		# d[k] = v.value if hasattr(v, 'value') else hdf5_to_dict(v)
 	return d
 
 
-def save(file_name, model, extra_dict=None):
+def save_dict_to_hdf5(filename, d, compression='gzip', compression_opts=9):
+	"""dict をHDF5形式ファイルへ保存する.
+
+	Args:
+		filename: 保存先ファイル名.
+		d: dict オブジェクト.
+	"""
+	with h5py.File(filename, 'w') as f:
+		dict_to_hdf5(d, f, compression, compression_opts)
+
+
+def load_dict_from_hdf5(filename):
+	"""HDF5形式ファイルを dict に読み込んで取得する.
+
+	Args:
+		filename: 読み込み元ファイル名.
+
+	Returns:
+		dict オブジェクト.
+	"""
+	with h5py.File(filename, 'r') as f:
+		return hdf5_to_dict(dict(f))
+
+
+def save(filename, model, compression='gzip', compression_opts=9):
+	"""Model をHDF5形式ファイルに保存する.
+
+	Args:
+		filename: 保存先ファイル名.
+		model: 保存する Model オブジェクト.
+	"""
 	model = to_cpu(model)
-
-	d = model.state_dict()
-
-	if extra_dict is not None:
-		for k, v in extra_dict.items():
-			d[k] = v
-
-	def assign(g, d):
-		for k, v in d.items():
-			if isinstance(v, Link) or isinstance(v, Optimizer):
-				s = chainer.serializers.HDF5Serializer(g)
-				s.save(v)
-			elif isinstance(v, dict):
-				assign(g.create_group(k), v)
-			else:
-				g.create_dataset(k, data=v)
-
-	with h5py.File(file_name, 'w') as f:
-		assign(f, d)
+	save_dict_to_hdf5(filename, model.state_dict(), compression, compression_opts)
 
 
-def load(file_name, model, extra_dict=None):
+def load(filename, model):
+	"""HDF5形式ファイルを Model に読み込む.
+
+	Args:
+		filename: 読み込み元ファイル名.
+		model: 読み込み先 Model オブジェクト.
+	"""
 	model = to_cpu(model)
-
-	d = model.state_dict()
-
-	if extra_dict is not None:
-		for k, v in extra_dict.items():
-			d[k] = v
-
-	def assign(g, d):
-		for k, v in d.items():
-			if isinstance(v, Link) or isinstance(v, Optimizer):
-				s = chainer.serializers.HDF5Serializer(g)
-				s.save(v)
-			elif isinstance(v, dict):
-				assign(g.create_group(k), v)
-			else:
-				g.create_dataset(k, data=v)
-
-	with h5py.File(file_name, 'r') as f:
-		assign(f, d)
+	model.load_state_dict(load_dict_from_hdf5(filename))
 
 
-def load(file_name, model, matcher=None):
-	model = to_cpu(model)
-	d = get_model_file_names(file_name, model, matcher)
-	for k, v in d.items():
-		chainer.serializers.load_npz(v, k)
-	return model
+def load_if_exists(filename, model):
+	"""指定のHDF5形式ファイルが存在するなら Model に読み込む.
 
-
-def load_if_exists(file_name, model, matcher=None):
-	model = to_cpu(model)
-	d = get_model_file_names(file_name, model, matcher)
-	for v in d.values():
-		if not os.path.exists(v):
-			return model
-	for k, v in d.items():
-		chainer.serializers.load_npz(v, k)
-	return model
+	Args:
+		filename: 読み込み元ファイル名.
+		model: 読み込み先 Model オブジェクト.
+	"""
+	if os.path.isfile(filename):
+		load(filename, model)
 
 
 if __name__ == '__main__':
