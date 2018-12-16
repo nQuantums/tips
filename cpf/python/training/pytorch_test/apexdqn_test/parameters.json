@@ -1,0 +1,32 @@
+{
+    "env_conf": {
+        "state_shape": [1, 84, 84],
+        "action_dim": 4,
+        "name": "RiverraidNoFrameskip-v4"
+    },
+
+    "Actor": {
+        "num_actors": 2,
+        "T": 50000,
+        "num_steps": 3,
+        "epsilon": 0.4,
+        "alpha": 7,
+        "gamma": 0.99,
+        "n_step_transition_batch_size": 5,
+        "Q_network_sync_freq": 100
+    },
+
+    "Learner": {
+        "remove_old_xp_freq": 100,
+        "q_target_sync_freq": 100,
+        "min_replay_mem_size": 200,
+        "replay_sample_size": 32,
+        "load_saved_state": false
+    },
+
+    "Replay_Memory": {
+        "soft_capacity": 100000,
+        "priority_exponent": 0.6,
+        "importance_sampling_exponent": 0.4
+    }
+}
