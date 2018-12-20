@@ -1,219 +1,90 @@
-class Model:
+import numpy as np
 
-	def __init__(self):
-		self.input_layer = None
-		self.output_layer = None
-		self.nodes = set()
-		self.layers = []
-		self.glues = []
-		self.local_variable_ids = set()
-		self.code = []
-		self.dot_code = []
+a = np.arange(1 * 84 * 84, dtype=np.int32).reshape((1, 84, 84))
+a = np.concatenate((a, np.arange(1 * 84 * 84, dtype=np.int32).reshape((1, 84, 84))), axis=0)
+a = np.concatenate((a, np.arange(1 * 84 * 84, dtype=np.int32).reshape((1, 84, 84))), axis=0)
+a = np.concatenate((a, a[1:]), axis=0)
 
-	def input(self):
-		layer = Layer(self, None, 'input_layer')
-		self.input_layer = layer
-		self.nodes.add(layer)
-		return layer
-
-	def assign_output(self, output):
-		self.output_layer = output
-		output.name = 'output_layer'
-
-	def layer(self, input):
-		layer = Layer(self, input, 'layer_' + str(len(self.layers)))
-		self.layers.append(layer)
-		self.nodes.add(layer)
-		return layer
-
-	def glue(self, inputs):
-		glue = Glue(self, inputs, 'glue_' + str(len(self.glues)))
-		self.glues.append(glue)
-		self.nodes.add(glue)
-		return glue
-
-	def new_local_variable_id(self):
-		ids = self.local_variable_ids
-		id = 1
-		while id in ids:
-			id += 1
-		ids.add(id)
-		return id
-
-	def del_local_variable_id(self, id):
-		if id == 0:
-			return
-		self.local_variable_ids.remove(id)
-
-	def get_local_variable_name(self, id):
-		if id == 0:
-			return 'x'
-		if id in self.local_variable_ids:
-			return 'x' + str(id)
-		else:
-			raise LookupError('There is no variable with the specified ID ' + str(id) + '.')
-
-	def build(self):
-		self.code.append('def func(self, x)')
-		self.dot_code.insert(0, 'digraph {\n')
-		self.output_layer.build(0)
-		self.dot_code.append('}')
+print(a)
+# print(np.take(a, i))
+# print(a[i])
 
 
-class Layer:
 
-	def __init__(self, model, input, name):
-		self.model = model
-		self.input = input
-		self.output_variable_id = None
-		self.name = name
-		self.is_uner_build = False
-		self.is_built = False
-
-	def __str__(self):
-		return self.name
-
-	def __repr__(self):
-		return self.name
-
-	def get_output_variable_id(self, layer):
-		if self.output_variable_id is not None:
-			return self.output_variable_id
-		else:
-			self.output_variable_id = self.model.new_local_variable_id()
-			return self.output_variable_id
-
-	def collect_glue(self, output, depth, glue_set):
-		if self.input is None:
-			return
-		self.input.collect_glue(self, depth + 1, glue_set)
-
-	def build(self, depth):
-		if self.is_built:
-			return
-		if self.is_uner_build:
-			raise Exception()
-		self.is_uner_build = True
-
-		if self.input is None:
-			in_id = 0
-		else:
-			self.input.build(depth + 1)
-			in_id = self.input.get_output_variable_id(self)
-		in_name = self.model.get_local_variable_name(in_id)
-		self.model.del_local_variable_id(in_id)
-
-		out_id = self.model.new_local_variable_id()
-		out_name = self.model.get_local_variable_name(out_id)
-		self.output_variable_id = out_id
-
-		self.model.code.append('\t{} = self.{}({})'.format(out_name, self.name, in_name))
-		if self.input is not None:
-			self.model.dot_code.append('{} -> {} [label="{}"];'.format(self.input.name, self.name, in_name))
-
-		self.is_built = True
-		self.is_uner_build = False
+# import time
+# import filelock
 
 
-class Glue:
+# def interlocked(lock_file_name, func, timeout=None):
+# 	try:
+# 		with filelock.FileLock(lock_file_name).acquire(timeout=timeout):
+# 			func()
+# 			return True
+# 	except filelock.Timeout:
+# 		return False
 
-	def __init__(self, model, inputs, name):
-		for i in inputs:
-			if not isinstance(i, Layer):
-				raise TypeError("Invalid argument. 'inputs' element must be Layer.")
-
-		self.model = model
-		self.inputs = inputs
-		self.outputs = []
-		self.output_variable_ids = {}
-		self.name = name
-		self.is_built = False
-		self.is_uner_build = False
-
-	def __str__(self):
-		return self.name
-
-	def __repr__(self):
-		return self.name
-
-	def output(self):
-		layer = self.model.layer(self)
-		self.outputs.append(layer)
-		return layer
-
-	def get_output_variable_id(self, layer):
-		if layer in self.output_variable_ids:
-			return self.output_variable_ids[layer]
-		else:
-			id = self.model.new_local_variable_id()
-			self.output_variable_ids[layer] = id
-			return id
-
-	def collect_glue(self, output, depth, glue_set):
-		if 2 <= len(self.outputs):
-			glue_set.add((self, depth))
-
-	def build(self, depth):
-		if self.is_built:
-			return
-		if self.is_uner_build:
-			raise Exception()
-		self.is_uner_build = True
-
-		depth += 1
-
-		glue_set = set()
-		for i in self.inputs:
-			i.collect_glue(self, depth, glue_set)
-		glues_list = [g for g in glue_set]
-		glues_list.sort(key=lambda g: g[1])
-		for g in reversed(glues_list):
-			g[0].build(g[1])
-
-		in_ids = []
-		for i in self.inputs:
-			i.build(depth)
-			in_ids.append(i.get_output_variable_id(self))
-
-		out_ids = [self.get_output_variable_id(o) for o in self.outputs]
-
-		in_names = ', '.join([self.model.get_local_variable_name(id) for id in in_ids])
-		out_names = ', '.join([self.model.get_local_variable_name(id) for id in out_ids])
-		self.model.code.append('\t{} = self.{}(({}))'.format(out_names, self.name, in_names))
-
-		for i in self.inputs:
-			self.model.dot_code.append('{} -> {} [label="{}"];'.format(i.name, self.name, self.model.get_local_variable_name(i.get_output_variable_id(self))))
-
-		for id in in_ids:
-			self.model.del_local_variable_id(id)
-
-		self.is_built = True
-		self.is_uner_build = False
+# def file_write():
+# 	with open('file', 'w') as f:
+# 		f.write('afe')
+# 		time.sleep(10)
 
 
-m = Model()
+# print('begin')
+# print(interlocked('lock', file_write, timeout=1))
+# print('end')
 
-g = m.glue([m.input()])
 
-l1 = g.output()
-l1 = m.layer(l1)
-l1 = m.layer(l1)
+# import io
+# import pickle
+# import compressed_pickle
+# import numpy as np
+# from collections import namedtuple
 
-l2 = g.output()
-l2 = m.layer(l2)
-l2 = m.layer(l2)
+# print(np.prod((1, 2, 3)).item())
 
-l3 = g.output()
-l3 = m.layer(l3)
 
-g = m.glue([l1, l2, l3])
-g = m.glue([g.output()])
+# class Transition:
 
-m.assign_output(g.output())
+# 	def __init__(self, state, action, reward, next_state, terminal, q, next_q):
+# 		self.state = state
+# 		self.action = action
+# 		self.reward = reward
+# 		self.next_state = next_state
+# 		self.terminal = terminal
+# 		self.q = q
+# 		self.next_q = next_q
 
-m.build()
+# 	@staticmethod
+# 	def func1(text):
+# 		print(text)
 
-with open("test.dot", mode='w') as f:
-	f.write("\n".join(m.dot_code))
+# 	def func2(self, text):
+# 		self.func1(text)
 
-print('\n'.join(m.code))
+# t = Transition(1, 2, 3, 4, 5, 6, 7)
+# t.func2('afefefe')
+
+# N_Step_Transition = namedtuple('N_Step_Transition', ['S_t', 'A_t', 'R_ttpB', 'Gamma_ttpB', 'qS_t', 'S_tpn', 'qS_tpn', 'key'])
+
+# file = io.BytesIO()
+# pickle.dump(Transition(1, 2, 3, 4, 5, 6, 7), file)
+# file.seek(0)
+# obj = pickle.load(file)
+# print(obj)
+
+# a = np.array([[1, 2], [3, 4]])
+# binary = pickle.dumps(a)
+# print(binary)
+
+# b = pickle.loads(binary)
+
+# d = {'a': a, 'b': b, 'c': 'afefefe'}
+# binary = pickle.dumps(d)
+# e = pickle.loads(binary)
+
+# a = np.arange(65536, dtype=np.float32).reshape((256, 256))
+
+# binary = pickle.dumps(a)
+# binaryc = compressed_pickle.dumps(a)
+# print(a.size * a.itemsize, len(binary), len(binaryc))
+
