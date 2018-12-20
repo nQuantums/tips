@@ -167,6 +167,16 @@ namespace EntityGraph {
 			return this.E1 == relation.E1 && this.E2 == relation.E2;
 		}
 
+		public Entity GetPair(Entity entity) {
+			if (this.E1 == entity) {
+				return this.E2;
+			} else if (this.E2 == entity) {
+				return this.E1;
+			} else {
+				return null;
+			}
+		}
+
 		public override int GetHashCode() {
 			return this.E1.GetHashCode() ^ this.E2.GetHashCode();
 		}
@@ -230,225 +240,18 @@ namespace EntityGraph {
 		}
 	}
 
-	public class GraphBuilder {
+	public class FlowBuffer {
 		public Dictionary<Flow, FlowAtr> Flows = new Dictionary<Flow, FlowAtr>();
-		public Dictionary<Entity, HashSet<Flow>> Entities = new Dictionary<Entity, HashSet<Flow>>();
 
-		public GraphBuilder(Dictionary<Flow, FlowAtr> flowsToAdd) {
+		public FlowBuffer() {
+		}
+
+		public FlowBuffer(Dictionary<Flow, FlowAtr> flowsToAdd) {
 			var flows = this.Flows;
-			var entities = this.Entities;
-
 			foreach (var kvp in flowsToAdd) {
 				flows[kvp.Key] = kvp.Value;
 			}
-			foreach (var kvp in flowsToAdd) {
-				var flow = kvp.Key;
-				var e1 = flow.E1;
-				var e2 = flow.E2;
-
-				HashSet<Flow> f;
-				if (!entities.TryGetValue(e1, out f)) {
-					entities[e1] = f = new HashSet<Flow>();
-				}
-				f.Add(flow);
-				if (!entities.TryGetValue(e2, out f)) {
-					entities[e2] = f = new HashSet<Flow>();
-				}
-				f.Add(flow);
-			}
 		}
-
-		public void Filter(Action<Entity> filter) {
-			var flows = this.Flows;
-			var entities = this.Entities;
-
-			// フィルタリングを行いフラグをセットする
-			foreach (var kvp in entities) {
-				var e = kvp.Key;
-				filter(e);
-				if (e.Parent is null && (e.Flags & EntityFlags.IsHidden) != 0) {
-					e.Flags |= EntityFlags.IsDeleted;
-				}
-				e.Flags |= EntityFlags.IsFiltered;
-			}
-
-			// 削除フラグがセットされた Entity を取り除き関連する Flow を削除する
-			var deletedEntities = entities.Where(kvp => (kvp.Key.Flags & EntityFlags.IsDeleted) != 0).ToArray();
-			foreach (var kvp in deletedEntities) {
-				var e = kvp.Key;
-				entities.Remove(e);
-				foreach (var flow in kvp.Value) {
-					flows.Remove(flow);
-				}
-			}
-
-			// 非表示フラグがセットされた Entity から Flow を取得し親に繋ぎなおす
-			foreach (var kvp in entities) {
-				var e = kvp.Key;
-				var p = e.Parent;
-				foreach (var flow in kvp.Value) {
-					flows.Remove(flow);
-
-				}
-			}
-		}
-	}
-
-	public class Graph {
-		public Dictionary<Flow, FlowAtr> Flows = new Dictionary<Flow, FlowAtr>();
-		public List<Task> Tasks = new List<Task>();
-
-		public Task Task(string name) {
-			var t = new Task { Name = name, GlobalFlows = this.Flows };
-			this.Tasks.Add(t);
-			return t;
-		}
-
-		public string GetDotCode(Action<Entity> filter) {
-			var sb = new StringBuilder();
-
-			sb.AppendLine(@"digraph {
-	node [color=""#5050e5"" fontcolor=""#5050e5""]
-	edge [fontsize=11 color=gray50 fontcolor=gray50]
-");
-
-			var gb = new GraphBuilder(this.Flows);
-
-			var allFlows = new Dictionary<Flow, FlowAtr>();
-			var allEntities = new Dictionary<Entity, HashSet<Flow>>();
-
-			foreach (var kvp in this.Flows) {
-				allFlows[kvp.Key] = kvp.Value;
-			}
-
-			// 全ての Flow 情報から全ての Entity を取得する
-			foreach (var kvp in this.Flows) {
-				var flow = kvp.Key;
-				var e1 = flow.E1;
-				var e2 = flow.E2;
-
-				HashSet<Flow> flows;
-				if (!allEntities.TryGetValue(e1, out flows)) {
-					allEntities[e1] = flows = new HashSet<Flow>();
-				}
-				flows.Add(flow);
-
-				if (!allEntities.TryGetValue(e2, out flows)) {
-					allEntities[e2] = flows = new HashSet<Flow>();
-				}
-				flows.Add(flow);
-			}
-
-			// フィルタリングを行いフラグをセットする
-			foreach (var kvp in allEntities) {
-				var e = kvp.Key;
-				filter(e);
-				if (e.Parent is null && (e.Flags & EntityFlags.IsHidden) != 0) {
-					e.Flags |= EntityFlags.IsDeleted;
-				}
-				e.Flags |= EntityFlags.IsFiltered;
-			}
-
-			// フィルタリングを行い消えた場合は親に繋ぎなおす
-			foreach (var kvp in allEntities) {
-				var e = kvp.Key;
-				if ((e.Flags & EntityFlags.IsDeleted) != 0) {
-					foreach (var flow in kvp.Value) {
-						allFlows.Remove(flow);
-					}
-				}
-				if ((e.Flags & EntityFlags.IsHidden) != 0) {
-					e.Parent
-					foreach (var flow in kvp.Value) {
-						allFlows.Remove(flow);
-					}
-				}
-			}
-
-
-
-			// TODO: Entity の子がフィルタリングされたら代わりに親 Entity に Flow を結ぶ
-			// TODO: Entity がノードになるかサブグラフになるか判定
-			// TODO: 親子関係から subgraph 生成
-
-
-			// Flow で結ばれている Entity を取得
-			var entityToNode = new Dictionary<Entity, string>();
-			Action<Entity> addNode = e => {
-				string node;
-				if (!entityToNode.TryGetValue(e, out node)) {
-					entityToNode[e] = "node" + (entityToNode.Count + 1);
-				}
-			};
-			foreach (var ratr in this.Flows.Values) {
-				addNode(ratr.Flow.E1);
-				addNode(ratr.Flow.E2);
-			}
-
-			// 上記の Entity でとりあえずノード生成
-			foreach (var e in entityToNode) {
-				sb.AppendLine(e.Value + " " + e.Key.DotNodeAttribute);
-			}
-
-			// ノード間の関連生成
-			foreach (var kvp in this.Flows) {
-				var flow = kvp.Key;
-				var atr = kvp.Value;
-				var n1 = entityToNode[flow.E1];
-				var n2 = entityToNode[flow.E2];
-
-				switch (atr.Direction) {
-				case FlowDirection.Forward:
-					sb.AppendLine(n1 + " -> " + n2);
-					break;
-				case FlowDirection.Backward:
-					sb.AppendLine(n2 + " -> " + n1);
-					break;
-				case FlowDirection.Both:
-					sb.AppendLine(n1 + " -> " + n2);
-					sb.AppendLine(n2 + " -> " + n1);
-					break;
-				}
-			}
-
-			//// タスク毎にサブグラフ作成してタスク内のフローをグラフ化
-			//var taskIndex = 0;
-			//foreach (var t in this.Tasks) {
-			//	sb.AppendLine("subgraph cluster" + taskIndex + "{");
-			//	sb.AppendLine("label=\"" + t.Name + "\"");
-
-			//	foreach (var flow in t.LocalFlows) {
-			//		var atr = this.Flows[flow];
-			//		var n1 = entityToNode[flow.E1];
-			//		var n2 = entityToNode[flow.E2];
-
-			//		switch (atr.Direction) {
-			//		case FlowDirection.Forward:
-			//			sb.AppendLine(n1 + " -> " + n2);
-			//			break;
-			//		case FlowDirection.Backward:
-			//			sb.AppendLine(n2 + " -> " + n1);
-			//			break;
-			//		case FlowDirection.Both:
-			//			sb.AppendLine(n1 + " -> " + n2);
-			//			sb.AppendLine(n2 + " -> " + n1);
-			//			break;
-			//		}
-			//	}
-
-			//	sb.AppendLine("}");
-
-			//	taskIndex++;
-			//}
-
-			sb.AppendLine("}");
-
-			return sb.ToString();
-		}
-	}
-
-	public class FlowBuffer {
-		public Dictionary<Flow, FlowAtr> Flows = new Dictionary<Flow, FlowAtr>();
 
 		public Flow Flow(Entity from, Entity to) {
 			var flow = new Flow(from, to);
@@ -464,8 +267,6 @@ namespace EntityGraph {
 				ra.Direction |= FlowDirection.Backward;
 			}
 
-			this.Flows.Add(flow);
-
 			return flow;
 		}
 
@@ -478,42 +279,192 @@ namespace EntityGraph {
 				last = e;
 			}
 		}
+
+		public Dictionary<Entity, HashSet<Flow>> GetEntities() {
+			var entities = new Dictionary<Entity, HashSet<Flow>>();
+			foreach (var kvp in this.Flows) {
+				var flow = kvp.Key;
+				var e1 = flow.E1;
+				var e2 = flow.E2;
+
+				HashSet<Flow> f;
+				if (!entities.TryGetValue(e1, out f)) {
+					entities[e1] = f = new HashSet<Flow>();
+				}
+				f.Add(flow);
+				if (!entities.TryGetValue(e2, out f)) {
+					entities[e2] = f = new HashSet<Flow>();
+				}
+				f.Add(flow);
+			}
+			return entities;
+		}
+	}
+
+
+	public class GraphBuilder {
+		public FlowBuffer FlowBuffer;
+
+		public GraphBuilder(Dictionary<Flow, FlowAtr> flowsToAdd) {
+			this.FlowBuffer = new FlowBuffer(flowsToAdd);
+		}
+
+		public Dictionary<Entity, HashSet<Flow>> Filter(Action<Entity> filter) {
+			var fb = this.FlowBuffer;
+			var flows = fb.Flows;
+
+			for (; ; ) {
+				// フィルタリングを行い要求される抽象度の関連性のみ残す
+				var entities = fb.GetEntities();
+				var filtered = false;
+				foreach (var kvp in entities) {
+					var e = kvp.Key;
+					if ((e.Flags & EntityFlags.IsFiltered) != 0) {
+						continue;
+					}
+
+					// フィルタリングにてフラグをセットする
+					filter(e);
+					e.Flags |= EntityFlags.IsFiltered;
+					filtered = true;
+
+					// セットされたフラグに応じて関連性の削除または切り替えを行う
+					var flags = e.Flags;
+					if ((flags & (EntityFlags.IsDeleted | EntityFlags.IsHidden)) != 0) {
+						var p = e.Parent;
+						var switchToParent = (flags & EntityFlags.IsHidden) != 0 && p != null;
+						foreach (var flow in kvp.Value) {
+							flows.Remove(flow);
+							if (switchToParent) {
+								fb.Flow(p, flow.GetPair(p));
+							}
+						}
+					}
+				}
+				if (!filtered) {
+					return entities;
+				}
+			}
+		}
+	}
+
+	public class Graph {
+		public FlowBuffer FlowBuffer = new FlowBuffer();
+		public List<Task> Tasks = new List<Task>();
+
+		public Task Task(string name) {
+			var t = new Task { Name = name, FlowBuffer = this.FlowBuffer };
+			this.Tasks.Add(t);
+			return t;
+		}
+
+		public string GetDotCode(Action<Entity> filter = null) {
+			var sb = new StringBuilder();
+
+			sb.AppendLine(@"digraph {
+	node [color=""#5050e5"" fontcolor=""#5050e5""]
+	edge [fontsize=11 color=gray50 fontcolor=gray50]
+");
+
+			// 必要に応じてフィルタリングを行い、関連性を持つ Entity 一覧を取得する
+			var gb = new GraphBuilder(this.FlowBuffer.Flows);
+			var entities = filter != null ? gb.Filter(filter) : gb.FlowBuffer.GetEntities();
+
+			// 直接関連性を持つものが node となり、その親が subgraph となる
+			var entityToNode = new Dictionary<Entity, string>();
+			Action<Entity> addNode = e => {
+				string node;
+				if (!entityToNode.TryGetValue(e, out node)) {
+					entityToNode[e] = "node" + (entityToNode.Count + 1);
+				}
+			};
+			foreach (var e in entities.Keys) {
+				addNode(e);
+			}
+
+			// 上記の Entity でとりあえずノード生成
+			foreach (var e in entityToNode) {
+				sb.AppendLine(e.Value + " " + e.Key.DotNodeAttribute);
+			}
+
+			// 親子関係構築
+			var parentRelationship = new Dictionary<Entity, List<Entity>>();
+			foreach (var e in entities.Keys) {
+				var p = e.Parent;
+				if (p != null) {
+					List<Entity> children;
+					if (!parentRelationship.TryGetValue(p, out children)) {
+						parentRelationship[p] = children = new List<Entity>();
+					}
+					children.Add(e);
+				}
+			}
+
+			// subgraph を生成
+			Action<Entity> subgraph = null;
+			var subgraphCount = 0;
+			subgraph = e => {
+				List<Entity> children;
+				if (parentRelationship.TryGetValue(e, out children)) {
+					sb.AppendLine("subgraph cluster" + subgraphCount + "{");
+					sb.AppendLine("label=\"" + e.Name + "\"");
+					subgraphCount++;
+					foreach (var c in children) {
+						if (entityToNode.ContainsKey(c)) {
+							sb.AppendLine(entityToNode[c]);
+						} else {
+							subgraph(c);
+						}
+					}
+					sb.AppendLine("}");
+				}
+			};
+			foreach (var e in parentRelationship.Keys) {
+				var p = e.Parent;
+				if (p == null || p.KindName == "root") {
+					subgraph(e);
+				}
+			}
+
+			// ノード間の関連生成
+			foreach (var kvp in gb.FlowBuffer.Flows) {
+				var flow = kvp.Key;
+				var atr = kvp.Value;
+				var n1 = entityToNode[flow.E1];
+				var n2 = entityToNode[flow.E2];
+
+				switch (atr.Direction) {
+					case FlowDirection.Forward:
+						sb.AppendLine(n1 + " -> " + n2);
+						break;
+					case FlowDirection.Backward:
+						sb.AppendLine(n2 + " -> " + n1);
+						break;
+					case FlowDirection.Both:
+						sb.AppendLine(n1 + " -> " + n2);
+						sb.AppendLine(n2 + " -> " + n1);
+						break;
+				}
+			}
+
+			sb.AppendLine("}");
+
+			return sb.ToString();
+		}
 	}
 
 	public class Task : Entity {
-		public Dictionary<Flow, FlowAtr> GlobalFlows;
-		public HashSet<Flow> LocalFlows = new HashSet<Flow>();
+		public FlowBuffer FlowBuffer;
 
 		public Task() : base("Task") {
 		}
 
 		public Flow Flow(Entity from, Entity to) {
-			var flow = new Flow(from, to);
-
-			FlowAtr ra;
-			if (!this.GlobalFlows.TryGetValue(flow, out ra)) {
-				this.GlobalFlows[flow] = ra = new FlowAtr(flow);
-			}
-
-			if (flow.IsSameDir(ra.Flow)) {
-				ra.Direction |= FlowDirection.Forward;
-			} else {
-				ra.Direction |= FlowDirection.Backward;
-			}
-
-			this.LocalFlows.Add(flow);
-
-			return flow;
+			return this.FlowBuffer.Flow(from, to);
 		}
 
 		public void Flow(Entity e1, Entity e2, Entity e3, params Entity[] entities) {
-			this.Flow(e1, e2);
-			this.Flow(e2, e3);
-			var last = e3;
-			foreach (var e in entities) {
-				this.Flow(last, e);
-				last = e;
-			}
+			this.FlowBuffer.Flow(e1, e2, e3, entities);
 		}
 	}
 

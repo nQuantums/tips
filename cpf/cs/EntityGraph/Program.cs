@@ -41,7 +41,6 @@ namespace EntityGraph {
 			public WebSite Thunderbird = new WebSite("https://ftp.mozilla.org/pub/thunderbird/");
 			public WebSite Microsoft = new WebSite("");
 			public DataFile wsusscn2 = new DataFile { Name = "wsusscn2.cab" };
-			public PCloud PCloud;
 
 			public Web() : base("Web") {
 			}
@@ -63,9 +62,10 @@ namespace EntityGraph {
 		public class World : Entity {
 			public Web Web;
 			public HSC HSC;
+			public PCloud PCloud;
 			public UserPServer UserPServer;
 
-			public World() : base("Entities") {
+			public World() : base("root") {
 			}
 		}
 
@@ -118,12 +118,10 @@ namespace EntityGraph {
 			hscTask.Flow(hvn_db, hsc.HvnDbFinalize, hvn_db);
 			hscTask.Flow(hvn_db, hsc.HvnDbBuild, hsc.hvn_db_zip);
 
-			var adminTask = g.Task("権限");
-			adminTask.Flow(hsc.hvn_db_zip, web.PCloud.hvn_db_zip);
+			hscTask.Flow(hsc.hvn_db_zip, w.PCloud.hvn_db_zip);
 
-			var userPTask = g.Task("ユーザーP");
-			userPTask.Flow(web.PCloud.hvn_db_zip, w.UserPServer.hvn_db_zip, w.UserPServer.DbReplicator, w.UserPServer.hvn_db);
-			userPTask.Flow(w.UserPServer.hvn_db, w.UserPServer.Tonton, w.UserPServer.asset_db);
+			hscTask.Flow(w.PCloud.hvn_db_zip, w.UserPServer.hvn_db_zip, w.UserPServer.DbReplicator, w.UserPServer.hvn_db);
+			hscTask.Flow(w.UserPServer.hvn_db, w.UserPServer.Tonton, w.UserPServer.asset_db);
 
 			File.WriteAllText("out.dot", g.GetDotCode(), Encoding.UTF8);
 		}
