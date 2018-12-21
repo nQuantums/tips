@@ -60,6 +60,15 @@ namespace EntityGraph {
 		public string DotFontColor;
 
 		/// <summary>
+		/// ルート<see cref="Entity"/>なら true になる
+		/// </summary>
+		public bool IsRoot {
+			get {
+				return this.Parent == null || string.IsNullOrEmpty(this.Name);
+			}
+		}
+
+		/// <summary>
 		/// ノードとしてグラフ描画される際の属性
 		/// </summary>
 		public virtual string DotNodeAttribute {
@@ -336,7 +345,10 @@ namespace EntityGraph {
 						foreach (var flow in kvp.Value) {
 							flows.Remove(flow);
 							if (switchToParent) {
-								fb.Flow(p, flow.GetPair(p));
+								var pair = flow.GetPair(p);
+								if (pair != null) {
+									fb.Flow(p, pair);
+								}
 							}
 						}
 					}
@@ -352,6 +364,14 @@ namespace EntityGraph {
 		public FlowBuffer FlowBuffer = new FlowBuffer();
 		public List<Task> Tasks = new List<Task>();
 
+		public Flow Flow(Entity from, Entity to) {
+			return this.FlowBuffer.Flow(from, to);
+		}
+
+		public void Flow(Entity e1, Entity e2, Entity e3, params Entity[] entities) {
+			this.FlowBuffer.Flow(e1, e2, e3, entities);
+		}
+
 		public Task Task(string name) {
 			var t = new Task { Name = name, FlowBuffer = this.FlowBuffer };
 			this.Tasks.Add(t);
@@ -362,94 +382,134 @@ namespace EntityGraph {
 			var sb = new StringBuilder();
 
 			sb.AppendLine(@"digraph {
-	node [color=""#5050e5"" fontcolor=""#5050e5""]
-	edge [fontsize=11 color=gray50 fontcolor=gray50]
+	node [color=""#5050e5"" fontcolor=""#5050e5""];
+	edge [fontsize=11 color=gray50 fontcolor=gray50];
 ");
 
 			// 必要に応じてフィルタリングを行い、関連性を持つ Entity 一覧を取得する
-			var gb = new GraphBuilder(this.FlowBuffer.Flows);
-			var entities = filter != null ? gb.Filter(filter) : gb.FlowBuffer.GetEntities();
-
 			// 直接関連性を持つものが node となり、その親が subgraph となる
+			var gb = new GraphBuilder(this.FlowBuffer.Flows);
+			var flows = gb.FlowBuffer.Flows;
+			var entities = filter != null ? gb.Filter(filter) : gb.FlowBuffer.GetEntities();
+			var definedEntities = new HashSet<Entity>();
+
+			// Entity からノード名への変換テーブル作成
 			var entityToNode = new Dictionary<Entity, string>();
-			Action<Entity> addNode = e => {
+			foreach (var e in entities.Keys) {
 				string node;
 				if (!entityToNode.TryGetValue(e, out node)) {
 					entityToNode[e] = "node" + (entityToNode.Count + 1);
 				}
+			}
+
+			// ノード定義処理
+			Action<Entity> defineNode = e => {
+				sb.AppendLine(entityToNode[e] + " " + e.DotNodeAttribute + ";");
+				definedEntities.Add(e);
 			};
-			foreach (var e in entities.Keys) {
-				addNode(e);
-			}
 
-			// 上記の Entity でとりあえずノード生成
-			foreach (var e in entityToNode) {
-				sb.AppendLine(e.Value + " " + e.Key.DotNodeAttribute);
-			}
-
-			// 親子関係構築
-			var parentRelationship = new Dictionary<Entity, List<Entity>>();
-			foreach (var e in entities.Keys) {
-				var p = e.Parent;
-				if (p != null) {
-					List<Entity> children;
-					if (!parentRelationship.TryGetValue(p, out children)) {
-						parentRelationship[p] = children = new List<Entity>();
-					}
-					children.Add(e);
-				}
-			}
-
-			// subgraph を生成
-			Action<Entity> subgraph = null;
-			var subgraphCount = 0;
-			subgraph = e => {
-				List<Entity> children;
-				if (parentRelationship.TryGetValue(e, out children)) {
-					sb.AppendLine("subgraph cluster" + subgraphCount + "{");
-					sb.AppendLine("label=\"" + e.Name + "\"");
-					subgraphCount++;
-					foreach (var c in children) {
-						if (entityToNode.ContainsKey(c)) {
-							sb.AppendLine(entityToNode[c]);
-						} else {
-							subgraph(c);
-						}
-					}
-					sb.AppendLine("}");
-				}
-			};
-			foreach (var e in parentRelationship.Keys) {
-				var p = e.Parent;
-				if (p == null || p.KindName == "root") {
-					subgraph(e);
-				}
-			}
-
-			// ノード間の関連生成
-			foreach (var kvp in gb.FlowBuffer.Flows) {
+			// ノード間の関連を出力する処理
+			Action<KeyValuePair<Flow, FlowAtr>> writeFlow = kvp => {
 				var flow = kvp.Key;
 				var atr = kvp.Value;
 				var n1 = entityToNode[flow.E1];
 				var n2 = entityToNode[flow.E2];
 
 				switch (atr.Direction) {
-					case FlowDirection.Forward:
-						sb.AppendLine(n1 + " -> " + n2);
-						break;
-					case FlowDirection.Backward:
-						sb.AppendLine(n2 + " -> " + n1);
-						break;
-					case FlowDirection.Both:
-						sb.AppendLine(n1 + " -> " + n2);
-						sb.AppendLine(n2 + " -> " + n1);
-						break;
+				case FlowDirection.Forward:
+					sb.AppendLine(n1 + " -> " + n2 + ";");
+					break;
+				case FlowDirection.Backward:
+					sb.AppendLine(n2 + " -> " + n1 + ";");
+					break;
+				case FlowDirection.Both:
+					sb.AppendLine(n1 + " -> " + n2 + ";");
+					sb.AppendLine(n2 + " -> " + n1 + ";");
+					break;
 				}
+			};
+
+			// 親子関係構築
+			var parentRelationship = new Dictionary<Entity, HashSet<Entity>>();
+			Action<Entity> makeParentRelationship = null;
+			makeParentRelationship = e => {
+				var p = e.Parent;
+				if (p != null) {
+					HashSet<Entity> children;
+					if (!parentRelationship.TryGetValue(p, out children)) {
+						parentRelationship[p] = children = new HashSet<Entity>();
+					}
+					children.Add(e);
+
+					makeParentRelationship(p);
+				}
+			};
+			foreach (var e in entities.Keys) {
+				makeParentRelationship(e);
+			}
+
+			// subgraph を生成
+			Action<Entity> subgraph = null;
+			var subgraphCount = 0;
+			subgraph = e => {
+				HashSet<Entity> children;
+				if (parentRelationship.TryGetValue(e, out children)) {
+					var isRoot = e.IsRoot;
+					if (!isRoot) {
+						sb.AppendLine("subgraph cluster" + subgraphCount + "{");
+						sb.AppendLine("label=\"" + e.Name + "\";");
+						subgraphCount++;
+					}
+
+					foreach (var c in children) {
+						if (entityToNode.ContainsKey(c)) {
+							// ノードになる Entity ならノードとして定義する
+							defineNode(c);
+						} else {
+							// 上記以外はサブグラフとなる
+							subgraph(c);
+						}
+					}
+
+					// サブグラフ内で完結する関連を書き出す
+					foreach (var kvp in flows.Where(f => children.Contains(f.Key.E1) && children.Contains(f.Key.E2)).ToArray()) {
+						writeFlow(kvp);
+						flows.Remove(kvp.Key);
+					}
+
+					if (!isRoot) {
+						sb.AppendLine("}");
+					}
+				}
+			};
+
+			// ルートとなる Entity を探し出して書き出す
+			foreach (var e in parentRelationship.Keys) {
+				if (e.IsRoot) {
+					subgraph(e);
+				}
+			}
+
+			// まだ定義されていないノードを定義
+			foreach (var e in entityToNode.Keys) {
+				if (!definedEntities.Contains(e)) {
+					defineNode(e);
+				}
+			}
+
+			// 残ったノード間の関連生成
+			foreach (var kvp in flows) {
+				writeFlow(kvp);
 			}
 
 			sb.AppendLine("}");
 
 			return sb.ToString();
+		}
+	}
+
+	public class Group : Entity {
+		public Group() : base("Group") {
 		}
 	}
 
@@ -529,6 +589,11 @@ namespace EntityGraph {
 
 	public class Zip : Data {
 		public Zip() : base("Zip") {
+		}
+	}
+
+	public class Registry : Data {
+		public Registry() : base("Registry") {
 		}
 	}
 

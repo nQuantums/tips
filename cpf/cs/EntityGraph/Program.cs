@@ -2,6 +2,8 @@
 using System.IO;
 using System.Text;
 
+#pragma warning disable CS0649
+
 namespace EntityGraph {
 	class Program {
 		public class HSC : PC {
@@ -65,7 +67,7 @@ namespace EntityGraph {
 			public PCloud PCloud;
 			public UserPServer UserPServer;
 
-			public World() : base("root") {
+			public World() : base(null) {
 			}
 		}
 
