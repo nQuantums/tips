@@ -83,10 +83,6 @@ class Node:
 		"""この Node の所有者 Node の取得."""
 		return self.other_nodes['owner']
 
-	def get_model(self):
-		"""この Node が属する Model の取得."""
-		return self.get_root().get_model()
-
 	def get_full_name(self):
 		"""ルート Node からのフル名称を取得する."""
 		root = self.get_root()
@@ -287,7 +283,7 @@ class Node:
 			Module.
 		"""
 		nodes_owner = self._get_nodes_owner()
-		return nodes_owner._on_new_node(kind_name, Module(self.get_root().get_model(), nodes_owner, kind_name, self))
+		return nodes_owner._on_new_node(kind_name, Module(nodes_owner, kind_name, self))
 
 	def nop(self):
 		"""自分を入力とする出力 NoOp を生成する.
@@ -482,7 +478,7 @@ class Node:
 		if len(self.outputs) == 0 and not self.is_observer:
 			raise Exception(f"Node '{self.get_full_name()}' must have one or more outputs.")
 
-		model = self.get_root().get_model()
+		model = self.get_root()
 		old_depth = depth
 		depth += 1
 
@@ -541,9 +537,9 @@ class Node:
 			in_tuple_str: 入力値を格納している変数名.
 		"""
 		if out_tuple_str is None:
-			self.get_root().get_model().code.append(f'\t{self.get_code_node_name()}({in_tuple_str})')
+			self.get_root().code.append(f'\t{self.get_code_node_name()}({in_tuple_str})')
 		else:
-			self.get_root().get_model().code.append(f'\t{out_tuple_str} = {self.get_code_node_name()}({in_tuple_str})')
+			self.get_root().code.append(f'\t{out_tuple_str} = {self.get_code_node_name()}({in_tuple_str})')
 
 	def _collect_multi_output_nodes(self, output, depth, node_set):
 		"""入力側の直近の複数出力 Node を集める.
@@ -615,7 +611,7 @@ class NoOp(Node):
 			in_tuple_str: 入力値を格納している変数名.
 		"""
 		if out_tuple_str != in_tuple_str:
-			self.get_root().get_model().code.append(f'\t{out_tuple_str} = {in_tuple_str}')
+			self.get_root().code.append(f'\t{out_tuple_str} = {in_tuple_str}')
 
 
 class Funcs(Node):
@@ -815,13 +811,12 @@ class Module(Trainable, Node):
 	"""複数の子 Node を持つジュール.
 
 	Args:
-		model: モジュールが属することになるモデル.
 		owner: 親となる Module、None が指定されたらルートとなる.
 		kind_name: 種類名.
 		input: 入力 Node または None.
 	"""
 
-	def __init__(self, model, owner=None, kind_name='root', input=None):
+	def __init__(self, owner=None, kind_name='root', input=None):
 		if input == owner:
 			input = None
 
@@ -838,7 +833,6 @@ class Module(Trainable, Node):
 			input.add_ouput(self)
 			self.add_input(input)
 
-		self.model = model # この Module が属する Model
 		self.nodes = [] # 子ノード列
 		self.kindwise_count = {} # 種類毎の子ノード数
 		self.firsts = None # 最初のノード列
@@ -851,11 +845,6 @@ class Module(Trainable, Node):
 
 	def __exit__(self, type, trainable, traceback):
 		self.assembly_depth -= 1
-
-	def get_model(self):
-		"""この Node が属する Model の取得.
-		"""
-		return self.model
 
 	def get_dot_node_name(self):
 		"""dot 内でのノード名の取得.
@@ -954,7 +943,7 @@ class Module(Trainable, Node):
 		self.lasts[0].set_outputs(self.get_outputs())
 
 		# ビルド
-		model = self.get_root().get_model()
+		model = self.get_root()
 		tmp_var = None
 		if self != self.get_root() and 2 <= len(self.nodes):
 			tmp_var = model.tmp_var_mgr.get_var((self, self))
@@ -1064,31 +1053,20 @@ class VarMgr:
 					break
 
 
-class Model:
-	"""モデル
+class Root(Module):
+	"""ルートモジュール.
 	"""
 
 	def __init__(self):
-		self.module = Module(self) # ニューラルネットワーク
-		self.optimizer = None # 勾配の最適化用オブジェクト
+		Module.__init__(self)
 		self.tmp_var_mgr = VarMgr('m') # 生成する推論関数内での各ノードを格納する一時変数名を管理する
 		self.var_mgr = VarMgr('x') # 生成する推論関数内での各ノード出力を受け取る一時変数名を管理する
 		self.code = [] # 推論コード
 		self.dot_code = [] # Graphviz の .dot コード
 		self.prediction = None # 推論関数
 
-		# ルートとして初期化
-		self.module.name = 'root'
-		self.module.add_ouput(None)
-
-	def optimizer_RMSprop(self, lr=1e-2, alpha=0.99, eps=1e-8, weight_decay=0, momentum=0, centered=False):
-		self.optimizer = optim.RMSprop(self.module.parameters(), lr, alpha, eps, weight_decay, momentum, centered)
-
-	def optimizer_Adam(self, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, amsgrad=False):
-		self.optimizer = optim.Adam(self.module.parameters(), lr, betas, eps, weight_decay, amsgrad)
-
-	def optimizer_Adamax(self, lr=2e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0):
-		self.optimizer = optim.Adamax(self.module.parameters(), lr, betas, eps, weight_decay)
+		# ルート用の出力
+		self.add_ouput(None)
 
 	def build(self, output_file_name=None, module_name='Prediction'):
 		"""モデルの推論用関数をビルドする.
@@ -1104,7 +1082,7 @@ class Model:
 		self.dot_code.insert(0, 'digraph {\n')
 		self.dot_code.insert(1, 'node [shape=box]\n')
 
-		self.module._build(0)
+		Module._build(self, 0)
 
 		if len(self.var_mgr.vars) == 0:
 			raise Exception(f"Internal error. No output exists after '{self.module.get_full_name()}' built.")
@@ -1129,18 +1107,60 @@ class Model:
 
 		return self
 
+	def __call__(self, x):
+		"""計算を実行する.
+
+		Args:
+			x: 入力値.
+
+		Returns:
+			結果.
+		"""
+		return self.prediction(self, x)
+
+
+class Model:
+	"""モデル
+	"""
+
+	def __init__(self):
+		self.root = Root() # ニューラルネットワーク
+		self.optimizer = None # 勾配の最適化用オブジェクト
+
+	def optimizer_RMSprop(self, lr=1e-2, alpha=0.99, eps=1e-8, weight_decay=0, momentum=0, centered=False):
+		self.optimizer = optim.RMSprop(self.root.parameters(), lr, alpha, eps, weight_decay, momentum, centered)
+
+	def optimizer_Adam(self, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, amsgrad=False):
+		self.optimizer = optim.Adam(self.root.parameters(), lr, betas, eps, weight_decay, amsgrad)
+
+	def optimizer_Adamax(self, lr=2e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0):
+		self.optimizer = optim.Adamax(self.root.parameters(), lr, betas, eps, weight_decay)
+
+	def build(self, output_file_name=None, module_name='Prediction'):
+		"""モデルの推論用関数をビルドする.
+
+		Args:
+			output_file_name: 推論関数出力ソースファイル名、None 以外が指定されたらこのファイル作成してインポートされる、デバッグ用.
+			module_name: output_file_name ロード時に付与するモジュール名.
+
+		Returns:
+			self.
+		"""
+		self.root.build(output_file_name, module_name)
+		return self
+
 	def to(self, device):
-		self.module = self.module.to(device)
+		self.root = self.root.to(device)
 		return self
 
 	def zero_grad(self):
-		self.module.zerograds()
+		self.root.zerograds()
 
 	def train(self):
-		self.module.train()
+		self.root.train()
 
 	def eval(self):
-		self.module.eval()
+		self.root.eval()
 
 	def step(self):
 		self.optimizer.step()
@@ -1154,7 +1174,7 @@ class Model:
 		Returns:
 			結果.
 		"""
-		return self.prediction(self.module, x)
+		return self.root(x)
 
 	def state_dict(self):
 		"""重み、パラメータなどモデルの状態を辞書に入れて返す.
@@ -1163,7 +1183,7 @@ class Model:
 			dict.
 		"""
 		d = {
-		    'module': self.module.state_dict(),
+		    'module': self.root.state_dict(),
 		}
 		if self.optimizer is not None:
 			d['optimizer'] = self.optimizer.state_dict()
@@ -1172,7 +1192,7 @@ class Model:
 	def load_state_dict(self, d):
 		"""state_dict() で取得した辞書から状態を復元する.
 		"""
-		self.module.load_state_dict(d['module'])
+		self.root.load_state_dict(d['module'])
 		if self.optimizer is not None:
 			self.optimizer.load_state_dict(d['optimizer'])
 

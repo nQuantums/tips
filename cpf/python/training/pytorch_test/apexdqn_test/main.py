@@ -2,33 +2,39 @@
 import time
 import multiprocessing as mp
 import json
+from argparse import ArgumentParser
+import psycopg2
+
+import db_initializer
 from replay import ReplayMemory
 from actor import Actor
 from learner import Learner
-from argparse import ArgumentParser
 
 arg_parser = ArgumentParser(prog="main.py")
-arg_parser.add_argument("--params-file", default="parameters.json", type=str, help="Path to json file defining the parameters for the Actor, Learner and Replay memory", metavar="PARAMSFILE")
+arg_parser.add_argument(
+    "--params-file",
+    default="parameters.json",
+    type=str,
+    help="Path to json file defining the parameters for the Actor, Learner and Replay memory",
+    metavar="PARAMSFILE")
 args = arg_parser.parse_args()
 
 
-def learner(env_conf, replay_params, status_dict, learner_params, shared_state, shared_mem):
-	learner = Learner(env_conf, replay_params, status_dict, learner_params, shared_state, shared_mem)
+def learner(params, param_set_id, status_dict, shared_state, shared_mem):
+	learner = Learner(params, param_set_id, status_dict, shared_state, shared_mem)
 	learner.learn()
 
 
-def actor(i, env_conf, shared_state, shared_mem, actor_params):
-	actor = Actor(i, env_conf, shared_state, shared_mem, actor_params)
+def actor(params, param_set_id, i, status_dict, shared_state, shared_mem):
+	actor = Actor(params, param_set_id, i, status_dict, shared_state, shared_mem)
 	actor.run()
 
 
 if __name__ == "__main__":
-	params = json.load(open(args.params_file, 'r'))
-	env_conf = params['env_conf']
-	actor_params = params["Actor"]
-	learner_params = params["Learner"]
-	replay_params = params["Replay_Memory"]
-	print("Using the params:\n env_conf:{} \n actor_params:{} \n learner_params:{} \n, replay_params:{}".format(env_conf, actor_params, learner_params, replay_params))
+	with open(args.params_file, 'r') as f:
+		params = json.load(f)
+
+	param_set_id = db_initializer.initialize(params)
 
 	mp_manager = mp.Manager()
 	status_dict = mp_manager.dict()
@@ -36,28 +42,24 @@ if __name__ == "__main__":
 	shared_mem = mp_manager.Queue()
 
 	status_dict['quit'] = False
-
-	l = None
+	status_dict['Q_state_dict_stored'] = False
+	status_dict['request_quit'] = False
 
 	# A learner is started before the Actors so that the shared_state is populated with a Q_state_dict
-	learner_proc = mp.Process(target=learner, args=(env_conf, replay_params, status_dict, learner_params, shared_state, shared_mem))
+	learner_proc = mp.Process(target=learner, args=(params, param_set_id, status_dict, shared_state, shared_mem))
 	learner_proc.start()
-	time.sleep(1)
+	while not status_dict['Q_state_dict_stored']:
+		time.sleep(0.001)
 
 	#  TODO: Test with multiple actors
 	actor_procs = []
-	for i in range(actor_params["num_actors"]):
-		p = mp.Process(target=actor, args=(i, env_conf, shared_state, shared_mem, actor_params))
+	for i in range(params["actor"]["num_actors"]):
+		p = mp.Process(target=actor, args=(params, param_set_id, i, status_dict, shared_state, shared_mem))
 		p.start()
 		actor_procs.append(p)
-
-	if l:
-		l.learn()
 
 	[actor_proc.join() for actor_proc in actor_procs]
 	print('actor all join')
 	status_dict['quit'] = True
-	if not l:
-		learner_proc.join()
-
+	learner_proc.join()
 	print("Main: replay_mem.size:", shared_mem.qsize())

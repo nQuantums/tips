@@ -1,63 +1,103 @@
 #!/usr/bin/env python
-import torch
+import os
 import time
+import datetime
+import multiprocessing as mp
+from collections import OrderedDict
+import torch
 import numpy as np
 from collections import namedtuple
-from duelling_network import DuellingDQN
-from replay import ReplayMemory
+import psycopg2
 
-N_Step_Transition = namedtuple('N_Step_Transition', ['S_t', 'A_t', 'R_ttpB', 'Gamma_ttpB', 'qS_t', 'S_tpn', 'qS_tpn', 'key'])
+import db_initializer
+import tables
+from replay import ReplayMemory
+import model
 
 
 class Learner(object):
 
-	def __init__(self, env_conf, replay_params, status_dict, learner_params, shared_state, shared_mem):
+	def __init__(self, params, param_set_id, status_dict, shared_state, shared_mem):
+		gpu = 0
+		torch.cuda.set_device(gpu)
+
+		env_conf = params['env']
+		learner_params = params['learner']
+
+		model_formula = f'model.{learner_params["model"]}(self.state_shape, self.action_dim).to(self.device)'
+		optimizer_formula = learner_params["optimizer"].format('self.Q.parameters()')
+
+		self.conn = psycopg2.connect(params["db"]["connection_string"])
+		self.conn.autocommit = True
+		self.cur = self.conn.cursor()
+		self.param_set_id = param_set_id
+
+		self.device = torch.device("cuda:{}".format(gpu) if 0 <= gpu and torch.cuda.is_available() else "cpu")
 		self.status_dict = status_dict
 		self.state_shape = env_conf['state_shape']
-		action_dim = env_conf['action_dim']
+		self.batch_size = learner_params['replay_sample_size']
+		self.action_dim = env_conf['action_dim']
 		self.params = learner_params
+		self.q_target_sync_freq = self.params['q_target_sync_freq']
 		self.shared_state = shared_state
-		self.Q = DuellingDQN(self.state_shape, action_dim)
-		self.Q_double = DuellingDQN(self.state_shape, action_dim) # Target Q network which is slow moving replica of self.Q
 		self.shared_mem = shared_mem
-		self.replay_memory = ReplayMemory(replay_params)
-		self.optimizer = torch.optim.RMSprop(self.Q.parameters(), lr=0.00025 / 4, weight_decay=0.95, eps=1.5e-7)
+		self.replay_memory = ReplayMemory(params["replay_memory"])
 		self.num_q_updates = 0
+		self.offsets_for_action = (torch.arange(self.batch_size) * self.action_dim).to(self.device)
+		self.Q = eval(model_formula)
+		self.Q_double = eval(model_formula) # Target Q network which is slow moving replica of self.Q
+		self.optimizer = eval(optimizer_formula)
 
-		if self.params['load_saved_state']:
-			try:
-				saved_state = torch.load(self.params['load_saved_state'])
-				self.Q.load_state_dict(saved_state['module'])
-				self.optimizer.load_state_dict(saved_state['optimizer'])
-			except FileNotFoundError:
-				print("WARNING: No trained model found. Training from scratch")
+		self.train_num = 0
+		self.model_file_name = self.params['load_saved_state']
+		if self.model_file_name and os.path.isfile(self.model_file_name):
+			print(f'Loading {self.model_file_name}')
+			saved_state = torch.load(self.model_file_name)
+			self.Q.load_state_dict(saved_state['module'])
+			self.optimizer.load_state_dict(saved_state['optimizer'])
+			self.train_num = saved_state['train_num']
 
-		self.shared_state["Q_state_dict"] = self.Q.state_dict()
+		self.shared_state['Q_state_dict'] = self.state_dict_to_cpu(self.Q.state_dict())
+		self.status_dict['Q_state_dict_stored'] = True
 
-	def compute_loss_and_priorities(self, xp_batch):
+		self.last_Q_state_dict_id = 1
+		self.status_dict['Q_state_dict_id'] = self.last_Q_state_dict_id
+		self.status_dict['train_num'] = self.train_num
+
+	def state_dict_to_cpu(self, state_dict):
+		d = OrderedDict()
+		for k, v in state_dict.items():
+			d[k] = v.cpu()
+		return d
+
+	def compute_loss_and_priorities(self, batch_size):
 		"""
 		Computes the double-Q learning loss and the proportional experience priorities.
 		:param xp_batch: list of experiences of type N_Step_Transition
 		:return: double-Q learning loss and the proportional experience priorities
 		"""
-		n_step_transitions = N_Step_Transition(*zip(*xp_batch))
-		# Convert tuple to numpy array; Convert observations(S_t and S_tpn) to c x w x h torch Tensors (aka Variable)
-		S_t = torch.from_numpy(np.array(n_step_transitions.S_t)).float().requires_grad_(True)
-		S_tpn = torch.from_numpy(np.array(n_step_transitions.S_tpn)).float().requires_grad_(True)
-		rew_t_to_tpB = torch.tensor(n_step_transitions.R_ttpB)
-		gamma_t_to_tpB = torch.tensor(n_step_transitions.Gamma_ttpB)
-		A_t = np.array(n_step_transitions.A_t)
+		indices, n_step_transition_batch, priorities = self.replay_memory.sample(batch_size)
+
+		S = n_step_transition_batch.S.to(self.device)
+		A = n_step_transition_batch.A.to(self.device) + self.offsets_for_action
+		R = n_step_transition_batch.R.to(self.device)
+		G = n_step_transition_batch.Gamma.to(self.device)
+		S_last = n_step_transition_batch.S_last.to(self.device)
 
 		with torch.no_grad():
-			G_t = rew_t_to_tpB + gamma_t_to_tpB * \
-                         self.Q_double(S_tpn)[2].gather(1, torch.argmax(self.Q(S_tpn)[2], 1).view(-1, 1)).squeeze()
-		Q_S_A = self.Q(S_t)[2].gather(1, torch.from_numpy(A_t).reshape(-1, 1)).squeeze()
-		batch_td_error = G_t.float() - Q_S_A
+			Qd = self.Q_double(S_last)
+			Q = self.Q(S_last)
+			actions = torch.argmax(Q, 1).squeeze() + self.offsets_for_action
+			G_t = R + G * Qd.take(actions).squeeze()
+		q = self.Q(S)
+		batch_td_error = G_t - q.take(A).squeeze()
 		loss = 1 / 2 * (batch_td_error)**2
-		# Compute the new priorities of the experience
-		priorities = {k: v for k in n_step_transitions.key for v in abs(batch_td_error.detach().data.numpy())}
 
-		return loss.mean(), priorities
+		# Compute the new priorities of the experience
+		priorities = batch_td_error.data.abs().cpu().numpy()
+		self.replay_memory.set_priorities(indices, priorities)
+
+		return loss.mean(), priorities, q
 
 	def update_Q(self, loss):
 		self.optimizer.zero_grad()
@@ -65,77 +105,97 @@ class Learner(object):
 		self.optimizer.step()
 		self.num_q_updates += 1
 
-		if self.num_q_updates % self.params['q_target_sync_freq']:
+		if self.num_q_updates % self.q_target_sync_freq == 0:
 			self.Q_double.load_state_dict(self.Q.state_dict())
+			print(f'Target Q synchronized.')
+			return True
+		else:
+			return False
 
 	def add_experience_to_replay_mem(self):
 		while self.shared_mem.qsize() or not self.shared_mem.empty():
 			priorities, xp_batch = self.shared_mem.get()
 			self.replay_memory.add(priorities, xp_batch)
-		print('add_experience_to_replay_mem', self.replay_memory.size())
+			# print(f'replay_memory.length : {self.replay_memory.length}')
 
 	def learn(self):
+		t = tables.LearnerData()
+		record_type = t.get_record_type()
+		record_insert = t.get_insert()
+		cur = self.cur
+		param_set_id = self.param_set_id
+		now = datetime.datetime.now
+		step_num = 0
+		target_sync_num = 0
+		send_param_num = 0
+
+		print('learner waiting for replay memory.')
 		while self.replay_memory.size() <= self.params["min_replay_mem_size"]:
 			self.add_experience_to_replay_mem()
-			time.sleep(1)
-		t = 0
+			time.sleep(0.01)
+		step_num = 0
 		print('learner start')
 		while not self.status_dict['quit']:
-			print('learn')
 			self.add_experience_to_replay_mem()
 			# 4. Sample a prioritized batch of transitions
-			prioritized_xp_batch = self.replay_memory.sample(int(self.params['replay_sample_size']))
 			# 5. & 7. Apply double-Q learning rule, compute loss and experience priorities
-			loss, priorities = self.compute_loss_and_priorities(prioritized_xp_batch)
-			#print("\nLearner: t=", t, "loss:", loss, "RPM.size:", self.replay_memory.size(), end='\r')
-			# 6. Update parameters of the Q network(s)
-			self.update_Q(loss)
-			self.shared_state['Q_state_dict'] = self.Q.state_dict()
 			# 8. Update priorities
-			self.replay_memory.set_priorities(priorities)
+			loss, priorities, q = self.compute_loss_and_priorities(self.batch_size)
+			if step_num % 10 == 0:
+				print(f'loss : {loss}')
+			#print("\nLearner: step_num=", step_num, "loss:", loss, "RPM.size:", self.replay_memory.size(), end='\r')
+			# 6. Update parameters of the Q network(s)
+			if self.update_Q(loss):
+				target_sync_num += 1
+			if step_num % 5 == 0:
+				self.shared_state['Q_state_dict'] = self.state_dict_to_cpu(self.Q.state_dict())
+				self.last_Q_state_dict_id += 1
+				self.status_dict['Q_state_dict_id'] = self.last_Q_state_dict_id
+				print('Send params to actors.')
+				send_param_num += 1
 
 			# 9. Periodically remove old experience from replay memory
-			if t % self.params['remove_old_xp_freq'] == 0:
-				self.replay_memory.remove_to_fit()
-			t += 1
+			step_num += 1
+			self.train_num += 1
+			self.status_dict['train_num'] = self.train_num
+
+			# DBへデータ登録
+			r = record_type(param_set_id, now(), self.train_num, step_num, loss.item(), q[0].tolist(), priorities.tolist(),
+			                target_sync_num, send_param_num)
+			record_insert(cur, r)
 
 		print('learner end')
 
-		state_dict = {
-		    'module': self.Q.state_dict(),
-		    'optimizer': self.optimizer.state_dict(),
-		}
-		torch.save(state_dict, 'model.pt')
+		state_dict = {'module': self.Q.state_dict(), 'optimizer': self.optimizer.state_dict(), 'train_num': self.train_num}
+		torch.save(state_dict, self.model_file_name)
 
 
 if __name__ == "__main__":
 	""" 
 	Simple standalone test routine for Leaner class
 	"""
-	import multiprocessing as mp
-	from actor import Actor
+	import json
+	import actor
 
-	env_conf = {"state_shape": (1, 84, 84), "action_dim": 4, "name": "Breakout-v0"}
-	replay_params = {"soft_capacity": 100000, "priority_exponent": 0.6, "importance_sampling_exponent": 0.4}
-	learner_params = {"remove_old_xp_freq": 100, "q_target_sync_freq": 100, "min_replay_mem_size": 20, "replay_sample_size": 32, "load_saved_state": False}
-	actor_params = {"local_experience_buffer_capacity": 10, "epsilon": 0.4, "alpha": 7, "gamma": 0.99, "num_actors": 2, "n_step_transition_batch_size": 5, "Q_network_sync_freq": 10, "num_steps": 3, "T": 500}
-	dummy_q = DuellingDQN(env_conf['state_shape'], env_conf['action_dim'])
+	with open('parameters.json', 'r') as f:
+		params = json.load(f)
+	params['actor']['T'] = 5000
+	params['actor']['wait_shared_memory_clear'] = False
+
+	param_set_id = db_initializer.initialize(params)
+
 	mp_manager = mp.Manager()
-
 	status_dict = mp_manager.dict()
 	shared_state = mp_manager.dict()
-	shared_state["Q_state_dict"] = dummy_q.state_dict()
-	shared_replay_mem = mp_manager.Queue()
+	shared_mem = mp_manager.Queue()
 
 	status_dict['quit'] = False
+	status_dict['Q_state_dict_stored'] = False
+	status_dict['request_quit'] = False
 
-	learner = Learner(env_conf, replay_params, status_dict, learner_params, shared_state, shared_replay_mem)
-	actor = Actor(1, env_conf, shared_state, shared_replay_mem, actor_params)
+	l = Learner(params, param_set_id, status_dict, shared_state, shared_mem)
+
+	actor = actor.Actor(params, param_set_id, 0, status_dict, shared_state, shared_mem)
 	actor.run()
 
-	learner.learn()
-
-	print("Main: replay_mem.size:", shared_replay_mem.qsize())
-	for i in range(shared_replay_mem.qsize()):
-		p, xp_batch = shared_replay_mem.get()
-		print("priority:", p)
+	l.learn()
