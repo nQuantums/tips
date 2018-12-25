@@ -310,15 +310,44 @@ namespace EntityGraph {
 		}
 	}
 
-
+	/// <summary>
+	/// グラフ構築用
+	/// </summary>
 	public class GraphBuilder {
+		/// <summary>
+		/// 全ての関連一覧
+		/// </summary>
 		public FlowBuffer FlowBuffer;
+
+		/// <summary>
+		/// <see cref="Entity"/>をキーとした関連する<see cref="Flow"/>一覧
+		/// </summary>
+		public Dictionary<Entity, HashSet<Flow>> Entities;
+
+		/// <summary>
+		/// 親<see cref="Entity"/>をキーとした子<see cref="Entity"/>一覧
+		/// </summary>
+		public Dictionary<Entity, HashSet<Entity>> ParentToChild;
+
+		/// <summary>
+		/// 子<see cref="Entity"/>をキーとした親<see cref="Entity"/>
+		/// </summary>
+		public Dictionary<Entity, Entity> ChildToParent;
+
+		/// <summary>
+		/// <see cref="Entity"/>から Graphviz の node 名への変換テーブル
+		/// </summary>
+		public Dictionary<Entity, string> EntityToNodeName;
 
 		public GraphBuilder(Dictionary<Flow, FlowAtr> flowsToAdd) {
 			this.FlowBuffer = new FlowBuffer(flowsToAdd);
 		}
 
-		public Dictionary<Entity, HashSet<Flow>> Filter(Action<Entity> filter) {
+		/// <summary>
+		/// フィルタリングを行い要求される抽象度の関連性のみ残す
+		/// </summary>
+		/// <param name="filter">フィルタ処理デリゲート、<see cref="Entity.Flags"/>にフラグをセットする</param>
+		public void Filter(Action<Entity> filter) {
 			var fb = this.FlowBuffer;
 			var flows = fb.Flows;
 
@@ -341,10 +370,10 @@ namespace EntityGraph {
 					var flags = e.Flags;
 					if ((flags & (EntityFlags.IsDeleted | EntityFlags.IsHidden)) != 0) {
 						var p = e.Parent;
-						var switchToParent = (flags & EntityFlags.IsHidden) != 0 && p != null;
+						var moveToParent = (flags & EntityFlags.IsHidden) != 0 && p != null;
 						foreach (var flow in kvp.Value) {
 							flows.Remove(flow);
-							if (switchToParent) {
+							if (moveToParent) {
 								var pair = flow.GetPair(p);
 								if (pair != null) {
 									fb.Flow(p, pair);
@@ -354,9 +383,51 @@ namespace EntityGraph {
 					}
 				}
 				if (!filtered) {
-					return entities;
+					this.Entities = entities;
+					return;
 				}
 			}
+		}
+
+		/// <summary>
+		/// <see cref="Entity"/>の親子関係を生成する
+		/// </summary>
+		public void MakeParentRelationship() {
+			var entities = this.Entities;
+			var parentToChild = new Dictionary<Entity, HashSet<Entity>>();
+			var childToParent = new Dictionary<Entity, Entity>();
+
+			Action<Entity> makeParentRelationship = null;
+			makeParentRelationship = e => {
+				var p = e.Parent;
+				if (p != null) {
+					HashSet<Entity> children;
+					if (!parentToChild.TryGetValue(p, out children)) {
+						parentToChild[p] = children = new HashSet<Entity>();
+					}
+					children.Add(e);
+					childToParent[e] = p;
+
+					makeParentRelationship(p);
+				}
+			};
+			foreach (var e in entities.Keys) {
+				makeParentRelationship(e);
+			}
+
+			this.ParentToChild = parentToChild;
+			this.ChildToParent = childToParent;
+		}
+
+		/// <summary>
+		/// <see cref="Entity"/>を node 名に変換するテーブルを生成する
+		/// </summary>
+		/// <returns><see cref="Entity"/>をキーとしてノード名を持つ辞書</returns>
+		public Dictionary<Entity, string> MakeEntityToNodeName() {
+			// TODO: 親子関係ツリーから葉を node、それ以外を subgraph とするがその際以下の事を考慮する
+			// TODO: 子 Entity を親 Entity の一部としてマッピングしたい場合もある
+			// TODO: ※可能ならば Db は Tbl を自身の部位として持ちたい
+			// TODO: ※可能ならば Tbl は Col を自身の部位として持ちたい
 		}
 	}
 
@@ -390,7 +461,16 @@ namespace EntityGraph {
 			// 直接関連性を持つものが node となり、その親が subgraph となる
 			var gb = new GraphBuilder(this.FlowBuffer.Flows);
 			var flows = gb.FlowBuffer.Flows;
+
+			// フィルタリングを行い必要とされる抽象度の Entity のみ残す
 			var entities = filter != null ? gb.Filter(filter) : gb.FlowBuffer.GetEntities();
+
+			// Entity の親子関係構築
+			var parentRelationship = gb.MakeParentRelationship();
+
+			// TODO: 親子関係ツリーから葉を node、それ以外を subgraph とする
+			// TODO: 子 Entity を node の一部に関連付ける場合も考慮する
+
 			var definedEntities = new HashSet<Entity>();
 
 			// Entity からノード名への変換テーブル作成
@@ -428,25 +508,6 @@ namespace EntityGraph {
 					break;
 				}
 			};
-
-			// 親子関係構築
-			var parentRelationship = new Dictionary<Entity, HashSet<Entity>>();
-			Action<Entity> makeParentRelationship = null;
-			makeParentRelationship = e => {
-				var p = e.Parent;
-				if (p != null) {
-					HashSet<Entity> children;
-					if (!parentRelationship.TryGetValue(p, out children)) {
-						parentRelationship[p] = children = new HashSet<Entity>();
-					}
-					children.Add(e);
-
-					makeParentRelationship(p);
-				}
-			};
-			foreach (var e in entities.Keys) {
-				makeParentRelationship(e);
-			}
 
 			// subgraph を生成
 			Action<Entity> subgraph = null;
@@ -579,6 +640,7 @@ namespace EntityGraph {
 
 	public class Tbl : Entity {
 		public Tbl() : base("Table") {
+			this.DotShape = "house";
 		}
 	}
 
