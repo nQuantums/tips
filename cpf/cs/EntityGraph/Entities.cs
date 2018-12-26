@@ -47,17 +47,17 @@ namespace EntityGraph {
 		/// <summary>
 		/// ノードとしてグラフ描画される際の形状名
 		/// </summary>
-		public string DotShape;
+		public string InitialShape;
 
 		/// <summary>
 		/// 形状描画の色
 		/// </summary>
-		public string DotColor;
+		public string InitialColor;
 
 		/// <summary>
 		/// フォント描画の色
 		/// </summary>
-		public string DotFontColor;
+		public string InitialFontColor;
 
 		/// <summary>
 		/// ルート<see cref="Entity"/>なら true になる
@@ -65,28 +65,6 @@ namespace EntityGraph {
 		public bool IsRoot {
 			get {
 				return this.Parent == null || string.IsNullOrEmpty(this.Name);
-			}
-		}
-
-		/// <summary>
-		/// ノードとしてグラフ描画される際の属性
-		/// </summary>
-		public virtual string DotNodeAttribute {
-			get {
-				var sb = new StringBuilder();
-				sb.Append("[");
-				sb.Append("label=\"" + this.Name + "\"");
-				if (this.DotShape != null) {
-					sb.Append(" shape=" + this.DotShape + "");
-				}
-				if (this.DotColor != null) {
-					sb.Append(" color=\"" + this.DotColor + "\"");
-				}
-				if (this.DotFontColor != null) {
-					sb.Append(" fontcolor=\"" + this.DotFontColor + "\"");
-				}
-				sb.Append("]");
-				return sb.ToString();
 			}
 		}
 
@@ -149,6 +127,156 @@ namespace EntityGraph {
 				foreach (var e2 in e.GetChildAndDescendants()) {
 					yield return e;
 				}
+			}
+		}
+
+		/// <summary>
+		/// グラフ化作業途中の作業バッファを取得する
+		/// </summary>
+		public WorkBuffer GetWorkBuffer(GraphBuilder gb, bool createIfNotExists = true) {
+			var workBuffers = gb.WorkBuffers;
+			WorkBuffer wb;
+			if (!workBuffers.TryGetValue(this, out wb) && createIfNotExists) {
+				workBuffers[this] = wb = new WorkBuffer(workBuffers.Count);
+			}
+			return wb;
+		}
+
+		/// <summary>
+		/// Graphviz 属性内の label 値の取得
+		/// </summary>
+		public virtual string GetGraphvizLabel(GraphBuilder gb) {
+			return this.Name;
+		}
+
+		/// <summary>
+		/// Graphviz ノード属性内の shape 値の取得
+		/// </summary>
+		public virtual string GetGraphvizNodeShape(GraphBuilder gb) {
+			return this.InitialShape;
+		}
+
+		/// <summary>
+		/// Graphviz 属性内の color 値の取得
+		/// </summary>
+		public virtual string GetGraphvizColor(GraphBuilder gb) {
+			return this.InitialColor;
+		}
+
+		/// <summary>
+		/// Graphviz 属性内の fontcolor 値の取得
+		/// </summary>
+		public virtual string GetGraphvizFontColor(GraphBuilder gb) {
+			return this.InitialFontColor;
+		}
+
+		/// <summary>
+		/// Graphviz node 属性の取得
+		/// </summary>
+		public virtual string GetGraphvizNodeAttribute(GraphBuilder gb) {
+			var sb = new StringBuilder();
+			sb.Append("[");
+			sb.Append("label=\"" + this.GetGraphvizLabel(gb) + "\"");
+			if (this.InitialShape != null) {
+				sb.Append(" shape=" + this.GetGraphvizNodeShape(gb) + "");
+			}
+			if (this.InitialColor != null) {
+				sb.Append(" color=\"" + this.GetGraphvizColor(gb) + "\"");
+			}
+			if (this.InitialFontColor != null) {
+				sb.Append(" fontcolor=\"" + this.GetGraphvizFontColor(gb) + "\"");
+			}
+			sb.Append("]");
+			return sb.ToString();
+		}
+
+		/// <summary>
+		/// 指定の子<see cref="Entity"/>が自身の形状の一部とできるか判定する
+		/// </summary>
+		/// <param name="child">子<see cref="Entity"/></param>
+		/// <returns>port にできるなら true</returns>
+		public virtual bool IsPortable(Entity child) {
+			return false;
+		}
+
+		/// <summary>
+		/// 可能ならば子<see cref="Entity"/>を自形状の port にする
+		/// </summary>
+		/// <param name="gb">Graphviz グラフ構築用オブジェクト</param>
+		/// <returns>port になった子<see cref="Entity"/>一覧、または null</returns>
+		public Dictionary<Entity, string> MakePorts(GraphBuilder gb) {
+			var wb = GetWorkBuffer(gb);
+			var children = wb.Children;
+			if (children != null) {
+				if (children.Count == children.Where(c => IsPortable(c)).Count()) {
+					var ports = new Dictionary<Entity, string>();
+					foreach (var c in children) {
+						var portName = ports.Count.ToString();
+						ports.Add(c, portName);
+						c.GetWorkBuffer(gb).PortName = portName;
+					}
+					return wb.Ports = ports;
+				}
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// 自分と子<see cref="Entity"/>に Graphviz 名を付与する
+		/// </summary>
+		/// <param name="gb">Graphviz グラフ構築用オブジェクト</param>
+		/// <param name="parentGraphvizName">親<see cref="Entiy"/>の Graphviz 名</param>
+		public void AssignGraphvizName(GraphBuilder gb, string parentGraphvizName) {
+			var wb = GetWorkBuffer(gb);
+			var portName = wb.PortName;
+			var children = wb.Children;
+
+			string name;
+			if (portName != null) {
+				name = parentGraphvizName + ":" + portName;
+			} else if (children == null) {
+				name = "node" + wb.Id;
+			} else {
+				name = "cluster" + wb.Id;
+			}
+			wb.GraphvizName = name;
+
+			if (children != null) {
+				foreach (var c in children) {
+					c.AssignGraphvizName(gb, name);
+				}
+			}
+		}
+
+		/// <summary>
+		/// 自分と子<see cref="Entity"/>の Graphviz 定義を取得する
+		/// </summary>
+		/// <param name="gb">Graphviz グラフ構築用オブジェクト</param>
+		/// <param name="sb">定義書き込み先</param>
+		public virtual void GraphvizDefinition(GraphBuilder gb, StringBuilder sb) {
+			var wb = GetWorkBuffer(gb);
+			if (wb.PortName != null) {
+				return; // 親形状の一部となっているため自身の定義は存在しない
+			}
+
+			var name = wb.GraphvizName;
+			var isSubgraph = false;
+			if (name.StartsWith("node")) {
+				sb.AppendLine(name + GetGraphvizNodeAttribute(gb));
+			} else {
+				sb.AppendLine("subgraph " + name + "{");
+				isSubgraph = true;
+			}
+
+			var children = wb.Children;
+			if (children != null) {
+				foreach (var c in children) {
+					GraphvizDefinition(gb, sb);
+				}
+			}
+
+			if (isSubgraph) {
+				sb.AppendLine("}");
 			}
 		}
 	}
@@ -311,6 +439,45 @@ namespace EntityGraph {
 	}
 
 	/// <summary>
+	/// <see cref="Entity"/>のグラフ化作業時に使用されるバッファ
+	/// </summary>
+	public class WorkBuffer {
+		/// <summary>
+		/// 属性ID
+		/// </summary>
+		public int Id;
+
+		/// <summary>
+		/// Graphviz での要素名
+		/// </summary>
+		public string GraphvizName;
+
+		/// <summary>
+		/// 親<see cref="Entity"/>形状の port とされたらポート名が設定される
+		/// </summary>
+		public string PortName;
+
+		/// <summary>
+		/// 自形状の port とする<see cref="Entity"/>一覧
+		/// </summary>
+		public Dictionary<Entity, string> Ports;
+
+		/// <summary>
+		/// 関連する<see cref="Flow"/>一覧
+		/// </summary>
+		public HashSet<Flow> Flows;
+
+		/// <summary>
+		/// 子<see cref="Entity"/>一覧
+		/// </summary>
+		public HashSet<Entity> Children;
+
+		public WorkBuffer(int id) {
+			this.Id = id;
+		}
+	}
+
+	/// <summary>
 	/// グラフ構築用
 	/// </summary>
 	public class GraphBuilder {
@@ -320,14 +487,9 @@ namespace EntityGraph {
 		public FlowBuffer FlowBuffer;
 
 		/// <summary>
-		/// <see cref="Entity"/>をキーとした関連する<see cref="Flow"/>一覧
+		/// <see cref="Entity"/>をグラフ化する際に使用される作業用属性
 		/// </summary>
-		public Dictionary<Entity, HashSet<Flow>> Entities;
-
-		/// <summary>
-		/// 親<see cref="Entity"/>をキーとした子<see cref="Entity"/>一覧
-		/// </summary>
-		public Dictionary<Entity, HashSet<Entity>> ParentToChild;
+		public Dictionary<Entity, WorkBuffer> WorkBuffers;
 
 		/// <summary>
 		/// 子<see cref="Entity"/>をキーとした親<see cref="Entity"/>
@@ -335,10 +497,15 @@ namespace EntityGraph {
 		public Dictionary<Entity, Entity> ChildToParent;
 
 		/// <summary>
-		/// <see cref="Entity"/>から Graphviz の node 名への変換テーブル
+		/// <see cref="GenerateDefinition"/>にて定義済みの<see cref="Entity"/>一覧
 		/// </summary>
-		public Dictionary<Entity, string> EntityToNodeName;
+		public HashSet<Entity> DefinedEntities = new HashSet<Entity>();
 
+
+		/// <summary>
+		/// コンストラクタ、<see cref="Entity"/>間の関連を指定して初期化する
+		/// </summary>
+		/// <param name="flowsToAdd"><see cref="Entity"/>間の関連</param>
 		public GraphBuilder(Dictionary<Flow, FlowAtr> flowsToAdd) {
 			this.FlowBuffer = new FlowBuffer(flowsToAdd);
 		}
@@ -362,7 +529,9 @@ namespace EntityGraph {
 					}
 
 					// フィルタリングにてフラグをセットする
-					filter(e);
+					if (filter != null) {
+						filter(e);
+					}
 					e.Flags |= EntityFlags.IsFiltered;
 					filtered = true;
 
@@ -383,7 +552,10 @@ namespace EntityGraph {
 					}
 				}
 				if (!filtered) {
-					this.Entities = entities;
+					var attributes = this.WorkBuffers;
+					foreach (var kvp in entities) {
+						kvp.Key.GetWorkBuffer(this);
+					}
 					return;
 				}
 			}
@@ -392,30 +564,28 @@ namespace EntityGraph {
 		/// <summary>
 		/// <see cref="Entity"/>の親子関係を生成する
 		/// </summary>
-		public void MakeParentRelationship() {
-			var entities = this.Entities;
-			var parentToChild = new Dictionary<Entity, HashSet<Entity>>();
+		public void SetParentRelationship() {
 			var childToParent = new Dictionary<Entity, Entity>();
 
 			Action<Entity> makeParentRelationship = null;
-			makeParentRelationship = e => {
-				var p = e.Parent;
-				if (p != null) {
-					HashSet<Entity> children;
-					if (!parentToChild.TryGetValue(p, out children)) {
-						parentToChild[p] = children = new HashSet<Entity>();
+			makeParentRelationship = child => {
+				var parent = child.Parent;
+				if (parent != null) {
+					var wb = parent.GetWorkBuffer(this);
+					var children = wb.Children;
+					if (children == null) {
+						wb.Children = new HashSet<Entity>();
 					}
-					children.Add(e);
-					childToParent[e] = p;
+					children.Add(child);
+					childToParent[child] = parent;
 
-					makeParentRelationship(p);
+					makeParentRelationship(parent);
 				}
 			};
-			foreach (var e in entities.Keys) {
+			foreach (var e in this.WorkBuffers.Keys) {
 				makeParentRelationship(e);
 			}
 
-			this.ParentToChild = parentToChild;
 			this.ChildToParent = childToParent;
 		}
 
@@ -423,11 +593,20 @@ namespace EntityGraph {
 		/// <see cref="Entity"/>を node 名に変換するテーブルを生成する
 		/// </summary>
 		/// <returns><see cref="Entity"/>をキーとしてノード名を持つ辞書</returns>
-		public Dictionary<Entity, string> MakeEntityToNodeName() {
-			// TODO: 親子関係ツリーから葉を node、それ以外を subgraph とするがその際以下の事を考慮する
-			// TODO: 子 Entity を親 Entity の一部としてマッピングしたい場合もある
-			// TODO: ※可能ならば Db は Tbl を自身の部位として持ちたい
-			// TODO: ※可能ならば Tbl は Col を自身の部位として持ちたい
+		public void SetGraphvizName() {
+			foreach (var e in this.WorkBuffers.Keys) {
+				if (e.IsRoot) {
+					e.AssignGraphvizName(this, null);
+				}
+			}
+		}
+
+		public void GenerateDefinition(StringBuilder sb) {
+			foreach (var e in this.WorkBuffers.Keys) {
+				if (e.IsRoot) {
+					e.GraphvizDefinition(this, sb);
+				}
+			}
 		}
 	}
 
@@ -460,13 +639,22 @@ namespace EntityGraph {
 			// 必要に応じてフィルタリングを行い、関連性を持つ Entity 一覧を取得する
 			// 直接関連性を持つものが node となり、その親が subgraph となる
 			var gb = new GraphBuilder(this.FlowBuffer.Flows);
+
+			if (filter != null) {
+				gb.Filter(filter);
+			}
+			gb.SetParentRelationship();
+			gb.SetGraphvizName();
+
+
+
 			var flows = gb.FlowBuffer.Flows;
 
 			// フィルタリングを行い必要とされる抽象度の Entity のみ残す
 			var entities = filter != null ? gb.Filter(filter) : gb.FlowBuffer.GetEntities();
 
 			// Entity の親子関係構築
-			var parentRelationship = gb.MakeParentRelationship();
+			var parentRelationship = gb.SetParentRelationship();
 
 			// TODO: 親子関係ツリーから葉を node、それ以外を subgraph とする
 			// TODO: 子 Entity を node の一部に関連付ける場合も考慮する
@@ -591,7 +779,7 @@ namespace EntityGraph {
 
 	public class Man : Entity {
 		public Man() : base("人") {
-			this.DotShape = "star";
+			this.InitialShape = "star";
 		}
 	}
 
@@ -600,9 +788,9 @@ namespace EntityGraph {
 
 		public WebSite(string url) : base("WebSite") {
 			this.Url = url;
-			this.DotShape = "egg";
-			this.DotColor = "#40b9e5";
-			this.DotFontColor = "#40b9e5";
+			this.InitialShape = "egg";
+			this.InitialColor = "#40b9e5";
+			this.InitialFontColor = "#40b9e5";
 		}
 	}
 
@@ -613,17 +801,17 @@ namespace EntityGraph {
 
 	public class App : Entity {
 		public App() : base("App") {
-			this.DotShape = "doubleoctagon";
-			this.DotColor = "#ff7040";
-			this.DotFontColor = "#ff7040";
+			this.InitialShape = "doubleoctagon";
+			this.InitialColor = "#ff7040";
+			this.InitialFontColor = "#ff7040";
 		}
 	}
 
 	public class Data : Entity {
 		public Data(string kindName, string entityName = null) : base(kindName, entityName) {
-			this.DotShape = "note";
-			this.DotColor = "#10a559";
-			this.DotFontColor = "#10a559";
+			this.InitialShape = "note";
+			this.InitialColor = "#10a559";
+			this.InitialFontColor = "#10a559";
 		}
 	}
 
@@ -634,13 +822,66 @@ namespace EntityGraph {
 
 	public class Db : Data {
 		public Db() : base("DataBase") {
-			this.DotShape = "box3d";
+			this.InitialShape = "box3d";
+		}
+
+		public override string DotNodeLabel {
+			get {
+				var ports = this.Attribute != null ? this.Attribute.Ports : null;
+				if (ports != null) {
+					var sb = new StringBuilder();
+					sb.Append(@"<<table border=""0"" cellborder=""1"" cellspacing=""5"">");
+					sb.Append(@"<tr><td><b><i>" + this.Name + "</i></b></td></tr>");
+					for (int i = 0; i < ports.Count; i++) {
+						sb.Append(@"<tr><td port=""" + i + @""">" + ports[i].Name + @"</td></tr>");
+					}
+					sb.Append("</table>>");
+					return sb.ToString();
+				} else {
+					return base.DotNodeLabel;
+				}
+			}
+		}
+
+		public override void AssignEntityToNodeName(Dictionary<Entity, HashSet<Entity>> parentToChild, Dictionary<Entity, string> entityToNodeName) {
+			var nodeName = entityToNodeName[this] = "node" + entityToNodeName.Count;
+
+			var children = parentToChild[this];
+			var tableCount = children.Where(c => c is Tbl).Count();
+			if (tableCount == children.Count) {
+				var atr = this.Attribute = new WorkBuffer();
+				atr.Ports = new List<Entity>();
+				foreach (var c in children) {
+					entityToNodeName[c] = nodeName + ":" + atr.Ports.Count;
+					atr.Ports.Add(c);
+				}
+			} else {
+				base.AssignEntityToNodeName(parentToChild, entityToNodeName);
+			}
 		}
 	}
 
 	public class Tbl : Entity {
+		public override string DotNodeLabel {
+			get {
+				var ports = this.Attribute != null ? this.Attribute.Ports : null;
+				if (ports != null) {
+					var sb = new StringBuilder();
+					sb.Append(@"<<table border=""0"" cellborder=""1"" cellspacing=""5"">");
+					sb.Append(@"<tr><td><b><i>" + this.Name + "</i></b></td></tr>");
+					for (int i = 0; i < ports.Count; i++) {
+						sb.Append(@"<tr><td port=""" + i + @""">" + ports[i].Name + @"</td></tr>");
+					}
+					sb.Append("</table>>");
+					return sb.ToString();
+				} else {
+					return base.DotNodeLabel;
+				}
+			}
+		}
+
 		public Tbl() : base("Table") {
-			this.DotShape = "house";
+			this.InitialShape = "house";
 		}
 	}
 
