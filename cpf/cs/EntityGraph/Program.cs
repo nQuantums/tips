@@ -7,7 +7,7 @@ using System.Text;
 namespace EntityGraph {
 	class Program {
 		public class HSC : PC {
-			public Db hvn_db;
+			public hvn_db hvn_db;
 			public App JVNGetter;
 			public App NVDGetter;
 			public App WSUSGetter;
@@ -27,6 +27,11 @@ namespace EntityGraph {
 			public Csv VendorPatchesModified;
 			public Csv VendorPatchesNew;
 			public Zip hvn_db_zip;
+		}
+
+		public class hvn_db : Db {
+			public Tbl test1;
+			public Tbl test2;
 		}
 
 		public class PCloud : PC {
@@ -91,7 +96,7 @@ namespace EntityGraph {
 			hscTask.Flow(web.wsusscn2, hsc.OfficePatchUpdater, hvn_db);
 			hscTask.Flow(web.wsusscn2, hsc.WinPatchUpdater, hvn_db);
 
-			hscTask.Flow(hvn_db, hsc.HvnDbCheck);
+			hscTask.Flow(hvn_db.test1, hsc.HvnDbCheck);
 
 			hscTask.Flow(hvn_db, hsc.VendorPatchGet, hsc.VendorPatches, hsc.VendorPatchReport);
 			hscTask.Flow(hsc.VendorPatchReport, hsc.VendorPatchesNew);

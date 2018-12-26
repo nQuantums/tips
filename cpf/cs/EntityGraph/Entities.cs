@@ -146,7 +146,20 @@ namespace EntityGraph {
 		/// Graphviz 属性内の label 値の取得
 		/// </summary>
 		public virtual string GetGraphvizLabel(GraphBuilder gb) {
-			return this.Name;
+			var wb = GetWorkBuffer(gb);
+			var ports = wb.Ports;
+			if (ports != null) {
+				var sb = new StringBuilder();
+				sb.Append(@"<<table border=""0"" cellborder=""1"" cellspacing=""5"">");
+				sb.Append(@"<tr><td><b><i>" + this.Name + "</i></b></td></tr>");
+				foreach (var kvp in ports) {
+					sb.Append(@"<tr><td port=""" + kvp.Value + @""">" + kvp.Key.Name + @"</td></tr>");
+				}
+				sb.Append("</table>>");
+				return sb.ToString();
+			} else {
+				return '"' + this.Name + '"';
+			}
 		}
 
 		/// <summary>
@@ -176,7 +189,7 @@ namespace EntityGraph {
 		public virtual string GetGraphvizNodeAttribute(GraphBuilder gb) {
 			var sb = new StringBuilder();
 			sb.Append("[");
-			sb.Append("label=\"" + this.GetGraphvizLabel(gb) + "\"");
+			sb.Append("label=" + this.GetGraphvizLabel(gb));
 			if (this.InitialShape != null) {
 				sb.Append(" shape=" + this.GetGraphvizNodeShape(gb) + "");
 			}
@@ -254,6 +267,8 @@ namespace EntityGraph {
 		/// <param name="gb">Graphviz グラフ構築用オブジェクト</param>
 		/// <param name="sb">定義書き込み先</param>
 		public virtual void GraphvizDefinition(GraphBuilder gb, StringBuilder sb) {
+			gb.DefinedEntities.Add(this);
+
 			var wb = GetWorkBuffer(gb);
 			if (wb.PortName != null) {
 				return; // 親形状の一部となっているため自身の定義は存在しない
@@ -265,17 +280,25 @@ namespace EntityGraph {
 				sb.AppendLine(name + GetGraphvizNodeAttribute(gb));
 			} else {
 				sb.AppendLine("subgraph " + name + "{");
+				sb.AppendLine("label=\"" + this.Name + "\";");
 				isSubgraph = true;
 			}
 
 			var children = wb.Children;
 			if (children != null) {
 				foreach (var c in children) {
-					GraphvizDefinition(gb, sb);
+					c.GraphvizDefinition(gb, sb);
 				}
 			}
 
 			if (isSubgraph) {
+				var definedFlows = gb.DefinedFlows;
+				foreach (var kvp in gb.FlowBuffer.Flows) {
+					if (kvp.Key.IsContainedBy(children)) {
+						kvp.Value.GraphvizDefinition(gb, sb);
+					}
+				}
+
 				sb.AppendLine("}");
 			}
 		}
@@ -302,6 +325,10 @@ namespace EntityGraph {
 
 		public bool IsSameDir(Flow relation) {
 			return this.E1 == relation.E1 && this.E2 == relation.E2;
+		}
+
+		public bool IsContainedBy(HashSet<Entity> entities) {
+			return entities.Contains(this.E1) && entities.Contains(this.E2);
 		}
 
 		public Entity GetPair(Entity entity) {
@@ -374,6 +401,26 @@ namespace EntityGraph {
 
 		public FlowAtr(Flow relation) {
 			this.Flow = relation;
+		}
+
+		public void GraphvizDefinition(GraphBuilder gb, StringBuilder sb) {
+			var flow = this.Flow;
+			gb.DefinedFlows.Add(flow);
+
+			var n1 = flow.E1.GetWorkBuffer(gb).GraphvizName;
+			var n2 = flow.E2.GetWorkBuffer(gb).GraphvizName;
+			switch (this.Direction) {
+			case FlowDirection.Forward:
+				sb.AppendLine(n1 + " -> " + n2 + ";");
+				break;
+			case FlowDirection.Backward:
+				sb.AppendLine(n2 + " -> " + n1 + ";");
+				break;
+			case FlowDirection.Both:
+				sb.AppendLine(n1 + " -> " + n2 + ";");
+				sb.AppendLine(n2 + " -> " + n1 + ";");
+				break;
+			}
 		}
 	}
 
@@ -489,7 +536,7 @@ namespace EntityGraph {
 		/// <summary>
 		/// <see cref="Entity"/>をグラフ化する際に使用される作業用属性
 		/// </summary>
-		public Dictionary<Entity, WorkBuffer> WorkBuffers;
+		public Dictionary<Entity, WorkBuffer> WorkBuffers = new Dictionary<Entity, WorkBuffer>();
 
 		/// <summary>
 		/// 子<see cref="Entity"/>をキーとした親<see cref="Entity"/>
@@ -500,6 +547,11 @@ namespace EntityGraph {
 		/// <see cref="GenerateDefinition"/>にて定義済みの<see cref="Entity"/>一覧
 		/// </summary>
 		public HashSet<Entity> DefinedEntities = new HashSet<Entity>();
+
+		/// <summary>
+		/// <see cref="GenerateDefinition"/>にて定義済みの<see cref="Flow"/>一覧
+		/// </summary>
+		public HashSet<Flow> DefinedFlows = new HashSet<Flow>();
 
 
 		/// <summary>
@@ -574,7 +626,7 @@ namespace EntityGraph {
 					var wb = parent.GetWorkBuffer(this);
 					var children = wb.Children;
 					if (children == null) {
-						wb.Children = new HashSet<Entity>();
+						wb.Children = children = new HashSet<Entity>();
 					}
 					children.Add(child);
 					childToParent[child] = parent;
@@ -582,7 +634,7 @@ namespace EntityGraph {
 					makeParentRelationship(parent);
 				}
 			};
-			foreach (var e in this.WorkBuffers.Keys) {
+			foreach (var e in this.WorkBuffers.Keys.ToArray()) {
 				makeParentRelationship(e);
 			}
 
@@ -592,7 +644,6 @@ namespace EntityGraph {
 		/// <summary>
 		/// <see cref="Entity"/>を node 名に変換するテーブルを生成する
 		/// </summary>
-		/// <returns><see cref="Entity"/>をキーとしてノード名を持つ辞書</returns>
 		public void SetGraphvizName() {
 			foreach (var e in this.WorkBuffers.Keys) {
 				if (e.IsRoot) {
@@ -636,119 +687,15 @@ namespace EntityGraph {
 	edge [fontsize=11 color=gray50 fontcolor=gray50];
 ");
 
-			// 必要に応じてフィルタリングを行い、関連性を持つ Entity 一覧を取得する
-			// 直接関連性を持つものが node となり、その親が subgraph となる
 			var gb = new GraphBuilder(this.FlowBuffer.Flows);
-
-			if (filter != null) {
-				gb.Filter(filter);
-			}
+			gb.Filter(filter);
 			gb.SetParentRelationship();
 			gb.SetGraphvizName();
+			gb.GenerateDefinition(sb);
 
-
-
-			var flows = gb.FlowBuffer.Flows;
-
-			// フィルタリングを行い必要とされる抽象度の Entity のみ残す
-			var entities = filter != null ? gb.Filter(filter) : gb.FlowBuffer.GetEntities();
-
-			// Entity の親子関係構築
-			var parentRelationship = gb.SetParentRelationship();
-
-			// TODO: 親子関係ツリーから葉を node、それ以外を subgraph とする
-			// TODO: 子 Entity を node の一部に関連付ける場合も考慮する
-
-			var definedEntities = new HashSet<Entity>();
-
-			// Entity からノード名への変換テーブル作成
-			var entityToNode = new Dictionary<Entity, string>();
-			foreach (var e in entities.Keys) {
-				string node;
-				if (!entityToNode.TryGetValue(e, out node)) {
-					entityToNode[e] = "node" + (entityToNode.Count + 1);
-				}
-			}
-
-			// ノード定義処理
-			Action<Entity> defineNode = e => {
-				sb.AppendLine(entityToNode[e] + " " + e.DotNodeAttribute + ";");
-				definedEntities.Add(e);
-			};
-
-			// ノード間の関連を出力する処理
-			Action<KeyValuePair<Flow, FlowAtr>> writeFlow = kvp => {
-				var flow = kvp.Key;
-				var atr = kvp.Value;
-				var n1 = entityToNode[flow.E1];
-				var n2 = entityToNode[flow.E2];
-
-				switch (atr.Direction) {
-				case FlowDirection.Forward:
-					sb.AppendLine(n1 + " -> " + n2 + ";");
-					break;
-				case FlowDirection.Backward:
-					sb.AppendLine(n2 + " -> " + n1 + ";");
-					break;
-				case FlowDirection.Both:
-					sb.AppendLine(n1 + " -> " + n2 + ";");
-					sb.AppendLine(n2 + " -> " + n1 + ";");
-					break;
-				}
-			};
-
-			// subgraph を生成
-			Action<Entity> subgraph = null;
-			var subgraphCount = 0;
-			subgraph = e => {
-				HashSet<Entity> children;
-				if (parentRelationship.TryGetValue(e, out children)) {
-					var isRoot = e.IsRoot;
-					if (!isRoot) {
-						sb.AppendLine("subgraph cluster" + subgraphCount + "{");
-						sb.AppendLine("label=\"" + e.Name + "\";");
-						subgraphCount++;
-					}
-
-					foreach (var c in children) {
-						if (entityToNode.ContainsKey(c)) {
-							// ノードになる Entity ならノードとして定義する
-							defineNode(c);
-						} else {
-							// 上記以外はサブグラフとなる
-							subgraph(c);
-						}
-					}
-
-					// サブグラフ内で完結する関連を書き出す
-					foreach (var kvp in flows.Where(f => children.Contains(f.Key.E1) && children.Contains(f.Key.E2)).ToArray()) {
-						writeFlow(kvp);
-						flows.Remove(kvp.Key);
-					}
-
-					if (!isRoot) {
-						sb.AppendLine("}");
-					}
-				}
-			};
-
-			// ルートとなる Entity を探し出して書き出す
-			foreach (var e in parentRelationship.Keys) {
-				if (e.IsRoot) {
-					subgraph(e);
-				}
-			}
-
-			// まだ定義されていないノードを定義
-			foreach (var e in entityToNode.Keys) {
-				if (!definedEntities.Contains(e)) {
-					defineNode(e);
-				}
-			}
-
-			// 残ったノード間の関連生成
-			foreach (var kvp in flows) {
-				writeFlow(kvp);
+			var definedFlows = gb.DefinedFlows;
+			foreach (var kvp in gb.FlowBuffer.Flows.Where(kvp => !definedFlows.Contains(kvp.Key)).ToList()) {
+				kvp.Value.GraphvizDefinition(gb, sb);
 			}
 
 			sb.AppendLine("}");
@@ -825,63 +772,18 @@ namespace EntityGraph {
 			this.InitialShape = "box3d";
 		}
 
-		public override string DotNodeLabel {
-			get {
-				var ports = this.Attribute != null ? this.Attribute.Ports : null;
-				if (ports != null) {
-					var sb = new StringBuilder();
-					sb.Append(@"<<table border=""0"" cellborder=""1"" cellspacing=""5"">");
-					sb.Append(@"<tr><td><b><i>" + this.Name + "</i></b></td></tr>");
-					for (int i = 0; i < ports.Count; i++) {
-						sb.Append(@"<tr><td port=""" + i + @""">" + ports[i].Name + @"</td></tr>");
-					}
-					sb.Append("</table>>");
-					return sb.ToString();
-				} else {
-					return base.DotNodeLabel;
-				}
-			}
-		}
-
-		public override void AssignEntityToNodeName(Dictionary<Entity, HashSet<Entity>> parentToChild, Dictionary<Entity, string> entityToNodeName) {
-			var nodeName = entityToNodeName[this] = "node" + entityToNodeName.Count;
-
-			var children = parentToChild[this];
-			var tableCount = children.Where(c => c is Tbl).Count();
-			if (tableCount == children.Count) {
-				var atr = this.Attribute = new WorkBuffer();
-				atr.Ports = new List<Entity>();
-				foreach (var c in children) {
-					entityToNodeName[c] = nodeName + ":" + atr.Ports.Count;
-					atr.Ports.Add(c);
-				}
-			} else {
-				base.AssignEntityToNodeName(parentToChild, entityToNodeName);
-			}
+		public override bool IsPortable(Entity child) {
+			return child is Tbl;
 		}
 	}
 
 	public class Tbl : Entity {
-		public override string DotNodeLabel {
-			get {
-				var ports = this.Attribute != null ? this.Attribute.Ports : null;
-				if (ports != null) {
-					var sb = new StringBuilder();
-					sb.Append(@"<<table border=""0"" cellborder=""1"" cellspacing=""5"">");
-					sb.Append(@"<tr><td><b><i>" + this.Name + "</i></b></td></tr>");
-					for (int i = 0; i < ports.Count; i++) {
-						sb.Append(@"<tr><td port=""" + i + @""">" + ports[i].Name + @"</td></tr>");
-					}
-					sb.Append("</table>>");
-					return sb.ToString();
-				} else {
-					return base.DotNodeLabel;
-				}
-			}
-		}
-
 		public Tbl() : base("Table") {
 			this.InitialShape = "house";
+		}
+
+		public override bool IsPortable(Entity child) {
+			return child is Col;
 		}
 	}
 
