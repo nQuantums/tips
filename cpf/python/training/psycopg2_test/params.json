@@ -1,0 +1,31 @@
+{
+    "Env": {
+        "state_shape": [10, 84, 84],
+        "action_dim": 9,
+        "name": "MsPacman-v4"
+    },
+
+    "Actor": {
+        "num_actors": 4,
+        "T": 100000000,
+        "num_steps": 3,
+        "epsilon": 0.4,
+        "alpha": 7,
+        "gamma": 0.99,
+        "n_step_transition_batch_size": 5,
+        "Q_network_sync_freq": 100
+    },
+
+    "Learner": {
+        "q_target_sync_freq": 50,
+        "min_replay_mem_size": 1000,
+        "replay_sample_size": 64,
+        "load_saved_state": "model.pt"
+    },
+
+    "Replay_Memory": {
+        "soft_capacity": 15000,
+        "priority_exponent": 0.6,
+        "importance_sampling_exponent": 0.4
+    }
+}
