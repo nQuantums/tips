@@ -1,0 +1,39 @@
+{
+    "db": {
+        "connection_string": "dbname=apexdqn user=postgres"
+    },
+    "env": {
+        "state_shape": [5, 128, 128],
+        "action_dim": 9,
+        "name": "MsPacman-v4"
+    },
+
+    "actor": {
+        "num_actors": 4,
+        "T": 100000000,
+        "num_steps": 3,
+        "epsilon": 0.6,
+        "alpha": 7,
+        "gamma": 0.99,
+        "n_step_transition_batch_size": 16,
+        "Q_network_sync_freq": 100,
+        "wait_shared_memory_clear": true
+    },
+
+    "learner": {
+        "q_target_sync_freq": 50,
+        "min_replay_mem_size": 2000,
+        "replay_sample_size": 32,
+        "load_saved_state": "MsPacman-v4_PReLu_Adamax_HuberLoss_PacManReward2_128x128.pt",
+        "load_saved_state_tmp": "MsPacman-v4_RMSprop_HuberLoss_PacManReward_128x128.pt",
+        "model": "dqn_prelu",
+        "optimizer": "torch.optim.Adamax({})",
+        "optimizer_tmp": "torch.optim.RMSprop({}, lr=0.00025 / 4, weight_decay=0.95, eps=1.5e-7)"
+    },
+
+    "replay_memory": {
+        "soft_capacity": 15000,
+        "priority_exponent": 0.6,
+        "importance_sampling_exponent": 0.4
+    }
+}
