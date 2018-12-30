@@ -8,6 +8,36 @@ using System.Text;
 
 namespace Db {
 	/// <summary>
+	/// 指定値から<see cref="Col{T}"/>型プロパティを抜き出し配列化する
+	/// </summary>
+	/// <typeparam name="T"><see cref="Col{T}"/>プロパティを持つ型</typeparam>
+	public static class ColsGetter<T> {
+		public static readonly Func<T, Col[]> Invoke;
+
+		static ColsGetter() {
+			var type = typeof(T);
+			var input = Expression.Parameter(type);
+			var properties = type.GetProperties();
+			var colProperties = properties.Where(p => p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
+			var arrayType = typeof(Col[]);
+			var variable = Expression.Parameter(arrayType);
+			var expressions = new List<Expression>();
+
+			expressions.Add(Expression.Assign(variable, Expression.New(arrayType.GetConstructor(new Type[] { typeof(int) }), Expression.Constant(colProperties.Length))));
+
+			for (int i = 0; i < colProperties.Length; i++) {
+				var p = colProperties[i];
+				var a = Expression.ArrayAccess(variable, Expression.Constant(i));
+				expressions.Add(Expression.Assign(a, Expression.Property(input, p)));
+			}
+
+			expressions.Add(variable);
+
+			Invoke = Expression.Lambda<Func<T, Col[]>>(Expression.Block(new ParameterExpression[] { variable }, expressions), input).Compile();
+		}
+	}
+
+	/// <summary>
 	/// DB上での型
 	/// </summary>
 	public class DbType {
@@ -96,6 +126,21 @@ namespace Db {
 		public Cr(CrType type, params Col[] cols) {
 			this.Type = type;
 			this.Cols = cols;
+		}
+	}
+
+	public class PrimaryKey : Cr {
+		public PrimaryKey(params Col[] cols) : base(CrType.PrimaryKey, cols) {
+		}
+	}
+
+	public class Index: Cr {
+		public Index(params Col[] cols) : base(CrType.Index, cols) {
+		}
+	}
+
+	public class AutoIncrement : Cr {
+		public AutoIncrement(params Col[] cols) : base(CrType.AutoIncrement, cols) {
 		}
 	}
 
@@ -219,12 +264,12 @@ namespace Db {
 		/// <summary>
 		/// 列一覧
 		/// </summary>
-		public readonly Col[] Cols;
+		public Col[] ColsArray { get; protected set; }
 
 		/// <summary>
 		/// 制約一覧
 		/// </summary>
-		public readonly Cr[] Constraints;
+		public Cr[] Constraints { get; protected set; }
 
 		/// <summary>
 		/// コンストラクタ、テーブル名（またはエイリアス）と列一覧を指定して初期化する
@@ -233,8 +278,18 @@ namespace Db {
 		/// <param name="cols">列一覧</param>
 		public Tbl(string name, params Col[] cols) {
 			this.Name = name;
-			this.Cols = cols.Where(c => c.Constraint == null).ToArray();
+			this.ColsArray = cols.Where(c => c.Constraint == null).ToArray();
 			this.Constraints = cols.Where(c => c.Constraint != null).Select(c => c.Constraint).ToArray();
+		}
+
+		/// <summary>
+		/// コンストラクタ、テーブル名（またはエイリアス）と列一覧を指定して初期化する
+		/// </summary>
+		/// <param name="name">テーブル名またはエイリアス</param>
+		/// <param name="cols">列一覧値</param>
+		public Tbl(string name, object cols) {
+			this.Name = name;
+			SetCols(cols);
 		}
 
 		/// <summary>
@@ -244,12 +299,15 @@ namespace Db {
 		/// <returns>列名</returns>
 		public string this[Col col] {
 			get {
-				var index = Array.IndexOf(this.Cols, col);
+				var index = Array.IndexOf(this.ColsArray, col);
 				if (index < 0) {
 					throw new ApplicationException("テーブルまたはエイリアス " + this.Name + " 内に列 " + col.NameQuoted + " は存在しません。");
 				}
 				return this.Name + "." + col.NameQuoted;
 			}
+		}
+
+		protected virtual void SetCols(object cols) {
 		}
 
 		public override string ToString() {
@@ -261,7 +319,35 @@ namespace Db {
 		}
 
 		public string CreateTableIfNotExists() {
-			return Db.CreateTableIfNotExists(this.Name, this.Cols, this.Constraints);
+			return Db.CreateTableIfNotExists(this.Name, this.ColsArray, this.Constraints);
+		}
+	}
+
+	/// <summary>
+	/// テーブル又はエイリアスを指すクラス
+	/// </summary>
+	public class Tbl<T> : Tbl where T : new() {
+		/// <summary>
+		/// 列一覧を含む値
+		/// </summary>
+		public T Cols { get; protected set; }
+
+		/// <summary>
+		/// コンストラクタ、テーブル名（またはエイリアス）と列一覧を指定して初期化する
+		/// </summary>
+		/// <param name="name">テーブル名またはエイリアス</param>
+		/// <param name="constraintCreators">制約作成デリゲート一覧</param>
+		public Tbl(string name, params Func<T, Cr>[] constraintCreators) : base(name, new T()) {
+			this.Constraints = constraintCreators.Select(c => c(this.Cols)).ToArray();
+		}
+
+		protected override void SetCols(object cols) {
+			this.Cols = (T)cols;
+			this.ColsArray = ColsGetter<T>.Invoke(this.Cols);
+		}
+
+		public static implicit operator string(Tbl<T> value) {
+			return value.Name;
 		}
 	}
 
@@ -293,7 +379,7 @@ namespace Db {
 				if (sb.Length != 0) {
 					sb.Append(", ");
 				}
-				sb.Append(string.Join(", ", t.Cols.Select(c => t.Name + "." + c.Name)));
+				sb.Append(string.Join(", ", t.ColsArray.Select(c => t.Name + "." + c.Name)));
 			}
 			return sb.ToString();
 		}
@@ -438,7 +524,7 @@ namespace Db {
 				if (i != 0) {
 					sb.Append(", ");
 				}
-				sb.Append(string.Join(", ", t.Cols.Select(c => t.Name + "." + c.Name)));
+				sb.Append(string.Join(", ", t.ColsArray.Select(c => t.Name + "." + c.Name)));
 			}
 			return sb.ToString();
 		}
