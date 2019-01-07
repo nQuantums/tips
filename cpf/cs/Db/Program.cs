@@ -8,15 +8,15 @@ namespace Db {
 			public static readonly Col<DateTime> birth_day = new Col<DateTime>("birth_day");
 		}
 
-		public class Employee {
-			public Col<int> id = Cols.id;
-			public Col<string> name = Cols.name;
-			public Col<DateTime> birth_day = Cols.birth_day;
-		}
-
 		static class Tbls {
+			public class Employee {
+				public Col<int> id = Cols.id;
+				public Col<string> name = Cols.name;
+				public Col<DateTime> birth_day = Cols.birth_day;
+			}
+
 			public static readonly Tbl<Employee> employee = new Tbl<Employee>(
-				"ver",
+				"employee",
 				c => new PrimaryKey(c.id),
 				c => new Index(c.name)
 			);
@@ -26,6 +26,12 @@ namespace Db {
 			Console.WriteLine(DateTime.MinValue);
 			Console.WriteLine(DateTime.MaxValue);
 			Console.WriteLine($"id={Tbls.employee.Cols.id}");
+
+			var a = Tbls.employee.Alias("e");
+
+			Console.WriteLine(a.CreateTableIfNotExists());
+
+
 			//Console.WriteLine(tbl.GetType());
 			//var tbl = Tbl.Def(
 			//	"table1",
