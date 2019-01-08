@@ -152,6 +152,15 @@ namespace Db {
 		/// </summary>
 		public string NameQuoted {
 			get {
+				return '`' + this.Name + '`';
+			}
+		}
+
+		/// <summary>
+		/// ` で括られたエイリアス名も含む列名の取得
+		/// </summary>
+		public string NameQuotedWithAlias {
+			get {
 				if (string.IsNullOrEmpty(this.Alias)) {
 					return '`' + this.Name + '`';
 				} else {
@@ -183,11 +192,11 @@ namespace Db {
 		}
 
 		public static implicit operator string(Col value) {
-			return value.NameQuoted;
+			return value.NameQuotedWithAlias;
 		}
 
 		public override string ToString() {
-			return this.NameQuoted;
+			return this.NameQuotedWithAlias;
 		}
 	}
 
@@ -247,18 +256,11 @@ namespace Db {
 
 
 		public static implicit operator string(Col<T> value) {
-			return value.NameQuoted;
+			return value.NameQuotedWithAlias;
 		}
 
 		public override string ToString() {
-			return this.NameQuoted;
-		}
-
-		/// <summary>
-		/// 指定されたエイリアス内の列を指す文字列を取得する
-		/// </summary>
-		public string At(string table) {
-			return table + "." + this.NameQuoted;
+			return this.NameQuotedWithAlias;
 		}
 	}
 
@@ -401,24 +403,188 @@ namespace Db {
 		}
 	}
 
-	public class Prm {
+	public class Param {
 		public object Value;
 
-		public Prm(object value) {
+		public Param(object value) {
 			this.Value = value;
 		}
 	}
 
-	public class Where {
+	public class SqlBuffer {
+		public readonly Dictionary<Param, string> Params = new Dictionary<Param, string>();
+
+		public string GetPrmName(Param prm) {
+			string paramName;
+			if (!this.Params.TryGetValue(prm, out paramName)) {
+				this.Params[prm] = paramName = "@v" + this.Params.Count;
+			}
+			return paramName;
+		}
+
+		public string ToString(object module) {
+			ISqlModule sm;
+			Param p;
+			if (module == null) {
+				return "NULL";
+			} else if ((sm = module as ISqlModule) != null) {
+				return sm.Build(this);
+			} else if ((p = module as Param) != null) {
+				return GetPrmName(p);
+			} else {
+				return module.ToString();
+			}
+		}
+	}
+
+	public interface ISqlModule {
+		string Build(SqlBuffer sqlBuffer);
+	}
+
+	public class SqlSelect : ISqlModule {
 		public object[] Expressions;
 
-		public Where(object expression, params object[] expressions) {
+		public SqlSelect(object expression, params object[] expressions) {
 			var exprs = new object[expressions.Length + 1];
 			exprs[0] = expression;
 			if (expressions.Length != 0) {
 				Array.Copy(expressions, 0, exprs, 1, expressions.Length);
 			}
 			this.Expressions = exprs;
+		}
+
+		public string Build(SqlBuffer sqlBuffer) {
+			var sb = new StringBuilder();
+
+			sb.Append("SELECT");
+
+			foreach (var e in this.Expressions) {
+				sb.Append(" ");
+				sb.Append(sqlBuffer.ToString(e));
+			}
+
+			return sb.ToString();
+		}
+	}
+
+	public class SqlFrom : ISqlModule {
+		public object Tbl;
+
+		public SqlFrom(object tbl) {
+			this.Tbl = tbl;
+		}
+
+		public string Build(SqlBuffer sqlBuffer) {
+			Tbl tbl;
+			var sb = new StringBuilder();
+
+			sb.Append("FROM ");
+
+			if ((tbl = this.Tbl as Tbl) != null) {
+				var utbl = tbl.UnderlyingTbl;
+				if (tbl.Name != utbl.Name) {
+					sb.Append(utbl.Name);
+					sb.Append(" ");
+					sb.Append(tbl.Name);
+				} else {
+					sb.Append(tbl.Name);
+				}
+			} else {
+				sb.Append(sqlBuffer.ToString(this.Tbl));
+			}
+
+			return sb.ToString();
+		}
+	}
+
+	public class SqlWhere : ISqlModule {
+		public object[] Expressions;
+
+		public SqlWhere(object expression, params object[] expressions) {
+			var exprs = new object[expressions.Length + 1];
+			exprs[0] = expression;
+			if (expressions.Length != 0) {
+				Array.Copy(expressions, 0, exprs, 1, expressions.Length);
+			}
+			this.Expressions = exprs;
+		}
+
+		public string Build(SqlBuffer sqlBuffer) {
+			var sb = new StringBuilder();
+			sb.Append("WHERE");
+			foreach (var e in this.Expressions) {
+				sb.Append(" ");
+				sb.Append(sqlBuffer.ToString(e));
+			}
+			return sb.ToString();
+		}
+	}
+
+	public class SqlInsertInto : ISqlModule {
+		public object Tbl;
+		public object[] Cols;
+
+		public SqlInsertInto(object tbl, params object[] cols) {
+			this.Tbl = tbl;
+			this.Cols = cols;
+		}
+
+		public string Build(SqlBuffer sqlBuffer) {
+			var sb = new StringBuilder();
+			sb.Append("INSERT INTO ");
+			Tbl tbl;
+			if ((tbl = this.Tbl as Tbl) != null) {
+				sb.Append(tbl.UnderlyingTbl.ToString());
+			} else {
+				sb.Append(this.Tbl.ToString());
+			}
+			sb.Append("(");
+			for (int i = 0; i < this.Cols.Length; i++) {
+				if (i != 0) {
+					sb.Append(", ");
+				}
+				var col = this.Cols[i];
+				Col c;
+				if ((c = col as Col) != null) {
+					sb.Append(c.NameQuoted);
+				} else {
+					sb.Append(col.ToString());
+				}
+			}
+			sb.Append(")");
+			return sb.ToString();
+		}
+	}
+
+	public class SqlValues : ISqlModule {
+		public object[][] Values;
+
+		public SqlValues(params object[] value) {
+			this.Values = new object[][] { value };
+		}
+
+		public SqlValues(object[][] values) {
+			this.Values = values;
+		}
+
+		public string Build(SqlBuffer sqlBuffer) {
+			var sb = new StringBuilder();
+			sb.Append("VALUES");
+			for (int i = 0; i < this.Values.Length; i++) {
+				if (i != 0) {
+					sb.Append(", ");
+				}
+				var value = this.Values[i];
+				sb.Append("(");
+				for (int j = 0; j < value.Length; j++) {
+					if (j != 0) {
+						sb.Append(", ");
+					}
+					sb.Append(sqlBuffer.ToString(value[j]));
+				}
+				sb.Append(")");
+			}
+			return sb.ToString();
 		}
 	}
 
@@ -450,54 +616,60 @@ namespace Db {
 			return string.Join("\n", modules) + ";";
 		}
 
-		public static void Sql(MySqlCommand cmd, params object[] modules) {
-			var prms = new Dictionary<Prm, string>();
+		/// <summary>
+		/// 指定のSQL文モジュールからSQL文を生成し<see cref="MySqlCommand"/>に適用するデリゲートを取得する
+		/// </summary>
+		/// <param name="modules">SQL文モジュール</param>
+		/// <returns><see cref="MySqlCommand"/>にSQL文を適用するデリゲート</returns>
+		public static Action<MySqlCommand> Sql(params object[] modules) {
+			var buffer = new SqlBuffer();
 
-			// パラメータを文字列に変換する処理
-			Func<Prm, string> prmToStr = p => {
-				string paramName;
-				if (!prms.TryGetValue(p, out paramName)) {
-					prms[p] = paramName = "@v" + prms.Count;
-				}
-				return paramName;
-			};
-
-			// オブジェクトを文字列に変換する処理
-			Func<object, string> objToStr = null;
-			objToStr = obj => {
-				Where w;
-				Prm p;
-				if (obj == null) {
-					return "NULL";
-				} else if ((w = obj as Where) != null) {
-					var b = new StringBuilder();
-					b.Append("WHERE");
-					foreach (var e in w.Expressions) {
-						b.Append(" ");
-						b.Append(objToStr(e));
-					}
-					return b.ToString();
-				} else if ((p = obj as Prm) != null) {
-					return prmToStr(p);
-				} else {
-					return obj.ToString();
-				}
-			};
-
-			// 各モジュールを文字列に変換してコマンド文字列を生成する
+			// 各モジュールを文字列に変換してSQL分を生成する
 			var sb = new StringBuilder();
 			foreach (var m in modules) {
-				sb.AppendLine(objToStr(m));
+				sb.AppendLine(buffer.ToString(m));
 			}
 			sb.Append(";");
-			cmd.CommandText = sb.ToString();
+			var commandText = sb.ToString();
 
-			// 使用されたパラメータを設定する
-			var parameters = cmd.Parameters;
-			parameters.Clear();
-			foreach (var p in prms) {
-				parameters.AddWithValue(p.Value, p.Key.Value);
-			}
+			// SQLコマンドに内容を適用するデリゲート作成
+			Action<MySqlCommand> applyToCmd = cmd => {
+				// 生成されたSQL分を適用
+				cmd.CommandText = commandText;
+
+				// 使用されたパラメータを設定する
+				var parameters = cmd.Parameters;
+				parameters.Clear();
+				foreach (var p in buffer.Params) {
+					parameters.AddWithValue(p.Value, p.Key.Value);
+				}
+			};
+
+			return applyToCmd;
+		}
+
+		public static SqlSelect Select(object expression, params object[] expressions) {
+			return new SqlSelect(expression, expressions);
+		}
+
+		public static SqlFrom From(object tbl) {
+			return new SqlFrom(tbl);
+		}
+
+		public static SqlWhere Where(object expression, params object[] expressions) {
+			return new SqlWhere(expression, expressions);
+		}
+
+		public static SqlInsertInto InsertInto(object tbl, params object[] cols) {
+			return new SqlInsertInto(tbl, cols);
+		}
+
+		public static SqlValues Values(params object[] value) {
+			return new SqlValues(value);
+		}
+
+		public static SqlValues Values(object[][] values) {
+			return new SqlValues(values);
 		}
 
 
@@ -642,14 +814,6 @@ namespace Db {
 			return sb.ToString();
 		}
 
-		public static string From(Tbl tbl) {
-			return "FROM " + tbl.UnderlyingTbl.Name + " " + tbl.Name;
-		}
-
-		public static string From(string tableName) {
-			return "FROM " + tableName;
-		}
-
 		public static string From(string tableName, string alias) {
 			return "FROM " + tableName + " " + alias;
 		}
@@ -660,10 +824,6 @@ namespace Db {
 
 		public static string JoinUsing(string tableName, string alias, Col col) {
 			return "INNER JOIN " + tableName + " " + alias + " USING(" + col.Name + ")";
-		}
-
-		public static Where Where(object expression, params object[] expressions) {
-			return new Where(expression, expressions);
 		}
 
 		public static string Where(string expression) {
