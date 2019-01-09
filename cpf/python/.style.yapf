@@ -1,7 +1,7 @@
 [style]
 # YAPF uses the chromium style
 based_on_style = chromium
-column_limit = 512
+column_limit = 128
 indent_width = 4
 use_tabs = True
 spaces_before_comment = 1

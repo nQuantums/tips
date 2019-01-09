@@ -5,7 +5,7 @@
 	import matplotlib.pyplot as plt
 	import dnn
 	from dnn import np
-	from dnn import chainer
+	from dnn import optim
 	from dnn import F
 	from dnn import Variable
 
@@ -13,6 +13,7 @@
 	xp = dnn.xp # numpy または cupy
 	itr = 0
 
+	figx, ax = plt.subplots()
 	figx_in_pred, ax_in_pred = plt.subplots()
 
 	def calc_width_height(length):
@@ -22,9 +23,9 @@
 		h = length // w
 		return (h, w)
 
-	def plot(self, ax):
+	def plot(self, batch, ax):
 		def proc(x):
-			img = dnn.to_cpu(x.data[0])
+			img = dnn.to_cpu(x.data[batch])
 			img = img.reshape(calc_width_height(img.size))
 			ax.cla()
 			ax.imshow(img)
@@ -37,7 +38,7 @@
 
 	# モデル構築
 	batch = 1
-	model = dnn.Model(chainer.optimizers.Adam())
+	model = dnn.Model(optim.Adam())
 	with model.module as m:
 		m\
 		.conv2d(1, 1, 3, 1, 1).prelu()\
@@ -45,6 +46,7 @@
 		.conv2d(1, 1, 3, 1, 1).prelu()\
 		.reshape((batch, 1024))\
 		.dense(1024, 512).prelu()\
+		.plot(0, ax_in_pred)\
 		.dense(512, 512).prelu()\
 		.dense(512, 1024).prelu()\
 		.reshape((batch, 1, 32, 32)).prelu()\
@@ -63,10 +65,8 @@
 	# 所定のデバイスメモリに転送
 	model = dnn.to_device(model)
 
-	figx, ax = plt.subplots()
-
 	# とりあえず入力値を単純に10倍にするネットを目標とする
-	for i in range(10000):
+	for i in range(100):
 		model.zero_grad()
 
 		x = Variable(xp.random.uniform(0, 1, (1, 1, 32, 32)).astype(xp.float32))
@@ -87,7 +87,7 @@
 
 		itr += 1
 
-	# 保存時はCPUメモリにしないとだめ
+	# 保存しておく
 	dnn.save('dnn_test.h5', model)
 """
 import os
@@ -99,7 +99,7 @@ from chainer import Chain
 from chainer.link import Link
 from chainer import Optimizer
 from chainer import cuda
-from chainer import optimizers
+from chainer import optimizers as optim
 import cupy as cp
 
 xp = None

@@ -1,8 +1,5 @@
-from collections import deque
 import numpy as np
 import torch
-from transition import NStepTransition
-
 
 class ReplayMemory(object):
 
@@ -17,12 +14,6 @@ class ReplayMemory(object):
 		self.transitions = np.zeros((self.capacity,), dtype=np.object)
 
 	def sample(self, sample_size):
-		"""
-		Returns a batch of experiences sampled from the replay memory based on the sampling probability calculated using
-		the experience priority
-		:param sample_size: Size of the batch to be sampled from the prioritized replay buffer
-		:return: A list of N_Step_Transition objects
-		"""
 		# 有効データ部位取得
 		if self.length < self.capacity:
 			priorities = self.priorities[:self.end]
@@ -36,24 +27,19 @@ class ReplayMemory(object):
 
 		# 取得されたインデックスを元に tensor 作成
 		transitions = transitions[indices]
-		S = torch.tensor([t.S for t in transitions], dtype=torch.float32)
-		A = torch.tensor([t.A for t in transitions], dtype=torch.int64)
-		R = torch.tensor([t.R for t in transitions], dtype=torch.float32)
-		G = torch.tensor([t.Gamma for t in transitions], dtype=torch.float32)
-		S_last = torch.tensor([t.S_last for t in transitions], dtype=torch.float32)
+		s = torch.tensor([t[0] for t in transitions], dtype=torch.float32)
+		a = torch.tensor([t[1].astype(np.int64) for t in transitions], dtype=torch.int64)
+		r = torch.tensor([t[2] for t in transitions], dtype=torch.float32)
+		a_latest = torch.tensor([t[3].astype(np.int64) for t in transitions], dtype=torch.int64)
+		s_latest = torch.tensor([t[4] for t in transitions], dtype=torch.float32)
+		terminal = torch.tensor([t[5].astype(np.float32) for t in transitions], dtype=torch.float32)
 
-		return indices, NStepTransition(S, A, R, G, S_last, None), priorities[indices]
+		return indices, (s, a, r, a_latest, s_latest, terminal), priorities[indices]
 
 	def set_priorities(self, indices, priorities):
 		self.priorities[indices] = (priorities + self.importance_sampling_exponent)**self.priority_exponent 
 
 	def add(self, priorities, n_step_transitions):
-		"""
-		Adds batches of experiences and priorities to the replay memory
-		:param priorities: Priorities of the experiences in xp_batch
-		:param xp_batch: List of experiences of type N_Step_Transitions
-		:return:
-		"""
 		l = len(priorities)
 		cap = self.capacity
 

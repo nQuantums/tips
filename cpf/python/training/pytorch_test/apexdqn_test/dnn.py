@@ -425,8 +425,8 @@ class Node:
 	def concat(self, *inputs, dim=0):
 		return self.gate('concat', lambda _, *x: torch.cat(x, dim), *inputs, output_same_value=True)
 
-	def data(self):
-		return self.funcs('data', lambda x: x.data)
+	def detach(self):
+		return self.funcs('detach', lambda x: x.detach())
 
 	def _get_nodes_owner(self):
 		"""新規 Node 生成時に親となる Node の取得.

@@ -1,21 +1,17 @@
 import dnn
 from dnn import np
 from dnn import chainer
-from dnn import F
-from dnn import L
 from dnn import Variable
 
-x = np.arange(16, dtype=np.float32)
-print(x)
-x = x.reshape((16 // 8, 8))
-print(x)
-m = F.average(x, 1, keepdims=True)
-print(m)
-print(F.tile(m, tuple([t // s for t, s in zip(x.shape, m.shape)])))
+dnn.startup(0)
+xp = dnn.xp
 
+a = Variable(xp.array([[1, 2, 3, 4], [1, 2, 3, 4]], dtype=xp.float32))
+b = Variable(xp.array([[10], [20]], dtype=xp.float32))
+print(a + b)
 
-
-# x = np.array([1, 2, 3])
-# print(x)
-# y = F.tile(x, (2, 1))
-# print(y)
+# x = np.arange(1 * 1 * 32 * 32, dtype=np.float32).reshape((1, 1, 32, 32))
+# l = chainer.links.Convolution2D(1, 1, ksize=8, stride=4, pad=0, dilate=1)
+# with chainer.no_backprop_mode():
+# 	y = l(x)
+# print(y.shape)

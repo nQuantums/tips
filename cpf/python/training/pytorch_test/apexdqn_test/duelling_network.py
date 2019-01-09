@@ -25,4 +25,4 @@ class DuellingDQN(torch.nn.Module):
 		value = self.value(self.value_stream_layer(x))
 		advantage = self.advantage(self.advantage_stream_layer(x))
 		action_value = value + (advantage - (1/self.action_dim) * advantage.sum() )
-		return value, advantage, action_value
+		return action_value

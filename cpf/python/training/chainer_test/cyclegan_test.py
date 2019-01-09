@@ -380,7 +380,12 @@ def run_train():
 
 	# 学習済みデータがあれば読み込む
 	print("Loading trained data...")
-	dnn.load_if_exists('cycle_gan', m)
+	# dnn.load_if_exists('cyclegan_data/cycle_gan', m)
+	# dnn.save('cyclegan_data2/cycle_gan', m)
+	# dnn.save_dict_to_hdf5('cycle_gan.h5', m.state_dict())
+	d = dnn.load_dict_from_hdf5('cycle_gan.h5')
+	m.load_state_dict(d)
+	# dnn.save('dict/cycle_gan', m)
 	print("Done.")
 
 	m = dnn.to_xp(m)
@@ -442,9 +447,9 @@ def run_train():
 			break
 
 	# 学習結果を保存
-	print("Saving trained data...")
-	dnn.save('cycle_gan', m)
-	print("Done.")
+	# print("Saving trained data...")
+	# dnn.save('cycle_gan', m)
+	# print("Done.")
 
 
 def run_test():

@@ -35,7 +35,6 @@ class ActorData(db.Tbl):
 		self.actor_id = db.int16
 		self.timestamp = db.timestamp
 		self.train_num = db.int32
-		self.step_num = db.int32
 		self.ep_len = db.int32
 		self.ep_reward = db.float32
 		self.q = db.array_float32
@@ -59,7 +58,9 @@ class LearnerData(db.Tbl):
 		self.step_num = db.int32
 		self.loss = db.float32
 		self.q = db.array_float32
-		self.priorities = db.array_float32
+		self.before_priorities = db.array_float32
+		self.after_priorities = db.array_float32
+		self.indices = db.array_int32
 		self.target_sync_num = db.int32
 		self.send_param_num = db.int32
 

@@ -5,6 +5,7 @@ import datetime
 import multiprocessing as mp
 from collections import OrderedDict
 import torch
+import torch.nn.functional as F
 import numpy as np
 from collections import namedtuple
 import psycopg2
@@ -17,39 +18,42 @@ import model
 
 class Learner(object):
 
-	def __init__(self, params, param_set_id, status_dict, shared_state, shared_mem):
+	def __init__(self, params, param_set_id, status_dict, shared_state, remote_mem):
+		self.params = params
+		self.param_set_id = param_set_id
+		self.status_dict = status_dict
+		self.shared_state = shared_state
+		self.remote_mem = remote_mem
+
 		gpu = 0
 		torch.cuda.set_device(gpu)
 
-		env_conf = params['env']
-		learner_params = params['learner']
+		ep = params['env']
+		ap = params['actor']
+		lp = params['learner']
+		rmp = params["replay_memory"]
 
-		model_formula = f'model.{learner_params["model"]}(self.state_shape, self.action_dim).to(self.device)'
-		optimizer_formula = learner_params["optimizer"].format('self.Q.parameters()')
+		model_formula = f'model.{lp["model"]}(self.state_shape, self.action_dim).to(self.device)'
+		optimizer_formula = lp["optimizer"].format('self.Q.parameters()')
 
 		self.conn = psycopg2.connect(params["db"]["connection_string"])
 		self.conn.autocommit = True
 		self.cur = self.conn.cursor()
-		self.param_set_id = param_set_id
 
 		self.device = torch.device("cuda:{}".format(gpu) if 0 <= gpu and torch.cuda.is_available() else "cpu")
-		self.status_dict = status_dict
-		self.state_shape = env_conf['state_shape']
-		self.batch_size = learner_params['replay_sample_size']
-		self.action_dim = env_conf['action_dim']
-		self.params = learner_params
-		self.q_target_sync_freq = self.params['q_target_sync_freq']
-		self.shared_state = shared_state
-		self.shared_mem = shared_mem
-		self.replay_memory = ReplayMemory(params["replay_memory"])
+		self.state_shape = ep['state_shape']
+		self.batch_size = lp['replay_sample_size']
+		self.action_dim = ep['action_dim']
+		self.q_target_sync_freq = lp['q_target_sync_freq']
 		self.num_q_updates = 0
-		self.offsets_for_action = (torch.arange(self.batch_size) * self.action_dim).to(self.device)
+		self.take_offsets = (torch.arange(self.batch_size) * self.action_dim).to(self.device)
 		self.Q = eval(model_formula)
-		self.Q_double = eval(model_formula) # Target Q network which is slow moving replica of self.Q
+		self.Q_target = eval(model_formula) # Target Q network which is slow moving replica of self.Q
 		self.optimizer = eval(optimizer_formula)
+		self.replay_memory = ReplayMemory(rmp)
 
 		self.train_num = 0
-		self.model_file_name = self.params['load_saved_state']
+		self.model_file_name = lp['load_saved_state']
 		if self.model_file_name and os.path.isfile(self.model_file_name):
 			print(f'Loading {self.model_file_name}')
 			saved_state = torch.load(self.model_file_name)
@@ -57,12 +61,15 @@ class Learner(object):
 			self.optimizer.load_state_dict(saved_state['optimizer'])
 			self.train_num = saved_state['train_num']
 
-		self.shared_state['Q_state_dict'] = self.state_dict_to_cpu(self.Q.state_dict())
+		self.shared_state['Q_state_dict'] = self.state_dict_to_cpu(self.Q.state_dict()), self.state_dict_to_cpu(
+		    self.Q_target.state_dict())
 		self.status_dict['Q_state_dict_stored'] = True
 
 		self.last_Q_state_dict_id = 1
 		self.status_dict['Q_state_dict_id'] = self.last_Q_state_dict_id
 		self.status_dict['train_num'] = self.train_num
+
+		self.gamma_n = params['actor']['gamma']**params['actor']['num_steps']
 
 	def state_dict_to_cpu(self, state_dict):
 		d = OrderedDict()
@@ -70,34 +77,37 @@ class Learner(object):
 			d[k] = v.cpu()
 		return d
 
-	def compute_loss_and_priorities(self, batch_size):
-		"""
-		Computes the double-Q learning loss and the proportional experience priorities.
-		:param xp_batch: list of experiences of type N_Step_Transition
-		:return: double-Q learning loss and the proportional experience priorities
-		"""
-		indices, n_step_transition_batch, priorities = self.replay_memory.sample(batch_size)
+	def add_experience_to_replay_mem(self):
+		while self.remote_mem.qsize():
+			priorities, batch = self.remote_mem.get()
+			self.replay_memory.add(priorities, batch)
 
-		S = n_step_transition_batch.S.to(self.device)
-		A = n_step_transition_batch.A.to(self.device) + self.offsets_for_action
-		R = n_step_transition_batch.R.to(self.device)
-		G = n_step_transition_batch.Gamma.to(self.device)
-		S_last = n_step_transition_batch.S_last.to(self.device)
+	def compute_loss_and_priorities(self, batch_size):
+		indices, n_step_transition_batch, before_priorities = self.replay_memory.sample(batch_size)
+
+		s = n_step_transition_batch[0].to(self.device)
+		a = n_step_transition_batch[1].to(self.device)
+		r = n_step_transition_batch[2].to(self.device)
+		a_latest = n_step_transition_batch[3].to(self.device)
+		s_latest = n_step_transition_batch[4].to(self.device)
+		terminal = n_step_transition_batch[5].to(self.device)
+
+		q = self.Q(s)
+		q_a = q.take(self.take_offsets + a).squeeze()
 
 		with torch.no_grad():
-			Qd = self.Q_double(S_last)
-			Q = self.Q(S_last)
-			actions = torch.argmax(Q, 1).squeeze() + self.offsets_for_action
-			G_t = R + G * Qd.take(actions).squeeze()
-		q = self.Q(S)
-		batch_td_error = G_t - q.take(A).squeeze()
-		loss = 1 / 2 * (batch_td_error)**2
+			self.Q_target.eval()
+			Gt = r + (1.0 - terminal) * self.gamma_n * self.Q_target(s_latest).take(self.take_offsets + a_latest).squeeze()
+			td_error = Gt - q_a
+
+		loss = F.smooth_l1_loss(q_a, Gt)
+		# loss = td_error**2 / 2
 
 		# Compute the new priorities of the experience
-		priorities = batch_td_error.data.abs().cpu().numpy()
-		self.replay_memory.set_priorities(indices, priorities)
+		after_priorities = td_error.data.abs().cpu().numpy()
+		self.replay_memory.set_priorities(indices, after_priorities)
 
-		return loss.mean(), priorities, q
+		return loss, q, before_priorities, after_priorities, indices
 
 	def update_Q(self, loss):
 		self.optimizer.zero_grad()
@@ -106,17 +116,11 @@ class Learner(object):
 		self.num_q_updates += 1
 
 		if self.num_q_updates % self.q_target_sync_freq == 0:
-			self.Q_double.load_state_dict(self.Q.state_dict())
+			self.Q_target.load_state_dict(self.Q.state_dict())
 			print(f'Target Q synchronized.')
 			return True
 		else:
 			return False
-
-	def add_experience_to_replay_mem(self):
-		while self.shared_mem.qsize() or not self.shared_mem.empty():
-			priorities, xp_batch = self.shared_mem.get()
-			self.replay_memory.add(priorities, xp_batch)
-			# print(f'replay_memory.length : {self.replay_memory.length}')
 
 	def learn(self):
 		t = tables.LearnerData()
@@ -128,9 +132,10 @@ class Learner(object):
 		step_num = 0
 		target_sync_num = 0
 		send_param_num = 0
+		min_replay_mem_size = self.params['learner']["min_replay_mem_size"]
 
 		print('learner waiting for replay memory.')
-		while self.replay_memory.size() <= self.params["min_replay_mem_size"]:
+		while self.replay_memory.size() <= min_replay_mem_size:
 			self.add_experience_to_replay_mem()
 			time.sleep(0.01)
 		step_num = 0
@@ -140,7 +145,7 @@ class Learner(object):
 			# 4. Sample a prioritized batch of transitions
 			# 5. & 7. Apply double-Q learning rule, compute loss and experience priorities
 			# 8. Update priorities
-			loss, priorities, q = self.compute_loss_and_priorities(self.batch_size)
+			loss, q, before_priorities, after_priorities, indices = self.compute_loss_and_priorities(self.batch_size)
 			if step_num % 10 == 0:
 				print(f'loss : {loss}')
 			#print("\nLearner: step_num=", step_num, "loss:", loss, "RPM.size:", self.replay_memory.size(), end='\r')
@@ -148,7 +153,8 @@ class Learner(object):
 			if self.update_Q(loss):
 				target_sync_num += 1
 			if step_num % 5 == 0:
-				self.shared_state['Q_state_dict'] = self.state_dict_to_cpu(self.Q.state_dict())
+				self.shared_state['Q_state_dict'] = self.state_dict_to_cpu(self.Q.state_dict()), self.state_dict_to_cpu(
+				    self.Q_target.state_dict())
 				self.last_Q_state_dict_id += 1
 				self.status_dict['Q_state_dict_id'] = self.last_Q_state_dict_id
 				print('Send params to actors.')
@@ -160,8 +166,9 @@ class Learner(object):
 			self.status_dict['train_num'] = self.train_num
 
 			# DBへデータ登録
-			r = record_type(param_set_id, now(), self.train_num, step_num, loss.item(), q[0].tolist(), priorities.tolist(),
-			                target_sync_num, send_param_num)
+			r = record_type(param_set_id, now(), self.train_num,
+			                step_num, loss.item(), q[0].tolist(), before_priorities.tolist(), after_priorities.tolist(),
+			                indices.tolist(), target_sync_num, send_param_num)
 			record_insert(cur, r)
 
 		print('learner end')
@@ -179,7 +186,7 @@ if __name__ == "__main__":
 
 	with open('parameters.json', 'r') as f:
 		params = json.load(f)
-	params['actor']['T'] = 5000
+	params['actor']['T'] = 2000
 	params['actor']['wait_shared_memory_clear'] = False
 
 	param_set_id = db_initializer.initialize(params)
