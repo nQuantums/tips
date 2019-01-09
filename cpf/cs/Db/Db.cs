@@ -138,6 +138,23 @@ namespace Db {
 	/// </summary>
 	public class Col {
 		/// <summary>
+		/// 基となった<see cref="Col"/>
+		/// </summary>
+		public Col BaseCol { get; protected set; }
+
+		/// <summary>
+		/// 基礎となる<see cref="Col"/>の取得
+		/// </summary>
+		public Col Underlying {
+			get {
+				if (this.BaseCol != null) {
+					return this.BaseCol;
+				}
+				return this;
+			}
+		}
+
+		/// <summary>
 		/// エイリアス名
 		/// </summary>
 		public string Alias { get; protected set; }
@@ -206,11 +223,6 @@ namespace Db {
 	/// <typeparam name="T">データベース内で保持する値に対応するC#型</typeparam>
 	public class Col<T> : Col {
 		/// <summary>
-		/// 基となった<see cref="Col{T}"/>
-		/// </summary>
-		readonly Col<T> BaseCol;
-
-		/// <summary>
 		/// 値
 		/// </summary>
 		public T Value;
@@ -218,10 +230,11 @@ namespace Db {
 		/// <summary>
 		/// 基礎となる<see cref="Col{T}"/>の取得
 		/// </summary>
-		public Col<T> UnderlyingCol {
+		public new Col<T> UnderlyingCol {
 			get {
-				if (this.BaseCol != null) {
-					return this.BaseCol;
+				var u = this.BaseCol as Col<T>;
+				if (u != null) {
+					return u;
 				}
 				return this;
 			}
@@ -276,7 +289,7 @@ namespace Db {
 		/// <summary>
 		/// 基礎となる<see cref="Tbl"/>の取得
 		/// </summary>
-		public Tbl UnderlyingTbl {
+		public Tbl Underlying {
 			get {
 				if (this.BaseTbl != null) {
 					return this.BaseTbl;
@@ -289,6 +302,19 @@ namespace Db {
 		/// テーブル名またはエイリアス
 		/// </summary>
 		public string Name { get; protected set; }
+
+		/// <summary>
+		/// ` で括られたテーブル名の取得
+		/// </summary>
+		public string NameQuoted {
+			get {
+				if (this.Name.StartsWith("`")) {
+					return this.Name;
+				} else {
+					return '`' + this.Name + '`';
+				}
+			}
+		}
 
 		/// <summary>
 		/// 列一覧
@@ -412,6 +438,13 @@ namespace Db {
 	}
 
 	public class SqlBuffer {
+		[Flags]
+		public enum ToStringFlags {
+			AsStringLiteral = 1 << 0,
+			WithAlias = 1 << 1,
+			Underlying = 1 << 2,
+		}
+
 		public readonly Dictionary<Param, string> Params = new Dictionary<Param, string>();
 
 		public string GetPrmName(Param prm) {
@@ -422,26 +455,49 @@ namespace Db {
 			return paramName;
 		}
 
-		public string ToString(object module) {
-			ISqlModule sm;
+		public string ToString(object element, ToStringFlags flags = 0) {
+			ISqlElement sm;
 			Param p;
-			if (module == null) {
-				return "NULL";
-			} else if ((sm = module as ISqlModule) != null) {
-				return sm.Build(this);
-			} else if ((p = module as Param) != null) {
+			Col c;
+			Tbl t;
+			if (element == null) {
+				return QuoteIfNeeded("NULL", (flags & ToStringFlags.AsStringLiteral) != 0);
+			} else if ((sm = element as ISqlElement) != null) {
+				return QuoteIfNeeded(sm.Build(this), (flags & ToStringFlags.AsStringLiteral) != 0);
+			} else if ((c = element as Col) != null) {
+				if ((flags & ToStringFlags.Underlying) != 0) {
+					c = c.Underlying;
+				}
+				if ((flags & ToStringFlags.WithAlias) != 0) {
+					return c.NameQuotedWithAlias;
+				} else {
+					return c.NameQuoted;
+				}
+			} else if ((t = element as Tbl) != null) {
+				if ((flags & ToStringFlags.WithAlias) != 0 && t.NameQuoted != t.Underlying.NameQuoted) {
+					return t.NameQuoted + " " + t.Underlying.NameQuoted;
+				}
+				if ((flags & ToStringFlags.Underlying) != 0) {
+					t = t.Underlying;
+				}
+				return t.NameQuoted;
+			} else if ((p = element as Param) != null) {
 				return GetPrmName(p);
 			} else {
-				return module.ToString();
+				return QuoteIfNeeded(element.ToString(), (flags & ToStringFlags.AsStringLiteral) != 0);
 			}
+		}
+
+		static string QuoteIfNeeded(string value, bool needQuote = false) {
+			return needQuote ? "'" + value + "'" : value;
 		}
 	}
 
-	public interface ISqlModule {
+	public interface ISqlElement {
 		string Build(SqlBuffer sqlBuffer);
 	}
 
-	public class SqlSelect : ISqlModule {
+	public class SqlSelect : ISqlElement {
 		public object[] Expressions;
 
 		public SqlSelect(object expression, params object[] expressions) {
@@ -467,7 +523,7 @@ namespace Db {
 		}
 	}
 
-	public class SqlFrom : ISqlModule {
+	public class SqlFrom : ISqlElement {
 		public object Tbl;
 
 		public SqlFrom(object tbl) {
@@ -481,7 +537,7 @@ namespace Db {
 			sb.Append("FROM ");
 
 			if ((tbl = this.Tbl as Tbl) != null) {
-				var utbl = tbl.UnderlyingTbl;
+				var utbl = tbl.Underlying;
 				if (tbl.Name != utbl.Name) {
 					sb.Append(utbl.Name);
 					sb.Append(" ");
@@ -497,7 +553,7 @@ namespace Db {
 		}
 	}
 
-	public class SqlWhere : ISqlModule {
+	public class SqlWhere : ISqlElement {
 		public object[] Expressions;
 
 		public SqlWhere(object expression, params object[] expressions) {
@@ -520,7 +576,7 @@ namespace Db {
 		}
 	}
 
-	public class SqlInsertInto : ISqlModule {
+	public class SqlInsertInto : ISqlElement {
 		public object Tbl;
 		public object[] Cols;
 
@@ -532,12 +588,7 @@ namespace Db {
 		public string Build(SqlBuffer sqlBuffer) {
 			var sb = new StringBuilder();
 			sb.Append("INSERT INTO ");
-			Tbl tbl;
-			if ((tbl = this.Tbl as Tbl) != null) {
-				sb.Append(tbl.UnderlyingTbl.ToString());
-			} else {
-				sb.Append(this.Tbl.ToString());
-			}
+			sb.Append(sqlBuffer.ToString(this.Tbl, SqlBuffer.ToStringFlags.Underlying));
 			sb.Append("(");
 			for (int i = 0; i < this.Cols.Length; i++) {
 				if (i != 0) {
@@ -556,7 +607,7 @@ namespace Db {
 		}
 	}
 
-	public class SqlValues : ISqlModule {
+	public class SqlValues : ISqlElement {
 		public object[][] Values;
 
 		public SqlValues(params object[] value) {
@@ -588,6 +639,94 @@ namespace Db {
 		}
 	}
 
+	public class SqlLike : ISqlElement {
+		public object Expression;
+		public object Pattern;
+
+		public SqlLike(object expression, object pattern) {
+			this.Expression = expression;
+			this.Pattern = pattern;
+		}
+
+		public string Build(SqlBuffer sqlBuffer) {
+			var sb = new StringBuilder();
+			sb.Append(sqlBuffer.ToString(this.Expression, SqlBuffer.ToStringFlags.AsStringLiteral | SqlBuffer.ToStringFlags.WithAlias));
+			sb.Append(" LIKE ");
+			sb.Append(sqlBuffer.ToString(this.Pattern, SqlBuffer.ToStringFlags.AsStringLiteral | SqlBuffer.ToStringFlags.WithAlias));
+			return sb.ToString();
+		}
+	}
+
+	public class SqlDeleteFrom : ISqlElement {
+		public object Tbl;
+
+		public SqlDeleteFrom(object tbl) {
+			this.Tbl = tbl;
+		}
+
+		public string Build(SqlBuffer sqlBuffer) {
+			var sb = new StringBuilder();
+			sb.Append("DELETE FROM ");
+			sb.Append(sqlBuffer.ToString(this.Tbl, SqlBuffer.ToStringFlags.Underlying));
+			return sb.ToString();
+		}
+	}
+
+	public enum JoinType {
+		Inner,
+		Left,
+	}
+
+	public class SqlJoinUsing : ISqlElement {
+		public JoinType JoinType;
+		public object Tbl;
+		public object Col;
+
+		public SqlJoinUsing(JoinType joinType, object tbl, object col) {
+			this.JoinType = joinType;
+			this.Tbl = tbl;
+			this.Col = col;
+		}
+
+		public string Build(SqlBuffer sqlBuffer) {
+			var sb = new StringBuilder();
+			sb.Append(this.JoinType == JoinType.Inner ? "INNER JOIN" : "LEFT JOIN");
+			sb.Append(" ");
+			sb.Append(sqlBuffer.ToString(this.Tbl, SqlBuffer.ToStringFlags.WithAlias));
+			sb.Append(" USING(");
+			sb.Append(sqlBuffer.ToString(this.Col, SqlBuffer.ToStringFlags.Underlying));
+			sb.Append(")");
+			return sb.ToString();
+		}
+	}
+
+	public class SqlJoinOn : ISqlElement {
+		public JoinType JoinType;
+		public object Tbl;
+		public object[] Expressions;
+
+		public SqlJoinOn(JoinType joinType, object tbl, params object[] expressions) {
+			this.JoinType = joinType;
+			this.Tbl = tbl;
+			this.Expressions = expressions;
+		}
+
+		public string Build(SqlBuffer sqlBuffer) {
+			var sb = new StringBuilder();
+			sb.Append(this.JoinType == JoinType.Inner ? "INNER JOIN" : "LEFT JOIN");
+			sb.Append(" ");
+			sb.Append(sqlBuffer.ToString(this.Tbl, SqlBuffer.ToStringFlags.WithAlias));
+			sb.Append(" ON ");
+			for (int i = 0; i < this.Expressions.Length; i++) {
+				if (i != 0) {
+					sb.Append(" ");
+				}
+				sb.Append(sqlBuffer.ToString(this.Expressions[i]));
+			}
+			return sb.ToString();
+		}
+	}
+
 	/// <summary>
 	/// SQL文生成をサポートするクラス
 	/// </summary>
@@ -612,21 +751,21 @@ namespace Db {
 			return sb.ToString();
 		}
 
-		public static string Sql(params string[] modules) {
-			return string.Join("\n", modules) + ";";
+		public static string Sql(params string[] elements) {
+			return string.Join("\n", elements) + ";";
 		}
 
 		/// <summary>
 		/// 指定のSQL文モジュールからSQL文を生成し<see cref="MySqlCommand"/>に適用するデリゲートを取得する
 		/// </summary>
-		/// <param name="modules">SQL文モジュール</param>
+		/// <param name="elements">SQL文モジュール</param>
 		/// <returns><see cref="MySqlCommand"/>にSQL文を適用するデリゲート</returns>
-		public static Action<MySqlCommand> Sql(params object[] modules) {
+		public static Action<MySqlCommand> Sql(params object[] elements) {
 			var buffer = new SqlBuffer();
 
 			// 各モジュールを文字列に変換してSQL分を生成する
 			var sb = new StringBuilder();
-			foreach (var m in modules) {
+			foreach (var m in elements) {
 				sb.AppendLine(buffer.ToString(m));
 			}
 			sb.Append(";");
@@ -646,6 +785,114 @@ namespace Db {
 			};
 
 			return applyToCmd;
+		}
+
+		public static Func<Param, Action<MySqlCommand, T1>> Sql<T1>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1) => {
+				return (cmd, arg1) => {
+					param1.Value = arg1;
+					applier(cmd);
+				};
+			};
+		}
+
+		public static Func<Param, Param, Action<MySqlCommand, T1, T2>> Sql<T1, T2>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2) => {
+				return (cmd, arg1, arg2) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					applier(cmd);
+				};
+			};
+		}
+
+		public static Func<Param, Param, Param, Action<MySqlCommand, T1, T2, T3>> Sql<T1, T2, T3>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3) => {
+				return (cmd, arg1, arg2, arg3) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					applier(cmd);
+				};
+			};
+		}
+
+		public static Func<Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4>> Sql<T1, T2, T3, T4>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3, param4) => {
+				return (cmd, arg1, arg2, arg3, arg4) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					param4.Value = arg4;
+					applier(cmd);
+				};
+			};
+		}
+
+		public static Func<Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5>> Sql<T1, T2, T3, T4, T5>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3, param4, param5) => {
+				return (cmd, arg1, arg2, arg3, arg4, arg5) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					param4.Value = arg4;
+					param5.Value = arg5;
+					applier(cmd);
+				};
+			};
+		}
+
+		public static Func<Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6>> Sql<T1, T2, T3, T4, T5, T6>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3, param4, param5, param6) => {
+				return (cmd, arg1, arg2, arg3, arg4, arg5, arg6) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					param4.Value = arg4;
+					param5.Value = arg5;
+					param6.Value = arg6;
+					applier(cmd);
+				};
+			};
+		}
+
+		public static Func<Param, Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6, T7>> Sql<T1, T2, T3, T4, T5, T6, T7>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3, param4, param5, param6, param7) => {
+				return (cmd, arg1, arg2, arg3, arg4, arg5, arg6, arg7) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					param4.Value = arg4;
+					param5.Value = arg5;
+					param6.Value = arg6;
+					param7.Value = arg7;
+					applier(cmd);
+				};
+			};
+		}
+
+		public static Func<Param, Param, Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6, T7, T8>> Sql<T1, T2, T3, T4, T5, T6, T7, T8>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3, param4, param5, param6, param7, param8) => {
+				return (cmd, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					param4.Value = arg4;
+					param5.Value = arg5;
+					param6.Value = arg6;
+					param7.Value = arg7;
+					param8.Value = arg8;
+					applier(cmd);
+				};
+			};
 		}
 
 		public static SqlSelect Select(object expression, params object[] expressions) {
@@ -670,6 +917,30 @@ namespace Db {
 
 		public static SqlValues Values(object[][] values) {
 			return new SqlValues(values);
+		}
+
+		public static SqlLike Like(object expression, object pattern) {
+			return new SqlLike(expression, pattern);
+		}
+
+		public static SqlDeleteFrom DeleteFrom(object tbl) {
+			return new SqlDeleteFrom(tbl);
+		}
+
+		public static SqlJoinUsing InnerJoinUsing(object tbl, object col) {
+			return new SqlJoinUsing(JoinType.Inner, tbl, col);
+		}
+
+		public static SqlJoinUsing LeftJoinUsing(object tbl, object col) {
+			return new SqlJoinUsing(JoinType.Left, tbl, col);
+		}
+
+		public static SqlJoinOn InnerJoinOn(object tbl, params object[] expressions) {
+			return new SqlJoinOn(JoinType.Inner, tbl, expressions);
+		}
+
+		public static SqlJoinOn LeftJoinOn(object tbl, params object[] expressions) {
+			return new SqlJoinOn(JoinType.Left, tbl, expressions);
 		}
 
 
@@ -980,35 +1251,117 @@ namespace Db {
 	}
 
 	/// <summary>
-	/// <see cref="MySqlDataReader"/>から値を読み込み<see cref="Col{T}"/>を取得するデリゲートを作成する
+	/// <see cref="MySqlDataReader"/>からの値取得用
+	/// <para>失敗時にはカラム名が分かる様に例外を投げる</para>
 	/// </summary>
-	/// <typeparam name="T">クラス型</typeparam>
-	public static class GetFromDataReader {
-		/// <summary>
-		/// <see cref="MySqlDataReader"/>から値を読み込み<see cref="Col{T}"/>を取得するデリゲートを作成する
-		/// </summary>
-		/// <typeparam name="T">クラス型</typeparam>
-		/// <param name="columnsExpression">() => new { title, date } の様な匿名クラスを生成する式</param>
-		/// <returns>デリゲート</returns>
-		public static Func<MySqlDataReader, T> Generate<T>(Expression<Func<T>> columnsExpression) {
+	public static class DataReaderAccessor {
+		public static string GetString(MySqlDataReader dr, string colName) {
+			try {
+				var v = dr[colName];
+				return v == DBNull.Value ? null : v.ToString();
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static bool GetBool(MySqlDataReader dr, string colName) {
+			try {
+				return Convert.ToBoolean(dr[colName]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static short GetInt16(MySqlDataReader dr, string colName) {
+			try {
+				return Convert.ToInt16(dr[colName]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static int GetInt32(MySqlDataReader dr, string colName) {
+			try {
+				return Convert.ToInt32(dr[colName]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static DateTime GetDateTime(MySqlDataReader dr, string colName) {
+			try {
+				return Convert.ToDateTime(dr[colName]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static Guid GetGuid(MySqlDataReader dr, string colName) {
+			try {
+				return (Guid)dr[colName];
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+
+		public static string GetNullableString(MySqlDataReader dr, string colName) {
+			try {
+				var v = dr[colName];
+				return v == DBNull.Value ? null : v.ToString();
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static bool? GetNullableBool(MySqlDataReader dr, string colName) {
+			try {
+				var v = dr[colName];
+				return v == DBNull.Value ? default(bool?) : Convert.ToBoolean(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static short? GetNullableInt16(MySqlDataReader dr, string colName) {
+			try {
+				var v = dr[colName];
+				return v == DBNull.Value ? default(short?) : Convert.ToInt16(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static int? GetNullableInt32(MySqlDataReader dr, string colName) {
+			try {
+				var v = dr[colName];
+				return v == DBNull.Value ? default(int?) : Convert.ToInt32(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static DateTime? GetNullableDateTime(MySqlDataReader dr, string colName) {
+			try {
+				var v = dr[colName];
+				return v == DBNull.Value ? default(DateTime?) : Convert.ToDateTime(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static Guid? GetNullableGuid(MySqlDataReader dr, string colName) {
+			try {
+				var v = dr[colName];
+				return v == DBNull.Value ? default(Guid?) : (Guid)v;
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+	}
+
+	/// <summary>
+	/// <see cref="MySqlDataReader"/>から値を読み込み<see cref="Col{S}"/>をプロパティとして持つクラスを取得する処理を提供
+	/// </summary>
+	/// <typeparam name="T"><see cref="Col{S}"/>をプロパティとして持つクラス型</typeparam>
+	public static class DataReaderToCols<T> {
+		public static readonly Func<MySqlDataReader, T, T> Invoke;
+
+		static DataReaderToCols() {
 			var type = typeof(T);
 
-			// new 演算子でクラスを生成するもの以外はエラーとする
-			var body = columnsExpression.Body;
-			if (body.NodeType != ExpressionType.New) {
-				throw new ApplicationException();
-			}
-
-			// クラスのプロパティ数とコンストラクタ引数の数が異なるならエラーとする
-			var newexpr = body as NewExpression;
-			var args = newexpr.Arguments;
+			// クラスのプロパティ数と型に一致するコンストラクタが存在しないならエラーとする
 			var properties = type.GetProperties();
-			if (args.Count != properties.Length) {
-				throw new ApplicationException(type + " のプロパティ数とコンストラクタ引数の数が一致しません。");
-			}
-
-			var propertyTypes = properties.Select(p => p.PropertyType).ToArray();
-			var ctor = type.GetConstructor(propertyTypes);
+			var ctor = type.GetConstructor(properties.Select(p => p.PropertyType).ToArray());
 			if (ctor == null) {
 				throw new ApplicationException(type + " にプロパティ値を引数として受け取るコンストラクタがありません。");
 			}
@@ -1016,6 +1369,7 @@ namespace Db {
 			// コンストラクタに渡す引数を作成
 			var argExprs = new Expression[properties.Length];
 			var paramDr = Expression.Parameter(typeof(MySqlDataReader));
+			var paramBaseCols = Expression.Parameter(type);
 			for (int i = 0; i < properties.Length; i++) {
 				var p = properties[i];
 				var pt = p.PropertyType;
@@ -1025,141 +1379,46 @@ namespace Db {
 				var ct = pt.GetGenericArguments()[0];
 				var nct = Nullable.GetUnderlyingType(ct);
 				var t = nct ?? ct;
-				var name = "";
+				var getMethodName = "";
 
 				if (t == typeof(string)) {
-					name = "String";
+					getMethodName = "String";
 				} else if (t == typeof(bool)) {
-					name = "Bool";
+					getMethodName = "Bool";
 				} else if (t == typeof(short)) {
-					name = "Int16";
+					getMethodName = "Int16";
 				} else if (t == typeof(int)) {
-					name = "Int32";
+					getMethodName = "Int32";
 				} else if (t == typeof(DateTime)) {
-					name = "DateTime";
+					getMethodName = "DateTime";
 				} else if (t == typeof(Guid)) {
-					name = "Guid";
+					getMethodName = "Guid";
 				} else {
 					throw new ApplicationException(type + " の " + p.Name + " の値が未対応の型 " + t + " となっています。");
 				}
 				if (nct != null) {
-					name = "Nullable" + name;
+					getMethodName = "Nullable" + getMethodName;
 				}
-				name = "Get" + name;
+				getMethodName = "Get" + getMethodName;
 
-				var getter = typeof(GetFromDataReader).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static);
+				var getter = typeof(DataReaderAccessor).GetMethod(getMethodName, BindingFlags.Public | BindingFlags.Static);
 				if (getter == null) {
 					throw new ApplicationException("内部エラー");
 				}
 
-				var col = Expression.Lambda(args[i]).Compile().DynamicInvoke() as Col;
-				if (col == null) {
-					throw new ApplicationException("内部エラー");
-				}
+				var col = Expression.Property(paramBaseCols, p);
+				var colName = Expression.Field(col, pt.GetField("Name"));
 
 				var pctor = pt.GetConstructor(new Type[] { pt, ct });
 				if (pctor == null) {
 					throw new ApplicationException("内部エラー");
 				}
 
-				argExprs[i] = Expression.New(pctor, Expression.Constant(col), Expression.Call(null, getter, paramDr, Expression.Constant(col.Name)));
+				argExprs[i] = Expression.New(pctor, col, Expression.Call(null, getter, paramDr, colName));
 			}
 
 			// コンストラクタ呼び出しをコンパイル
-			return Expression.Lambda<Func<MySqlDataReader, T>>(Expression.New(ctor, argExprs), paramDr).Compile();
-		}
-
-		static string GetString(MySqlDataReader dr, string colName) {
-			try {
-				var v = dr[colName];
-				return v == DBNull.Value ? null : v.ToString();
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		static bool GetBool(MySqlDataReader dr, string colName) {
-			try {
-				return Convert.ToBoolean(dr[colName]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		static short GetInt16(MySqlDataReader dr, string colName) {
-			try {
-				return Convert.ToInt16(dr[colName]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		static int GetInt32(MySqlDataReader dr, string colName) {
-			try {
-				return Convert.ToInt32(dr[colName]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		static DateTime GetDateTime(MySqlDataReader dr, string colName) {
-			try {
-				return Convert.ToDateTime(dr[colName]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		static Guid GetGuid(MySqlDataReader dr, string colName) {
-			try {
-				return (Guid)dr[colName];
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-
-		static string GetNullableString(MySqlDataReader dr, string colName) {
-			try {
-				var v = dr[colName];
-				return v == DBNull.Value ? null : v.ToString();
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		static bool? GetNullableBool(MySqlDataReader dr, string colName) {
-			try {
-				var v = dr[colName];
-				return v == DBNull.Value ? default(bool?) : Convert.ToBoolean(v);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		static short? GetNullableInt16(MySqlDataReader dr, string colName) {
-			try {
-				var v = dr[colName];
-				return v == DBNull.Value ? default(short?) : Convert.ToInt16(v);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		static int? GetNullableInt32(MySqlDataReader dr, string colName) {
-			try {
-				var v = dr[colName];
-				return v == DBNull.Value ? default(int?) : Convert.ToInt32(v);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		static DateTime? GetNullableDateTime(MySqlDataReader dr, string colName) {
-			try {
-				var v = dr[colName];
-				return v == DBNull.Value ? default(DateTime?) : Convert.ToDateTime(v);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		static Guid? GetNullableGuid(MySqlDataReader dr, string colName) {
-			try {
-				var v = dr[colName];
-				return v == DBNull.Value ? default(Guid?) : (Guid)v;
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
+			Invoke = Expression.Lambda<Func<MySqlDataReader, T, T>>(Expression.New(ctor, argExprs), paramDr, paramBaseCols).Compile();
 		}
 	}
 }
