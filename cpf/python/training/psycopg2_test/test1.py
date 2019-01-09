@@ -3,6 +3,7 @@ from collections import deque
 import json
 import psycopg2
 import db
+<<<<<<< HEAD
 
 
 class ParamSet(db.Tbl):
@@ -144,3 +145,11 @@ with psycopg2.connect("dbname=apexdqn user=postgres") as conn:
 # 			print(r)
 # 		# cur.fetchone()
 # 		# conn.commit()
+=======
+import tables
+
+with psycopg2.connect("host=192.168.1.2 dbname=apexdqn user=postgres password=Passw0rd!") as conn:
+	conn.autocommit = True
+	with conn.cursor() as cur:
+		ad = tables.ActorData()
+>>>>>>> 7ccf25c06a5f51c36df8b79b70c79a45014bb9ed
