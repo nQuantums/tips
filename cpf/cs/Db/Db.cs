@@ -208,6 +208,10 @@ namespace Db {
 			this.DbType = dbType;
 		}
 
+		public SqlAs As(string alias) {
+			return new SqlAs(alias, this);
+		}
+
 		public static implicit operator string(Col value) {
 			return value.NameQuotedWithAlias;
 		}
@@ -230,7 +234,7 @@ namespace Db {
 		/// <summary>
 		/// 基礎となる<see cref="Col{T}"/>の取得
 		/// </summary>
-		public new Col<T> UnderlyingCol {
+		public new Col<T> Underlying {
 			get {
 				var u = this.BaseCol as Col<T>;
 				if (u != null) {
@@ -390,9 +394,9 @@ namespace Db {
 		/// <summary>
 		/// 基礎となる<see cref="Tbl{T}"/>の取得
 		/// </summary>
-		public new Tbl<T> UnderlyingTbl {
+		public new Tbl<T> Underlying {
 			get {
-				return this.UnderlyingTbl as Tbl<T>;
+				return base.Underlying as Tbl<T>;
 			}
 		}
 
@@ -414,7 +418,7 @@ namespace Db {
 			var c = this.MemberwiseClone() as Tbl<T>;
 			c.BaseTbl = this;
 			c.Name = aliasName;
-			AliasingCols<T>.Invoke(c);
+			c.Cols = AliasingCols<T>.Invoke(c.Cols, aliasName);
 			c.ColsArray = ColsGetter<T>.Invoke(c.Cols);
 			return c;
 		}
@@ -437,14 +441,14 @@ namespace Db {
 		}
 	}
 
-	public class SqlBuffer {
-		[Flags]
-		public enum ToStringFlags {
-			AsStringLiteral = 1 << 0,
-			WithAlias = 1 << 1,
-			Underlying = 1 << 2,
-		}
+	[Flags]
+	public enum ToStringFlags {
+		AsStringLiteral = 1 << 0,
+		WithAlias = 1 << 1,
+		Underlying = 1 << 2,
+	}
 
+	public class SqlBuffer {
 		public readonly Dictionary<Param, string> Params = new Dictionary<Param, string>();
 
 		public string GetPrmName(Param prm) {
@@ -463,7 +467,7 @@ namespace Db {
 			if (element == null) {
 				return QuoteIfNeeded("NULL", (flags & ToStringFlags.AsStringLiteral) != 0);
 			} else if ((sm = element as ISqlElement) != null) {
-				return QuoteIfNeeded(sm.Build(this), (flags & ToStringFlags.AsStringLiteral) != 0);
+				return QuoteIfNeeded(sm.Build(this, flags), (flags & ToStringFlags.AsStringLiteral) != 0);
 			} else if ((c = element as Col) != null) {
 				if ((flags & ToStringFlags.Underlying) != 0) {
 					c = c.Underlying;
@@ -475,7 +479,7 @@ namespace Db {
 				}
 			} else if ((t = element as Tbl) != null) {
 				if ((flags & ToStringFlags.WithAlias) != 0 && t.NameQuoted != t.Underlying.NameQuoted) {
-					return t.NameQuoted + " " + t.Underlying.NameQuoted;
+					return t.Underlying.NameQuoted + " " + t.NameQuoted;
 				}
 				if ((flags & ToStringFlags.Underlying) != 0) {
 					t = t.Underlying;
@@ -494,29 +498,30 @@ namespace Db {
 	}
 
 	public interface ISqlElement {
-		string Build(SqlBuffer sqlBuffer);
+		string Build(SqlBuffer sqlBuffer, ToStringFlags flags);
 	}
 
 	public class SqlSelect : ISqlElement {
-		public object[] Expressions;
+		public object[] Cols;
 
-		public SqlSelect(object expression, params object[] expressions) {
-			var exprs = new object[expressions.Length + 1];
-			exprs[0] = expression;
-			if (expressions.Length != 0) {
-				Array.Copy(expressions, 0, exprs, 1, expressions.Length);
-			}
-			this.Expressions = exprs;
+		public SqlSelect(params object[] cols) {
+			this.Cols = cols;
 		}
 
-		public string Build(SqlBuffer sqlBuffer) {
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
 			var sb = new StringBuilder();
 
-			sb.Append("SELECT");
+			sb.Append("SELECT ");
 
-			foreach (var e in this.Expressions) {
-				sb.Append(" ");
-				sb.Append(sqlBuffer.ToString(e));
+			if (this.Cols.Length == 0) {
+				sb.Append("*");
+			} else {
+				for (int i = 0; i < this.Cols.Length; i++) {
+					if (i != 0) {
+						sb.Append(", ");
+					}
+					sb.Append(sqlBuffer.ToString(this.Cols[i], flags | ToStringFlags.WithAlias));
+				}
 			}
 
 			return sb.ToString();
@@ -530,7 +535,7 @@ namespace Db {
 			this.Tbl = tbl;
 		}
 
-		public string Build(SqlBuffer sqlBuffer) {
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
 			Tbl tbl;
 			var sb = new StringBuilder();
 
@@ -546,7 +551,7 @@ namespace Db {
 					sb.Append(tbl.Name);
 				}
 			} else {
-				sb.Append(sqlBuffer.ToString(this.Tbl));
+				sb.Append(sqlBuffer.ToString(this.Tbl, flags));
 			}
 
 			return sb.ToString();
@@ -565,13 +570,66 @@ namespace Db {
 			this.Expressions = exprs;
 		}
 
-		public string Build(SqlBuffer sqlBuffer) {
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
 			var sb = new StringBuilder();
 			sb.Append("WHERE");
 			foreach (var e in this.Expressions) {
 				sb.Append(" ");
-				sb.Append(sqlBuffer.ToString(e));
+				sb.Append(sqlBuffer.ToString(e, flags | ToStringFlags.WithAlias));
 			}
+			return sb.ToString();
+		}
+	}
+
+	public class SqlExpr : ISqlElement {
+		public object[] Expressions;
+
+		public SqlExpr(object expression, params object[] expressions) {
+			var exprs = new object[expressions.Length + 1];
+			exprs[0] = expression;
+			if (expressions.Length != 0) {
+				Array.Copy(expressions, 0, exprs, 1, expressions.Length);
+			}
+			this.Expressions = exprs;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			for (int i = 0; i < this.Expressions.Length; i++) {
+				if (i != 0) {
+					sb.Append(" ");
+				}
+				sb.Append(sqlBuffer.ToString(this.Expressions[i], flags | ToStringFlags.WithAlias));
+			}
+			return sb.ToString();
+		}
+	}
+
+	public class SqlAs : ISqlElement {
+		public string Alias;
+		public object[] Expressions;
+
+		public SqlAs(string alias, object expression, params object[] expressions) {
+			this.Alias = alias;
+
+			var exprs = new object[expressions.Length + 1];
+			exprs[0] = expression;
+			if (expressions.Length != 0) {
+				Array.Copy(expressions, 0, exprs, 1, expressions.Length);
+			}
+			this.Expressions = exprs;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			for (int i = 0; i < this.Expressions.Length; i++) {
+				if (i != 0) {
+					sb.Append(" ");
+				}
+				sb.Append(sqlBuffer.ToString(this.Expressions[i], flags));
+			}
+			sb.Append(" AS ");
+			sb.Append(this.Alias);
 			return sb.ToString();
 		}
 	}
@@ -585,10 +643,10 @@ namespace Db {
 			this.Cols = cols;
 		}
 
-		public string Build(SqlBuffer sqlBuffer) {
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
 			var sb = new StringBuilder();
 			sb.Append("INSERT INTO ");
-			sb.Append(sqlBuffer.ToString(this.Tbl, SqlBuffer.ToStringFlags.Underlying));
+			sb.Append(sqlBuffer.ToString(this.Tbl, ToStringFlags.Underlying));
 			sb.Append("(");
 			for (int i = 0; i < this.Cols.Length; i++) {
 				if (i != 0) {
@@ -618,12 +676,15 @@ namespace Db {
 			this.Values = values;
 		}
 
-		public string Build(SqlBuffer sqlBuffer) {
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
 			var sb = new StringBuilder();
 			sb.Append("VALUES");
+			sb.AppendLine();
 			for (int i = 0; i < this.Values.Length; i++) {
 				if (i != 0) {
-					sb.Append(", ");
+					sb.Append(",");
+				} else {
+					sb.Append(" ");
 				}
 				var value = this.Values[i];
 				sb.Append("(");
@@ -631,9 +692,9 @@ namespace Db {
 					if (j != 0) {
 						sb.Append(", ");
 					}
-					sb.Append(sqlBuffer.ToString(value[j]));
+					sb.Append(sqlBuffer.ToString(value[j], flags));
 				}
-				sb.Append(")");
+				sb.AppendLine(")");
 			}
 			return sb.ToString();
 		}
@@ -648,11 +709,11 @@ namespace Db {
 			this.Pattern = pattern;
 		}
 
-		public string Build(SqlBuffer sqlBuffer) {
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
 			var sb = new StringBuilder();
-			sb.Append(sqlBuffer.ToString(this.Expression, SqlBuffer.ToStringFlags.AsStringLiteral | SqlBuffer.ToStringFlags.WithAlias));
+			sb.Append(sqlBuffer.ToString(this.Expression, flags | ToStringFlags.AsStringLiteral | ToStringFlags.WithAlias));
 			sb.Append(" LIKE ");
-			sb.Append(sqlBuffer.ToString(this.Pattern, SqlBuffer.ToStringFlags.AsStringLiteral | SqlBuffer.ToStringFlags.WithAlias));
+			sb.Append(sqlBuffer.ToString(this.Pattern, flags | ToStringFlags.AsStringLiteral | ToStringFlags.WithAlias));
 			return sb.ToString();
 		}
 	}
@@ -664,10 +725,10 @@ namespace Db {
 			this.Tbl = tbl;
 		}
 
-		public string Build(SqlBuffer sqlBuffer) {
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
 			var sb = new StringBuilder();
 			sb.Append("DELETE FROM ");
-			sb.Append(sqlBuffer.ToString(this.Tbl, SqlBuffer.ToStringFlags.Underlying));
+			sb.Append(sqlBuffer.ToString(this.Tbl, flags | ToStringFlags.Underlying));
 			return sb.ToString();
 		}
 	}
@@ -677,51 +738,91 @@ namespace Db {
 		Left,
 	}
 
-	public class SqlJoinUsing : ISqlElement {
+	public class SqlJoin : ISqlElement {
 		public JoinType JoinType;
+		public bool IsUsing;
 		public object Tbl;
 		public object Col;
+		public object[] Expressions;
 
-		public SqlJoinUsing(JoinType joinType, object tbl, object col) {
+		public SqlJoin(JoinType joinType, object tbl) {
 			this.JoinType = joinType;
 			this.Tbl = tbl;
-			this.Col = col;
 		}
 
-		public string Build(SqlBuffer sqlBuffer) {
+		public SqlJoin Using(object col) {
+			this.IsUsing = true;
+			this.Col = col;
+			return this;
+		}
+
+		public SqlJoin On(params object[] expressions) {
+			this.IsUsing = false;
+			this.Expressions = expressions;
+			return this;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
 			var sb = new StringBuilder();
 			sb.Append(this.JoinType == JoinType.Inner ? "INNER JOIN" : "LEFT JOIN");
 			sb.Append(" ");
-			sb.Append(sqlBuffer.ToString(this.Tbl, SqlBuffer.ToStringFlags.WithAlias));
-			sb.Append(" USING(");
-			sb.Append(sqlBuffer.ToString(this.Col, SqlBuffer.ToStringFlags.Underlying));
-			sb.Append(")");
+			sb.Append(sqlBuffer.ToString(this.Tbl, flags | ToStringFlags.WithAlias));
+			if (this.IsUsing) {
+				if (this.Col == null) {
+					throw new ApplicationException("JOIN USING に対して列が指定されていません。");
+				}
+				sb.Append(" USING(");
+				sb.Append(sqlBuffer.ToString(this.Col, flags | ToStringFlags.Underlying));
+				sb.Append(")");
+			} else {
+				if (this.Expressions == null) {
+					throw new ApplicationException("JOIN ON に対して結合式が指定されていません。");
+				}
+				sb.Append(" ON ");
+				for (int i = 0; i < this.Expressions.Length; i++) {
+					if (i != 0) {
+						sb.Append(" ");
+					}
+					sb.Append(sqlBuffer.ToString(this.Expressions[i], flags | ToStringFlags.WithAlias));
+				}
+			}
 			return sb.ToString();
 		}
 	}
 
-	public class SqlJoinOn : ISqlElement {
-		public JoinType JoinType;
-		public object Tbl;
+	public class SqlAnd : ISqlElement {
 		public object[] Expressions;
 
-		public SqlJoinOn(JoinType joinType, object tbl, params object[] expressions) {
-			this.JoinType = joinType;
-			this.Tbl = tbl;
+		public SqlAnd(params object[] expressions) {
 			this.Expressions = expressions;
 		}
 
-		public string Build(SqlBuffer sqlBuffer) {
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
 			var sb = new StringBuilder();
-			sb.Append(this.JoinType == JoinType.Inner ? "INNER JOIN" : "LEFT JOIN");
-			sb.Append(" ");
-			sb.Append(sqlBuffer.ToString(this.Tbl, SqlBuffer.ToStringFlags.WithAlias));
-			sb.Append(" ON ");
 			for (int i = 0; i < this.Expressions.Length; i++) {
 				if (i != 0) {
-					sb.Append(" ");
+					sb.Append(" AND ");
 				}
-				sb.Append(sqlBuffer.ToString(this.Expressions[i]));
+				sb.Append("(" + sqlBuffer.ToString(this.Expressions[i], flags) + ")");
+			}
+			return sb.ToString();
+		}
+	}
+
+	public class SqlOr : ISqlElement {
+		public object[] Expressions;
+
+		public SqlOr(params object[] expressions) {
+			this.Expressions = expressions;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			for (int i = 0; i < this.Expressions.Length; i++) {
+				if (i != 0) {
+					sb.Append(" OR ");
+				}
+				sb.Append("(" + sqlBuffer.ToString(this.Expressions[i], flags) + ")");
 			}
 			return sb.ToString();
 		}
@@ -732,29 +833,6 @@ namespace Db {
 	/// </summary>
 	public static class Db {
 		#region 公開メソッド
-		public static string Cols(params Col[] cols) {
-			return string.Join(", ", cols.Select(c => c.Name));
-		}
-
-		public static string Cols(string tableName, params Col[] cols) {
-			return string.Join(", ", cols.Select(c => tableName + "." + c.Name));
-		}
-
-		public static string Cols(params Tbl[] tbls) {
-			var sb = new StringBuilder();
-			foreach (var t in tbls) {
-				if (sb.Length != 0) {
-					sb.Append(", ");
-				}
-				sb.Append(string.Join(", ", t.ColsArray.Select(c => t.Name + "." + c.Name)));
-			}
-			return sb.ToString();
-		}
-
-		public static string Sql(params string[] elements) {
-			return string.Join("\n", elements) + ";";
-		}
-
 		/// <summary>
 		/// 指定のSQL文モジュールからSQL文を生成し<see cref="MySqlCommand"/>に適用するデリゲートを取得する
 		/// </summary>
@@ -765,8 +843,12 @@ namespace Db {
 
 			// 各モジュールを文字列に変換してSQL分を生成する
 			var sb = new StringBuilder();
-			foreach (var m in elements) {
-				sb.AppendLine(buffer.ToString(m));
+			for (int i = 0; i < elements.Length; i++) {
+				if (i < elements.Length - 1) {
+					sb.AppendLine(buffer.ToString(elements[i]));
+				} else {
+					sb.Append(buffer.ToString(elements[i]));
+				}
 			}
 			sb.Append(";");
 			var commandText = sb.ToString();
@@ -895,62 +977,159 @@ namespace Db {
 			};
 		}
 
-		public static SqlSelect Select(object expression, params object[] expressions) {
-			return new SqlSelect(expression, expressions);
+		/// <summary>
+		/// 指定列の SELECT を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="cols">列一覧、数が0なら * 扱いになる</param>
+		/// <returns><see cref="SqlSelect"/></returns>
+		public static SqlSelect Select(params object[] cols) {
+			return new SqlSelect(cols);
 		}
 
+		/// <summary>
+		/// 指定テーブルからの FROM を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="tbl">取得元テーブル</param>
+		/// <returns><see cref="SqlFrom"/></returns>
 		public static SqlFrom From(object tbl) {
 			return new SqlFrom(tbl);
 		}
 
+		/// <summary>
+		/// WHERE を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="expression">式</param>
+		/// <param name="expressions">さらに結合する式一覧</param>
+		/// <returns><see cref="SqlWhere "/></returns>
 		public static SqlWhere Where(object expression, params object[] expressions) {
 			return new SqlWhere(expression, expressions);
 		}
 
+		/// <summary>
+		/// 式を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="expression">式</param>
+		/// <param name="expressions">さらに結合する式一覧</param>
+		/// <returns><see cref="SqlExpr"/></returns>
+		public static SqlExpr Expr(object expression, params object[] expressions) {
+			return new SqlExpr(expression, expressions);
+		}
+
+		/// <summary>
+		/// 指定テーブルへの INSERT INTO を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="tbl">挿入先テーブル</param>
+		/// <param name="cols">挿入値に対応する挿入先テーブルの列一覧</param>
+		/// <returns><see cref="SqlInsertInto"/></returns>
 		public static SqlInsertInto InsertInto(object tbl, params object[] cols) {
 			return new SqlInsertInto(tbl, cols);
 		}
 
+		/// <summary>
+		/// VALUES を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="value">１レコード分の各列の値一覧</param>
+		/// <returns><see cref="SqlValues"/></returns>
 		public static SqlValues Values(params object[] value) {
 			return new SqlValues(value);
 		}
 
+		/// <summary>
+		/// VALUES を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="values">複数レコード分の各列の値一覧</param>
+		/// <returns><see cref="SqlValues"/></returns>
 		public static SqlValues Values(object[][] values) {
 			return new SqlValues(values);
 		}
 
+		/// <summary>
+		/// LIKE を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="expression">LIKE の左側の式</param>
+		/// <param name="pattern">LIKE のパターン文字列</param>
+		/// <returns><see cref="SqlLike"/></returns>
 		public static SqlLike Like(object expression, object pattern) {
 			return new SqlLike(expression, pattern);
 		}
 
+		/// <summary>
+		/// DELETE FROM を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="tbl">削除元テーブル</param>
+		/// <returns><see cref="SqlDeleteFrom"/></returns>
 		public static SqlDeleteFrom DeleteFrom(object tbl) {
 			return new SqlDeleteFrom(tbl);
 		}
 
-		public static SqlJoinUsing InnerJoinUsing(object tbl, object col) {
-			return new SqlJoinUsing(JoinType.Inner, tbl, col);
+		/// <summary>
+		/// INNER JOIN を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="tbl">結合するテーブル</param>
+		/// <returns><see cref="SqlJoin"/></returns>
+		public static SqlJoin InnerJoin(object tbl) {
+			return new SqlJoin(JoinType.Inner, tbl);
 		}
 
-		public static SqlJoinUsing LeftJoinUsing(object tbl, object col) {
-			return new SqlJoinUsing(JoinType.Left, tbl, col);
+		/// <summary>
+		/// LEFT JOIN を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="tbl">結合するテーブル</param>
+		/// <returns><see cref="SqlJoin"/></returns>
+		public static SqlJoin LeftJoin(object tbl) {
+			return new SqlJoin(JoinType.Left, tbl);
 		}
 
-		public static SqlJoinOn InnerJoinOn(object tbl, params object[] expressions) {
-			return new SqlJoinOn(JoinType.Inner, tbl, expressions);
+		/// <summary>
+		/// AND を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="expressions">AND で結合する複数の式</param>
+		/// <returns><see cref="SqlAnd"/></returns>
+		public static SqlAnd And(params object[] expressions) {
+			return new SqlAnd(expressions);
 		}
 
-		public static SqlJoinOn LeftJoinOn(object tbl, params object[] expressions) {
-			return new SqlJoinOn(JoinType.Left, tbl, expressions);
+		/// <summary>
+		/// OR を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="expressions">OR で結合する複数の式</param>
+		/// <returns><see cref="SqlOr"/></returns>
+		public static SqlOr Or(params object[] expressions) {
+			return new SqlOr(expressions);
 		}
 
+		/// <summary>
+		/// 指定式を括弧で括る
+		/// </summary>
+		/// <param name="expression">式</param>
+		/// <returns>括弧で括られた式</returns>
+		public static string Parenthesize(object expression) {
+			return "(" + expression + ")";
+		}
 
+		/// <summary>
+		/// 指定された式が NULL または長さ0なら真となる
+		/// </summary>
+		public static string NullOrEmpty(object expression) {
+			return "(" + expression + " IS NULL OR length(" + expression + ")=0)";
+		}
+
+		/// <summary>
+		/// CREATE TABLE IF NOT EXISTS のSQL文文字列を生成する
+		/// </summary>
+		/// <param name="table">テーブル名</param>
+		/// <param name="cols">列一覧</param>
+		/// <param name="constraints">制約一覧</param>
+		/// <returns>SQL文</returns>
 		public static string CreateTableIfNotExists(string table, Col[] cols, params Cr[] constraints) {
 			var sb = new StringBuilder();
 			sb.AppendLine("CREATE TABLE IF NOT EXISTS " + table + "(");
 			for (int i = 0; i < cols.Length; i++) {
 				var col = cols[i];
-				if (i != 0) {
-					sb.Append(", ");
+				if (i == 0) {
+					sb.Append(" ");
+				} else {
+					sb.Append(",");
 				}
 				sb.Append(col.NameQuoted + " " + col.DbType);
 				if (constraints.Where(c => c.Type == CrType.AutoIncrement && c.Cols.Contains(col)).Any()) {
@@ -960,7 +1139,7 @@ namespace Db {
 			}
 			var pk = constraints.Where(c => c.Type == CrType.PrimaryKey).FirstOrDefault();
 			if (pk != null) {
-				sb.Append(", PRIMARY KEY(");
+				sb.Append(",PRIMARY KEY(");
 				for (int i = 0; i < pk.Cols.Length; i++) {
 					if (i != 0) {
 						sb.Append(", ");
@@ -971,159 +1150,6 @@ namespace Db {
 			}
 			sb.AppendLine(");");
 			return sb.ToString();
-		}
-
-
-		/// <summary>
-		/// 指定値を<see cref="MySqlParameterCollection"/>に入れた状態にしてその値を指す文字列を生成する
-		/// </summary>
-		/// <typeparam name="T">値型</typeparam>
-		/// <param name="parameters">ここにパラメータとして値が入る</param>
-		/// <param name="sb">(@v0, @v1) の様に値を指す文字列が構築される</param>
-		/// <param name="value">指定値</param>
-		public static void BuildValueUsingParameters<T>(MySqlParameterCollection parameters, StringBuilder sb, T value) {
-			PropertiesToParam<T>.Invoke(parameters, sb, value);
-		}
-
-		/// <summary>
-		/// 指定テーブルへの値挿入コマンドを指定<see cref="MySqlCommand"/>に構築する
-		/// </summary>
-		/// <typeparam name="T">挿入値型</typeparam>
-		/// <param name="cmd">構築先コマンド</param>
-		/// <param name="table">挿入先テーブル</param>
-		/// <param name="cols">挿入列一覧</param>
-		/// <param name="value">挿入値</param>
-		public static void BuildInsertInto<T>(MySqlCommand cmd, string table, Col[] cols, T value) {
-			var parameters = cmd.Parameters;
-			parameters.Clear();
-
-			var sb = new StringBuilder();
-			sb.Append("INSERT INTO " + table + "(");
-			for (int i = 0; i < cols.Length; i++) {
-				var col = cols[i];
-				if (i != 0) {
-					sb.Append(",");
-				}
-				sb.Append(col.NameQuoted);
-			}
-			sb.AppendLine(")");
-			sb.AppendLine("VALUES");
-
-			BuildValueUsingParameters(parameters, sb, value);
-			sb.Append(";");
-
-			cmd.CommandText = sb.ToString();
-		}
-
-		/// <summary>
-		/// 指定テーブルへの値列挿入コマンドを指定<see cref="MySqlCommand"/>に構築する
-		/// </summary>
-		/// <typeparam name="T">挿入値型</typeparam>
-		/// <param name="cmd">構築先コマンド</param>
-		/// <param name="table">挿入先テーブル</param>
-		/// <param name="cols">挿入列一覧</param>
-		/// <param name="values">挿入値一覧</param>
-		public static void BuildInsertInto<T>(MySqlCommand cmd, string table, Col[] cols, IEnumerable<T> values) {
-			var parameters = cmd.Parameters;
-			parameters.Clear();
-
-			var sb = new StringBuilder();
-			sb.Append("INSERT INTO " + table + "(");
-			for (int i = 0; i < cols.Length; i++) {
-				var col = cols[i];
-				if (i != 0) {
-					sb.Append(",");
-				}
-				sb.Append(col.NameQuoted);
-			}
-			sb.AppendLine(")");
-			sb.AppendLine("VALUES");
-
-			var first = true;
-			foreach (var value in values) {
-				if (first) {
-					first = false;
-				} else {
-					sb.Append(",");
-				}
-				BuildValueUsingParameters(parameters, sb, value);
-			}
-			sb.Append(";");
-
-			cmd.CommandText = sb.ToString();
-		}
-
-
-
-		public static string SelectAll() {
-			return "SELECT *";
-		}
-
-		public static string Select(params Col[] cols) {
-			var sb = new StringBuilder();
-			sb.Append("SELECT ");
-			for (int i = 0; i < cols.Length; i++) {
-				var c = cols[i];
-				if (i != 0) {
-					sb.Append(", ");
-				}
-				sb.Append(c.NameQuoted);
-			}
-			return sb.ToString();
-		}
-
-		public static string Select(params Tbl[] tblcols) {
-			var sb = new StringBuilder();
-			sb.Append("SELECT ");
-			for (int i = 0; i < tblcols.Length; i++) {
-				var t = tblcols[i];
-				if (i != 0) {
-					sb.Append(", ");
-				}
-				sb.Append(string.Join(", ", t.ColsArray.Select(c => t.Name + "." + c.Name)));
-			}
-			return sb.ToString();
-		}
-
-		public static string From(string tableName, string alias) {
-			return "FROM " + tableName + " " + alias;
-		}
-
-		public static string From(string tableName, Tbl alias) {
-			return "FROM " + tableName + " " + alias.Name;
-		}
-
-		public static string JoinUsing(string tableName, string alias, Col col) {
-			return "INNER JOIN " + tableName + " " + alias + " USING(" + col.Name + ")";
-		}
-
-		public static string Where(string expression) {
-			return "WHERE " + expression;
-		}
-
-		public static string Parenthesize(string expression) {
-			return "(" + expression + ")";
-		}
-
-		/// <summary>
-		/// 指定された複数の式を AND で連結する
-		/// </summary>
-		public static string And(params string[] expressions) {
-			return string.Join(" AND ", expressions.Select(e => Parenthesize(e)));
-		}
-
-		/// <summary>
-		/// 指定された複数の式を OR で連結する
-		/// </summary>
-		public static string Or(params string[] expressions) {
-			return string.Join(" OR ", expressions.Select(e => Parenthesize(e)));
-		}
-
-		/// <summary>
-		/// 指定された式が NULL または長さ0なら真となる
-		/// </summary>
-		public static string NullOrEmpty(string expression) {
-			return "(" + expression + " IS NULL OR length(" + expression + ")=0)";
 		}
 		#endregion
 	}
@@ -1216,37 +1242,48 @@ namespace Db {
 	}
 
 	/// <summary>
-	/// <typeparamref name="T"/>内にフィールドまたはプロパティとして存在する<see cref="Col{S}"/>にエイリアスをセットする
+	/// 指定の列一覧クラスを基にエイリアスをセットした列一覧クラスを生成する
 	/// </summary>
-	/// <typeparam name="T">フィールドまたはプロパティとして<see cref="Col{S}"/>を持つクラス型</typeparam>
+	/// <typeparam name="T">フィールドまたはプロパティとして<see cref="Col{S}"/>を持つ列一覧クラス型</typeparam>
 	public static class AliasingCols<T> where T : class, new() {
-		public static readonly Action<Tbl<T>> Invoke;
+		public static readonly Func<T, string, T> Invoke;
 
 		static AliasingCols() {
 			var colsType = typeof(T);
-			var tblType = typeof(Tbl<T>);
-			var tbl = Expression.Parameter(tblType);
+			var inputCols = Expression.Parameter(colsType);
+			var inputAliasName = Expression.Parameter(typeof(string));
 			var fieldsOfCols = colsType.GetFields().Where(f => f.IsPublic && f.FieldType.IsGenericType && f.FieldType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
 			var propertiesOfCols = colsType.GetProperties().Where(p => p.GetSetMethod(false).IsPublic && p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
-			var aliasName = Expression.Parameter(typeof(string));
 			var cols = Expression.Parameter(colsType);
 			var expressions = new List<Expression>();
+			var colsCtor = colsType.GetConstructor(new Type[0]);
 
-			expressions.Add(Expression.Assign(aliasName, Expression.Property(tbl, tblType.GetProperty("Name"))));
-			expressions.Add(Expression.Assign(cols, Expression.Property(tbl, tblType.GetProperty("Cols"))));
+			if (colsCtor == null) {
+				throw new ApplicationException("列一覧クラス " + colsType + " にはデフォルトコンストラクタが必要です。");
+			}
+
+			expressions.Add(Expression.Assign(cols, Expression.New(colsCtor)));
 
 			foreach (var f in fieldsOfCols) {
 				var t = f.FieldType;
 				var ctorForAlias = t.GetConstructor(new Type[] { typeof(string), t });
-				expressions.Add(Expression.Assign(Expression.Field(cols, f), Expression.New(ctorForAlias, aliasName, Expression.Field(cols, f))));
+				expressions.Add(Expression.Assign(Expression.Field(cols, f), Expression.New(ctorForAlias, inputAliasName, Expression.Field(cols, f))));
 			}
 			foreach (var p in propertiesOfCols) {
 				var t = p.PropertyType;
 				var ctorForAlias = t.GetConstructor(new Type[] { typeof(string), t });
-				expressions.Add(Expression.Assign(Expression.Property(cols, p), Expression.New(ctorForAlias, aliasName, Expression.Property(cols, p))));
+				expressions.Add(Expression.Assign(Expression.Property(cols, p), Expression.New(ctorForAlias, inputAliasName, Expression.Property(cols, p))));
 			}
+			expressions.Add(cols);
 
-			Invoke = Expression.Lambda<Action<Tbl<T>>>(Expression.Block(new ParameterExpression[] { aliasName, cols }, expressions), tbl).Compile();
+			Invoke = Expression.Lambda<Func<T, string, T>>(
+				Expression.Block(
+					new ParameterExpression[] { cols },
+					expressions
+				),
+				inputCols,
+				inputAliasName
+			).Compile();
 		}
 	}
 
@@ -1379,8 +1416,9 @@ namespace Db {
 				var ct = pt.GetGenericArguments()[0];
 				var nct = Nullable.GetUnderlyingType(ct);
 				var t = nct ?? ct;
-				var getMethodName = "";
 
+				// 列の型に対応した DataReader から取得メソッド名を選ぶ
+				var getMethodName = "";
 				if (t == typeof(string)) {
 					getMethodName = "String";
 				} else if (t == typeof(bool)) {
@@ -1407,7 +1445,7 @@ namespace Db {
 				}
 
 				var col = Expression.Property(paramBaseCols, p);
-				var colName = Expression.Field(col, pt.GetField("Name"));
+				var colName = Expression.Constant(p.Name);
 
 				var pctor = pt.GetConstructor(new Type[] { pt, ct });
 				if (pctor == null) {
