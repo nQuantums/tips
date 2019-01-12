@@ -64,6 +64,8 @@ class Actor:
 		return self.frames
 
 	def run(self):
+		torch.set_num_threads(1)
+		
 		ap = self.params['actor']
 
 		conn = psycopg2.connect(self.params["db"]["connection_string"])
@@ -175,7 +177,7 @@ class Actor:
 						# ※torch.tensor のまま送るとLearner側の都合で問題があるので numpy にしている
 						if wait_shared_memory_clear:
 							while n_step_transition_batch_size <= self.remote_mem.qsize():
-								time.sleep(0.001)
+								time.sleep(0.01)
 						s = s.numpy()
 						a = a.numpy().astype(np.int8)
 						r = r.numpy()
