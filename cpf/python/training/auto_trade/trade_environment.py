@@ -240,6 +240,8 @@ class TradeEnvironment:
 		Returns:
 			状態.
 		"""
+		self.settle()
+
 		min_episode_len = self.window_size_max * 2
 		while True:
 
@@ -253,7 +255,6 @@ class TradeEnvironment:
 			self.episode_records = self.records[self.episodes[self.cur_episode]:self.episodes[self.cur_episode + 1]]
 
 			if min_episode_len <= self.episode_records.shape[0]:
-				self.settle()
 				self.index_in_episode = self.window_size_max
 				self.update_framewise_records()
 				self.draw_img()
@@ -265,7 +266,7 @@ class TradeEnvironment:
 		Return:
 			現在値.
 		"""
-		return self.episode_records[self.index_in_episode]['close'].item()
+		return self.episode_records[self.index_in_episode][4].item()
 
 	def order(self, position_type):
 		"""注文する.

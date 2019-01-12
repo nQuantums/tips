@@ -51,12 +51,10 @@ while True:
 		next_state, reward_info, terminal, info = env.step(suggested_action)
 		reward = reward_info[0]
 
-		# next_state, reward, terminal, info = env.step(action)
-		# env.render()
-		# img = next_state.sum(axis=0)
-		# img *= 1 / img.max()
-		# cv2.imshow('img', img)
-		# k = cv2.waitKey(1)
+		img = next_state.sum(axis=0)
+		img *= 1 / img.max()
+		cv2.imshow('img', img)
+		k = cv2.waitKey(1)
 		# if 49 <= k and k <= 52:
 		# 	action = k - 49
 		# else:
@@ -64,7 +62,7 @@ while True:
 		# if k == 27:
 		# 	break
 
-		# print(f'Step {step} reward {reward} ep_reward {ep_reward} sum_reward {sum_reward}')
+		print(f'Step {step} reward {reward} ep_reward {ep_reward} sum_reward {sum_reward}')
 		ep_reward += reward
 		sum_reward += reward
 		step += 1
