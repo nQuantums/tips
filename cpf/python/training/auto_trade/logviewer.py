@@ -24,17 +24,26 @@ with psycopg2.connect(dbp['connection_string']) as conn:
 		param_sets = pd.read_sql('select * from param_set', conn)
 		print(param_sets)
 
+		fig = plt.figure()
+		ax = fig.add_subplot(2, 1, 1)
+		ax_sum = fig.add_subplot(2, 1, 2)
+
 		for i in range(ap['num_actors']):
+			s = db.select([l.train_num, a.reward]).\
+				frm(l).\
+				join(a).on(f'{l.train_num}={a.train_num}').\
+				where(f'{l.param_set_id}=1 AND {a.actor_id}={i} AND {a.action}<>{a.q_action}').\
+				order_by([l.train_num, l.timestamp, a.timestamp])
+			df = pd.read_sql(s.sql(), conn)
+			df.plot(x='train_num', ax=ax)
+
 			s = db.select([l.train_num, a.sum_reward]).\
 				frm(l).\
 				join(a).on(f'{l.train_num}={a.train_num}').\
 				where(f'{l.param_set_id}=1 AND {a.actor_id}={i}').\
 				order_by([l.train_num, l.timestamp, a.timestamp])
 			df = pd.read_sql(s.sql(), conn)
-			if ax is None:
-				ax = df.plot(x='train_num')
-			else:
-				df.plot(x='train_num', ax=ax)
+			df.plot(x='train_num', ax=ax_sum)
 
 		# print(df)
 		plt.show()
