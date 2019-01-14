@@ -125,6 +125,8 @@ class Learner(object):
 			return False
 
 	def learn(self):
+		lp = self.params['learner']
+
 		t = tables.LearnerData()
 		record_type = t.get_record_type()
 		record_insert = t.get_insert()
@@ -135,6 +137,7 @@ class Learner(object):
 		target_sync_num = 0
 		send_param_num = 0
 		min_replay_mem_size = self.params['learner']["min_replay_mem_size"]
+		send_to_actor_freq = lp['send_to_actor_freq']
 
 		print('learner waiting for replay memory.')
 		while self.replay_memory.size() <= min_replay_mem_size:
@@ -154,7 +157,7 @@ class Learner(object):
 			# 6. Update parameters of the Q network(s)
 			if self.update_Q(loss):
 				target_sync_num += 1
-			if step_num % 5 == 0:
+			if step_num % send_to_actor_freq == 0:
 				self.shared_state['Q_state_dict'] = self.state_dict_to_cpu(self.Q.state_dict()), self.state_dict_to_cpu(
 				    self.Q_target.state_dict())
 				self.last_Q_state_dict_id += 1

@@ -11,23 +11,25 @@
         "num_actors": 8,
         "T": 100000000,
         "num_steps": 3,
-        "epsilon": 0.7,
+        "epsilon": 0.6,
         "alpha": 7,
         "gamma": 0.99,
         "n_step_transition_batch_size": 16,
         "Q_network_sync_freq": 100,
         "wait_shared_memory_clear": true,
-        "policy": "plc_suggested_action",
-        "reward_adj": "adj_positional_reward_delta"
+        "spread": 5,
+        "policy": "plc_suggested_action7",
+        "reward_adj": "adj_positional_reward_delta2"
     },
 
     "learner": {
-        "q_target_sync_freq": 50,
-        "min_replay_mem_size": 2000,
+        "q_target_sync_freq": 1000,
+        "send_to_actor_freq": 7,
+        "min_replay_mem_size": 5000,
         "replay_sample_size": 32,
-        "state_dict_prefix": "Data",
+        "state_dict_prefix": "DataSp5Scale",
         "model": "dqn_batchnorm_prelu",
-        "hidden_size": "32",
+        "hidden_size": 64,
         "optimizer": "torch.optim.Adamax({})"
     },
 

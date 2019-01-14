@@ -7,7 +7,7 @@ class ParamSet(db.Tbl):
 		super().__init__('param_set')
 		self.param_set_id = db.serial64
 		self.model = db.text
-		self.hidden_size = db.text
+		self.hidden_size = db.int32
 		self.optimizer = db.text
 		self.state_dict_prefix = db.text
 		self.window_size = db.int32

@@ -17,7 +17,9 @@ ptps = maxs - mins
 fig = plt.figure()
 ax = fig.add_subplot(1, 1, 1)
 
-k = np.ones(20) / 20
+k_size = 10
+k_size_helf = k_size // 2
+k = np.ones(k_size) / k_size
 o = values[:, 0]
 h = values[:, 1]
 l = values[:, 2]
@@ -29,7 +31,7 @@ ma_sign = np.sign(ma_dif)
 ma_sign_dif = np.diff(ma_sign)
 ma_sign_indices = np.nonzero(ma_sign_dif)[0]
 ma_sign_values = ma[ma_sign_indices]
-ma_sign_indices += 10
+ma_sign_indices += k_size_helf
 
 down = np.nonzero((ma_dif < 0).astype('i4'))[0]
 up = np.nonzero((0 < ma_dif).astype('i4'))[0]

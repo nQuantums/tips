@@ -103,7 +103,10 @@ class Actor:
 		reward = 0
 		last_positional_reward = None
 
-		ma_kernel = np.ones(20) / 20
+		ma_kernel_size = 10
+		ma_kernel_size_half = ma_kernel_size // 2
+		ma_kernel = np.ones(ma_kernel_size) / ma_kernel_size
+		ma = None
 		ma_sign_values = None
 		ma_sign_indices = None
 
@@ -142,6 +145,291 @@ class Actor:
 			else:
 				return q_action, q_action
 
+		def plc_suggested_action2(q):
+			"""乱数の代わりに計算済みのお勧めアクションを使用する.
+			"""
+			nonlocal ma_sign_indices, ma_sign_values
+
+			q_action = torch.argmax(q, 0).item()
+
+			if random.random() < self.epsilon:
+				suggested_action = 0 # 基本何もしない
+
+				# 次の折り返し地点わかっているなら、折返し場所の値と現在値との差分からアクションを決定する
+				next_sign_index = np.where(self.env.index_in_episode <= ma_sign_indices)[0][:1]
+				next_sign_index = next_sign_index.item() if next_sign_index.size else -1
+				if 0 <= next_sign_index:
+					d = ma_sign_values[next_sign_index] - self.env.get_value()
+					if self.env.spread < d:
+						# 差がスプレッドより大きいなら買う
+						if self.env.position_type != 1:
+							suggested_action = 1
+					elif d < self.env.spread:
+						# 差がスプレッドより大きいなら売る
+						if self.env.position_type != 2:
+							suggested_action = 2
+					elif self.env.position_type:
+						# 差がスプレッドより小さいなら損失が大きくなる前に閉じる
+						suggested_action = 3
+
+				return suggested_action, q_action
+			else:
+				return q_action, q_action
+
+		def plc_suggested_action3(q):
+			"""乱数の代わりに計算済みのお勧めアクションを使用する.
+			"""
+			nonlocal ma_sign_indices, ma_sign_values
+
+			q_action = torch.argmax(q, 0).item()
+
+			if random.random() < self.epsilon:
+				suggested_action = 0 # 基本何もしない
+
+				# 次の折り返し地点わかっているなら、折返し場所の値と現在値との差分からアクションを決定する
+				next_sign_index = np.where(self.env.index_in_episode <= ma_sign_indices)[0][:1]
+				next_sign_index = next_sign_index.item() if next_sign_index.size else -1
+				if 0 <= next_sign_index and ma_kernel_size_half <= self.env.index_in_episode:
+					d = ma_sign_values[next_sign_index] - ma[self.env.index_in_episode - ma_kernel_size_half]
+					if self.env.spread < d:
+						# 差がスプレッドより大きいなら買う
+						if self.env.position_type != 1:
+							suggested_action = 1
+					elif d < self.env.spread:
+						# 差がスプレッドより大きいなら売る
+						if self.env.position_type != 2:
+							suggested_action = 2
+					elif self.env.position_type:
+						# 差がスプレッドより小さいなら損失が大きくなる前に閉じる
+						suggested_action = 3
+
+				return suggested_action, q_action
+			else:
+				return q_action, q_action
+
+		def plc_suggested_action4(q):
+			"""乱数の代わりに計算済みのお勧めアクションを使用する.
+			"""
+			nonlocal ma_sign_indices, ma_sign_values
+
+			q_action = torch.argmax(q, 0).item()
+
+			if random.random() < self.epsilon:
+				suggested_action = 0 # 基本何もしない
+
+				# 次の折り返し地点わかっているなら、折返し場所の値と現在値との差分からアクションを決定する
+				next_sign_index = np.where(self.env.index_in_episode <= ma_sign_indices)[0][:1]
+				next_sign_index = next_sign_index.item() if next_sign_index.size else -1
+				if 0 <= next_sign_index and ma_kernel_size_half <= self.env.index_in_episode:
+					d = ma_sign_values[next_sign_index] - ma[self.env.index_in_episode - ma_kernel_size_half]
+					if self.env.position_type == 0:
+						# 差がスプレッドより大きいなら売買する
+						if self.env.spread < d:
+							suggested_action = 1
+						elif d < self.env.spread:
+							suggested_action = 2
+					elif 0 < self.env.position_type:
+						if d == 0:
+							# 目標値に達したら買いから売りに転じる
+							suggested_action = 2
+						elif d < 0:
+							# 想定と逆のポジション持ってしまっているので決済する
+							suggested_action = 3
+					elif self.env.position_type < 0:
+						if d == 0:
+							# 目標値に達したら売りから買いに転じる
+							suggested_action = 1
+						elif 0 < d:
+							# 想定と逆のポジション持ってしまっているので決済する
+							suggested_action = 3
+
+				return suggested_action, q_action
+			else:
+				return q_action, q_action
+
+		def plc_suggested_action5(q):
+			"""乱数の代わりに計算済みのお勧めアクションを使用する.
+			"""
+			nonlocal ma_sign_indices, ma_sign_values
+
+			q_action = torch.argmax(q, 0).item()
+
+			if random.random() < self.epsilon:
+				suggested_action = 0 # 基本何もしない
+
+				# 次の折り返し地点わかっているなら、折返し場所の値と現在値との差分からアクションを決定する
+				i1 = np.where(self.env.index_in_episode <= ma_sign_indices)[0][:1]
+				i1 = i1.item() if i1.size else -1
+				if 0 <= i1 and ma_kernel_size_half <= self.env.index_in_episode:
+					cv = ma[self.env.index_in_episode - ma_kernel_size_half]
+					nv1 = ma_sign_values[i1]
+					d1 = nv1 - cv
+
+					if self.env.position_type == 0:
+						# ポジション持っておらず、次の折返し値との差がスプレッドより大きいなら売買する
+						if self.env.spread < d1:
+							suggested_action = 1
+						elif d1 < -self.env.spread:
+							suggested_action = 2
+					else:
+						# 既にポジション持っている際の処理
+						if self.env.index_in_episode == ma_sign_indices[i1]:
+							# 目標位置に達していたら基本は決済するが可能なら次の売買に備える
+							suggested_action = 0
+
+							i2 = np.where(ma_sign_indices[i1] < ma_sign_indices)[0][:1]
+							i2 = i2.item() if i2.size else -1
+							if 0 <= i2:
+								d2 = ma_sign_values[i2] - nv1
+								if self.env.spread < d2:
+									suggested_action = 1
+								elif d2 < -self.env.spread:
+									suggested_action = 2
+						elif np.sign(self.env.position_type) != np.sign(d1):
+							# 理想と異なるポジションなら基本は決済するが可能ならポジションを調整する
+							suggested_action = 3
+
+							i2 = np.where(ma_sign_indices[i1] < ma_sign_indices)[0][:1]
+							i2 = i2.item() if i2.size else -1
+							if 0 <= i2:
+								d2 = ma_sign_values[i2] - cv
+								if self.env.spread < d2:
+									suggested_action = 1
+								elif d2 < -self.env.spread:
+									suggested_action = 2
+
+				return suggested_action, q_action
+			else:
+				return q_action, q_action
+
+		def plc_suggested_action6(q):
+			"""乱数の代わりに計算済みのお勧めアクションを使用する.
+			"""
+			nonlocal ma_sign_indices, ma_sign_values
+
+			q_action = torch.argmax(q, 0).item()
+
+			if random.random() < self.epsilon:
+				suggested_action = 0 # 基本何もしない
+
+				# 次の折り返し地点わかっているなら、折返し場所の値と現在値との差分からアクションを決定する
+				i1 = np.where(self.env.index_in_episode <= ma_sign_indices)[0][:1]
+				i1 = i1.item() if i1.size else -1
+				if 0 <= i1 and ma_kernel_size_half <= self.env.index_in_episode:
+					cv = ma[self.env.index_in_episode - ma_kernel_size_half]
+					nv1 = ma_sign_values[i1]
+					d1 = nv1 - cv
+
+					threshould = int(self.env.spread * 2)
+
+					if self.env.position_type == 0:
+						# ポジション持っておらず、次の折返し値との差がスプレッドより大きいなら売買する
+						if threshould < d1:
+							suggested_action = 1
+						elif d1 < -threshould:
+							suggested_action = 2
+					else:
+						# 既にポジション持っている際の処理
+						if self.env.index_in_episode == ma_sign_indices[i1]:
+							# 目標値に達していたら基本は決済するが可能なら次の売買に備える
+							suggested_action = 0 if 0 < self.env.calc_positional_reward() else 3
+
+							i2 = np.where(ma_sign_indices[i1] < ma_sign_indices)[0][:1]
+							i2 = i2.item() if i2.size else -1
+							if 0 <= i2:
+								d2 = ma_sign_values[i2] - nv1
+								if threshould < d2:
+									suggested_action = 1
+								elif d2 < -threshould:
+									suggested_action = 2
+						elif np.sign(self.env.position_type) != np.sign(d1):
+							# 理想と異なるポジションなら基本は決済するが可能ならポジションを調整する
+							suggested_action = 0 if 0 < self.env.calc_positional_reward() else 3
+
+							i2 = np.where(ma_sign_indices[i1] < ma_sign_indices)[0][:1]
+							i2 = i2.item() if i2.size else -1
+							if 0 <= i2:
+								d2 = ma_sign_values[i2] - cv
+								if threshould < d2:
+									suggested_action = 1
+								elif d2 < -threshould:
+									suggested_action = 2
+
+				return suggested_action, q_action
+			else:
+				return q_action, q_action
+
+		def plc_suggested_action7(q):
+			"""乱数の代わりに計算済みのお勧めアクションを使用する.
+			"""
+			nonlocal ma_sign_indices, ma_sign_values
+
+			q_action = torch.argmax(q, 0).item()
+
+			if random.random() < self.epsilon:
+				# 更に一定の確率でランダムにアクションを選択
+				if random.random() < self.epsilon:
+					return random.randrange(0, len(q)), q_action
+
+				suggested_action = 0 # 基本何もしない
+
+				# 次の折り返し地点わかっているなら、折返し場所の値と現在値との差分からアクションを決定する
+				i1 = np.where(self.env.index_in_episode <= ma_sign_indices)[0][:1]
+				i1 = i1.item() if i1.size else -1
+				if 0 <= i1 and ma_kernel_size_half <= self.env.index_in_episode:
+					cv = ma[self.env.index_in_episode - ma_kernel_size_half]
+					nv1 = ma_sign_values[i1]
+					d1 = nv1 - cv
+
+					threshould = int(self.env.spread * 2)
+
+					if self.env.position_type == 0:
+						# ポジション持っておらず、次の折返し値との差がスプレッドより大きいなら売買する
+						if threshould < d1:
+							suggested_action = 1
+						elif d1 < -threshould:
+							suggested_action = 2
+					else:
+						# 既にポジション持っている際の処理
+						if self.env.index_in_episode == ma_sign_indices[i1]:
+							# 目標値に達していたら基本は決済するが可能なら次の売買に備える
+							suggested_action = 0 if 0 < self.env.calc_positional_reward() else 3
+
+							i2 = np.where(ma_sign_indices[i1] < ma_sign_indices)[0][:1]
+							i2 = i2.item() if i2.size else -1
+							if 0 <= i2:
+								d2 = ma_sign_values[i2] - nv1
+								if threshould < d2:
+									suggested_action = 1
+								elif d2 < -threshould:
+									suggested_action = 2
+						elif np.sign(self.env.position_type) != np.sign(d1):
+							# 理想と異なるポジションなら基本は決済するが可能ならポジションを調整する
+							suggested_action = 0 if 0 < self.env.calc_positional_reward() else 3
+
+							i2 = np.where(ma_sign_indices[i1] < ma_sign_indices)[0][:1]
+							i2 = i2.item() if i2.size else -1
+							if 0 <= i2:
+								d2 = ma_sign_values[i2] - cv
+								if threshould < d2:
+									suggested_action = 1
+								elif d2 < -threshould:
+									suggested_action = 2
+
+				return suggested_action, q_action
+			else:
+				return q_action, q_action
+
+		def adj_none():
+			"""報酬調整を行わない.
+			"""
+
+		def adj_clip():
+			"""報酬を-1～1にクリップする.
+			"""
+			nonlocal reward
+			reward = np.sign(reward)
+
 		def adj_positional_reward_delta():
 			"""含み損益の変化量を報酬に加える.
 			"""
@@ -154,11 +442,23 @@ class Actor:
 			else:
 				last_positional_reward = None
 
+		def adj_positional_reward_delta2():
+			"""含み損益の変化量を報酬に加える.
+			"""
+			nonlocal last_positional_reward, reward
+			if self.env.position_type:
+				pr = self.env.calc_positional_reward()
+				if last_positional_reward is not None:
+					reward += (pr - last_positional_reward) / 10
+				last_positional_reward = pr
+			else:
+				last_positional_reward = None
+
 		# 設定から方策と報酬調整処理を取得する
 		policy = eval(ap['policy'])
 		reward_adj = eval(ap['reward_adj'])
 
-		self.env.spread = 0 # 最初はスプレッド０でやらないとポジってくれなくてまともに学習できない・・・
+		self.env.spread = ap['spread'] # 最初はスプレッド０でやらないとポジってくれなくてまともに学習できないので注意
 
 		while not status_dict['request_quit']:
 			ep_len = 0
@@ -177,10 +477,9 @@ class Actor:
 			ma_sign_dif = np.diff(ma_sign)
 			ma_sign_indices = np.nonzero(ma_sign_dif)[0]
 			ma_sign_values = ma[ma_sign_indices]
-			ma_sign_indices += 10
+			ma_sign_indices += ma_kernel_size_half
 			del values
 			del mix
-			del ma
 			del ma_dif
 			del ma_sign
 			del ma_sign_dif
@@ -281,7 +580,7 @@ class Actor:
 				if terminal or reward_org:
 					if self.actor_id == 7:
 						print(
-						    f'Actor#: {self.actor_id} t: {t} reward: {reward_org} ep_len: {ep_len} ep_reward: {ep_reward} sum_reward: {sum_reward}'
+						    f'Actor#: {self.actor_id} t: {t} reward: {reward_org} {reward} ep_len: {ep_len} ep_reward: {ep_reward} sum_reward: {sum_reward}'
 						)
 					train_num = status_dict['train_num']
 					record = record_type(param_set_id, terminal, actor_id, now(), train_num, self.env.spread, action[0], action[1],
