@@ -4,44 +4,36 @@ import matplotlib.pyplot as plt
 import cv2
 import trade_environment
 from trade_environment import TradeEnvironment
+import action_suggester
 
-ma_kernel_size = 10
-ma_kernel_size_half = ma_kernel_size // 2
-ma_kernel = np.ones(ma_kernel_size) / ma_kernel_size
+frame_num = 5
 
-env = TradeEnvironment('test.dat', 240, (1, 100, 110))
+env = TradeEnvironment('test.dat', 30, (100, 110))
 env.spread = 5
 reward = 0
 sum_reward = 0
+
+suggester = action_suggester.TpActionSuggester(env)
+rew_adjuster = action_suggester.TpRewardAdjuster(suggester)
+
+plt.style.use('seaborn-whitegrid')
+
+
+def make_state(state, frame):
+	return np.concatenate((frame, (state if state.shape[0] < frame_num else state[:state.shape[0] - 1])), axis=0)
+
+
 while True:
-	env.reset()
 	print(f'episode number: {env.cur_episode}')
 
-	values = trade_environment.values_view_from_records(env.episode_records)
-	o = values[:, 0]
-	h = values[:, 1]
-	l = values[:, 2]
-	c = values[:, 3]
-	mix = np.mean(values, axis=1)
-	ma = np.convolve(mix, ma_kernel, mode='valid')
-	ma_dif = np.diff(ma)
-	ma_sign = np.sign(ma_dif)
-	ma_sign_dif = np.diff(ma_sign)
-	ma_sign_indices = np.nonzero(ma_sign_dif)[0]
-	ma_sign_values = ma[ma_sign_indices]
-	ma_sign_indices += ma_kernel_size_half
-
-	fig = plt.figure()
-	ax = fig.add_subplot(1, 1, 1)
-	ax.plot(o)
-	ax.plot(h)
-	ax.plot(l)
-	ax.plot(c)
-	ax.plot(ma)
-	ax.plot(ma_sign_indices, ma_sign_values)
-
-	cur_sign_index = np.where(env.index_in_episode <= ma_sign_indices)[0][:1]
-	cur_sign_index = cur_sign_index.item() if cur_sign_index.size else -1
+	# 初期状態の取得
+	state = env.reset(False)
+	suggester.start_episode()
+	for _ in range(frame_num - 1):
+		frame, reward_info, terminal, _ = env.step(0)
+		if terminal:
+			break
+		state = make_state(state, frame)
 
 	terminal = False
 
@@ -50,74 +42,43 @@ while True:
 	ep_reward = 0
 	action = 0
 
+	rewards = np.zeros((len(env.episode_values),), dtype=np.float64)
+	reward_adjs = np.zeros((len(env.episode_values),), dtype=np.float64)
+	buy_indices = []
+	sell_indices = []
+	exit_indices = []
+	last_action = 0
+
 	while not terminal:
-		if random.random() < 0.9:
-			suggested_action = 0 # 基本何もしない
-
-			# if 0 <= cur_sign_index and ma_sign_indices[cur_sign_index] == env.index_in_episode:
-			# 	next_sign_index = cur_sign_index + 1
-			# 	if next_sign_index <= ma_sign_indices.shape[0] and next_sign_index < ma_sign_values.shape[0]:
-			# 		d = ma_sign_values[next_sign_index] - ma_sign_values[cur_sign_index]
-			# 		cur_sign_index = next_sign_index
-			# 		if env.spread < d:
-			# 			suggested_action = 1
-			# 		elif d < -env.spread:
-			# 			suggested_action = 2
-			# 		else:
-			# 			suggested_action = 3
-
-			# 次の折り返し地点わかっているなら、折返し場所の値と現在値との差分からアクションを決定する
-			i1 = np.where(env.index_in_episode <= ma_sign_indices)[0][:1]
-			i1 = i1.item() if i1.size else -1
-			if 0 <= i1 and ma_kernel_size_half <= env.index_in_episode:
-				cv = ma[env.index_in_episode - ma_kernel_size_half]
-				nv1 = ma_sign_values[i1]
-				d1 = nv1 - cv
-
-				threshould = int(env.spread * 2)
-
-				if env.position_type == 0:
-					# ポジション持っておらず、次の折返し値との差がスプレッドより大きいなら売買する
-					if threshould < d1:
-						suggested_action = 1
-					elif d1 < -threshould:
-						suggested_action = 2
-				else:
-					# 既にポジション持っている際の処理
-					if env.index_in_episode == ma_sign_indices[i1]:
-						# 目標値に達していたら基本は決済するが可能なら次の売買に備える
-						suggested_action = 0 if 0 < env.calc_positional_reward() else 3
-
-						i2 = np.where(ma_sign_indices[i1] < ma_sign_indices)[0][:1]
-						i2 = i2.item() if i2.size else -1
-						if 0 <= i2:
-							d2 = ma_sign_values[i2] - nv1
-							if threshould < d2:
-								suggested_action = 1
-							elif d2 < -threshould:
-								suggested_action = 2
-					elif np.sign(env.position_type) != np.sign(d1):
-						# 理想と異なるポジションなら基本は決済するが可能ならポジションを調整する
-						suggested_action = 0 if 0 < env.calc_positional_reward() else 3
-
-						i2 = np.where(ma_sign_indices[i1] < ma_sign_indices)[0][:1]
-						i2 = i2.item() if i2.size else -1
-						if 0 <= i2:
-							d2 = ma_sign_values[i2] - cv
-							if threshould < d2:
-								suggested_action = 1
-							elif d2 < -threshould:
-								suggested_action = 2
+		if random.random() < 0.5:
+			action = suggester.get_suggested_action()
 		else:
-			suggested_action = random.randrange(0, 4)
+			action = random.randrange(0, 4)
+		# action = suggester.get_suggested_action()
+		# action = random.randrange(0, 4)
+		# action = 1
 
-		next_state, reward_info, terminal, info = env.step(suggested_action)
-		reward = reward_info[0]
+		reward_adj = rew_adjuster.adjust_reward(action)
+		reward_adjs[env.index_in_episode] = reward_adj
 
-		img = next_state.sum(axis=0)
-		img = img * (1 / img.max())
-		cv2.imshow('img', img)
-		cv2.waitKey(1)
+		if action == 1:
+			buy_indices.append(env.index_in_episode)
+		elif action == 2:
+			sell_indices.append(env.index_in_episode)
+		elif action == 3:
+			exit_indices.append(env.index_in_episode)
+
+		# アクションを指定して次の状態を得る
+		frame, reward_info, terminal, _ = env.step(action)
+		next_state = make_state(state, frame)
+		reward_org = reward_info[0]
+		reward = reward_info[0] + reward_adj
+		rewards[env.index_in_episode - 1] = reward
+
+		# img = next_state.sum(axis=0)
+		# img = img * (1 / img.max())
+		# cv2.imshow('img', img)
+		# cv2.waitKey(1)
 
 		# if 49 <= ma_kernel and ma_kernel <= 52:
 		# 	action = ma_kernel - 49
@@ -126,11 +87,40 @@ while True:
 		# if ma_kernel == 27:
 		# 	break
 
-		print(f'Step {step} reward {reward} ep_len {ep_len} ep_reward {ep_reward} sum_reward {sum_reward}')
+		# print(f'Step {step} rew {reward} rew_adj {reward_adj} ep_len {ep_len} ep_rew {ep_reward} sum_rew {sum_reward}')
+
+		# 次のループに備える
+		state = next_state
+		ep_reward += reward_org
 		ep_len += 1
-		ep_reward += reward
-		sum_reward += reward
+		sum_reward += reward_org
 		step += 1
 
-	del mix
-	del ma
+	values = env.episode_values
+	o = values[:, 0]
+	h = values[:, 1]
+	l = values[:, 2]
+	c = values[:, 3]
+
+	reward_indices = np.nonzero(rewards)[0]
+	c_reward = c[reward_indices] + rewards[reward_indices]
+
+	adj_rew_indices = np.nonzero(reward_adjs)[0]
+	c_rewadj = c[adj_rew_indices] + reward_adjs[adj_rew_indices]
+
+	fig = plt.figure()
+	ax = fig.add_subplot(1, 1, 1)
+	x = np.arange(len(c))
+	# ax.plot(x, o, label='open')
+	# ax.plot(x, h, label='high')
+	# ax.plot(x, l, label='low')
+	ax.plot(x[reward_indices], c_reward, label='reward', marker='x')
+	ax.plot(x[suggester.tp_indices], c[suggester.tp_indices], label='tp')
+	ax.plot(x, c, label='close')
+	ax.plot(x[adj_rew_indices], c_rewadj, label='rewadj', linestyle='None', marker='+')
+	ax.plot(x[buy_indices], c[buy_indices], label='buy', linestyle='None', marker='^')
+	ax.plot(x[sell_indices], c[sell_indices], label='sell', linestyle='None', marker='v')
+	ax.plot(x[exit_indices], c[exit_indices], label='exit', linestyle='None', marker='o')
+
+	plt.legend()
+	plt.show()

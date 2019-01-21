@@ -6,7 +6,7 @@ def get_state_dict_name(params):
 	ap = params["actor"]
 	lp = params["learner"]
 	fhw = ep['frames_height_width']
-	return f'{lp["state_dict_prefix"]}.{lp["model"]}.{fhw[0]}_{fhw[1]}_{fhw[2]}.{lp["hidden_size"]}.{lp["optimizer"]}.{ap["policy"]}.{ap["reward_adj"]}.pt'
+	return f'{lp["state_dict_prefix"]}.{lp["model"]}.{fhw[0]}_{fhw[1]}_{fhw[2]}.{lp["hidden_size"]}.{lp["optimizer"]}.{ap["action_suggester"]}.{ap["reward_adjuster"]}.{ap["policy"]}.pt'
 
 def initialize(params):
 	db_conf = params['db']
@@ -34,7 +34,7 @@ def initialize(params):
 			           ep['frames_height_width'], ap['num_actors'], ap['num_steps'], ap['epsilon'], ap['alpha'], ap['gamma'],
 			           lp['q_target_sync_freq'], lp['min_replay_mem_size'], lp['replay_sample_size'],
 			           rp['soft_capacity'], rp['priority_exponent'],
-			           rp['importance_sampling_exponent'], ap['policy'], ap['reward_adj'])
+			           rp['importance_sampling_exponent'], ap['action_suggester'], ap['reward_adjuster'], ap['policy'])
 
 			found = find(cur, r)
 			if found is None:

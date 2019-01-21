@@ -23,8 +23,9 @@ class ParamSet(db.Tbl):
 		self.soft_capacity = db.int64
 		self.priority_exponent = db.float64
 		self.importance_sampling_exponent = db.float64
+		self.action_suggester = db.text
+		self.reward_adjuster = db.text
 		self.policy = db.text
-		self.reward_adj = db.text
 
 		self.pk(self.get_cols())
 

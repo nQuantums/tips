@@ -138,6 +138,9 @@ class Tbl:
 			create_index_statement = ';'.join([idx.get_create_statement() for idx in self.get_indices()]) + ';'
 		return f'CREATE TABLE IF NOT EXISTS {self._name} ({col_defs}{pk_defs});{create_index_statement}'
 
+	def get_drop_statement(self):
+		return f'DROP TABLE IF EXISTS {self._name};'
+
 	def get_insert(self, filter=None):
 		cols = [c.name for c in self.get_cols(filter)]
 		colps = ','.join(['%s' for _ in cols])

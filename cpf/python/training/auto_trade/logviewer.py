@@ -14,43 +14,58 @@ with psycopg2.connect(dbp['connection_string']) as conn:
 	conn.autocommit = True
 	with conn.cursor() as cur:
 		ax = None
-		df = []
 
 		param_set_id = int(sys.argv[1])
 		min_actor_id = int(sys.argv[2]) if 2 < len(sys.argv) else 0
 		max_actor_id = int(sys.argv[3]) if 3 < len(sys.argv) else 7
-		min_train_num = int(sys.argv[4]) if 4 < len(sys.argv) else 0
+		min_train_num = sys.argv[4] if 4 < len(sys.argv) else 0
+		index = sys.argv[5] if 5 < len(sys.argv) else 'train_num'
 
-		param_set = pd.read_sql(f'SELECT * FROM param_set WHERE param_set_id={param_set_id}', conn)
-		title = f"{param_set['model'][0]} hidden_size: {param_set['hidden_size'][0]} {param_set['policy'][0]} {param_set['reward_adj'][0]}"
+		ps = pd.read_sql(f'SELECT * FROM param_set WHERE param_set_id={param_set_id}', conn)
+		title = f"{ps['state_dict_prefix'][0]} {ps['model'][0]} hidden_size: {ps['hidden_size'][0]} {ps['action_suggester'][0]} {ps['reward_adjuster'][0]} {ps['policy'][0]}"
+
+		plt.style.use('seaborn-whitegrid')
 
 		fig = plt.figure()
-		fig.suptitle(title, fontsize=16)
-		ax_action = fig.add_subplot(3, 1, 1)
-		ax_action.set_title('action=q_action')
-		ax_q_action = fig.add_subplot(3, 1, 2)
-		ax_q_action.set_title('action<>q_action')
-		ax_sum = fig.add_subplot(3, 1, 3)
-		ax_sum.set_title('sum reward')
+		fig.suptitle(title, fontsize=12)
+		ax_action = fig.add_subplot(4, 1, 1)
+		ax_action.set_title('Reward Q action')
+		ax_q_action = fig.add_subplot(4, 1, 2)
+		ax_q_action.set_title('Reward random action')
+		ax_sum = fig.add_subplot(4, 1, 3)
+		ax_sum.set_title('Reward sum')
+		ax_q_action_number = fig.add_subplot(4, 1, 4)
+		ax_q_action_number.set_title('Q action')
 
 		for i in range(min_actor_id, max_actor_id + 1):
-			df = pd.read_sql(
-			    f'SELECT train_num, reward FROM actor_data WHERE param_set_id={param_set_id} AND actor_id={i} AND {min_train_num}<=train_num AND action=q_action ORDER BY train_num',
-			    conn)
-			if df.shape[0] != 0:
-				df.plot(x='train_num', ax=ax_action)
+			cond = f'param_set_id={param_set_id} AND actor_id={i} AND {min_train_num}<={index}'
 
-			df = pd.read_sql(
-			    f'SELECT train_num, reward FROM actor_data WHERE param_set_id={param_set_id} AND actor_id={i} AND {min_train_num}<=train_num AND action<>q_action ORDER BY train_num',
-			    conn)
+			df = pd.read_sql(f'SELECT sum(reward) FROM actor_data WHERE {cond} AND action=q_action', conn)
 			if df.shape[0] != 0:
-				df.plot(x='train_num', ax=ax_q_action)
+				ax_action.set_title(f'Reward Q action : sum={df["sum"][0]}')
 
-			df = pd.read_sql(
-			    f'SELECT train_num, sum_reward FROM actor_data WHERE param_set_id={param_set_id} AND actor_id={i} AND {min_train_num}<=train_num ORDER BY train_num',
-			    conn)
+			df = pd.read_sql(f'SELECT {index}, reward FROM actor_data WHERE {cond} AND action=q_action ORDER BY {index}', conn)
 			if df.shape[0] != 0:
-				df.plot(x='train_num', ax=ax_sum)
+				df.plot(x=index, ax=ax_action)
+
+			df = pd.read_sql(f'SELECT sum(reward) FROM actor_data WHERE {cond} AND action<>q_action', conn)
+			if df.shape[0] != 0:
+				ax_q_action.set_title(f'Reward Q action : sum={df["sum"][0]}')
+
+			df = pd.read_sql(f'SELECT {index}, reward FROM actor_data WHERE {cond} AND action<>q_action ORDER BY {index}', conn)
+			if df.shape[0] != 0:
+				df.plot(x=index, ax=ax_q_action)
+
+			df = pd.read_sql(f'SELECT {index}, sum_reward FROM actor_data WHERE {cond} ORDER BY {index}', conn)
+			if df.shape[0] != 0:
+				df.plot(x=index, ax=ax_sum)
+
+			df = pd.read_sql(f'SELECT {index}, action FROM actor_data WHERE {cond} AND action=q_action ORDER BY {index}', conn)
+			if df.shape[0] != 0:
+				df.plot(x=index, ax=ax_q_action_number, linestyle='None', marker='o')
+			df = pd.read_sql(f'SELECT {index}, action FROM actor_data WHERE {cond} AND action<>q_action ORDER BY {index}', conn)
+			if df.shape[0] != 0:
+				df.plot(x=index, ax=ax_q_action_number, linestyle='None', marker='o')
 
 		# print(df)
 		plt.show()

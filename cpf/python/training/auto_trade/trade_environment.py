@@ -8,6 +8,14 @@ import cv2
 action_num = 4
 overlay_num = 1
 
+ma_kernel_sizes = np.array([5, 15, 31, 61], np.int64)
+ma_kernel_size_halfs = ma_kernel_sizes // 2
+ma_kernels = [np.ones(size) / size for size in ma_kernel_sizes]
+
+chance_ma_kernel_size = 15
+chance_ma_kernel_size_halfs = chance_ma_kernel_size // 2
+chance_ma_kernel = np.ones(chance_ma_kernel_size) / chance_ma_kernel_size
+
 
 def load_from_csv(csv_filepath):
 	dtypes_csv = [('time', 'str'), ('open', 'f4'), ('high', 'f4'), ('low', 'f4'), ('close', 'f4'), ('volume', 'i4')]
@@ -88,30 +96,18 @@ def running_max_min(a, window_size, step_size):
 	return running_max_min_view(a, window_size, step_size).ptp(1)
 
 
-def get_state_shape(frames_height_width):
-	return (frames_height_width[0] * overlay_num,) + frames_height_width[1:]
-
-
 class TradeEnvironment:
 
-	def __init__(self, binary_filepath, window_size=30, frames_height_width=(4, 200, 240)):
+	def __init__(self, binary_filepath, window_size=30, height_width=(200, 240)):
 		# グラフ描画のサイズなど初期化
-		self.w = frames_height_width[2] # グラフ画像幅(px)
+		self.w = height_width[1] # グラフ画像幅(px)
 		self.w_max = self.w - 1 # グラフ画像幅(px)-1
-		self.h = frames_height_width[1] # グラフ画像高さ(px)
+		self.h = height_width[0] # グラフ画像高さ(px)
 		self.h_max = self.h - 1 # グラフ画像高さ(px)-1
-		self.frames = frames_height_width[0] # １状態作成におけるグラフ描画回数、１回描画する度に１つ過去の窓になる、１つ過去に遡ると描画時間範囲が倍になる
-		self.img = np.zeros((self.frames * overlay_num, self.h, self.w), np.float32) # グラフ描画先データ、これが状態となる
-		self.state_shape = get_state_shape(frames_height_width) # 状態データの形状
+		self.img = np.zeros((1, self.h, self.w), np.float32) # グラフ描画先データ、これが状態となる
 
 		# グラフ描画時の窓サイズ計算
-		window_size = window_size
-		framewise_window_sizes = []
-		for _ in range(self.frames):
-			framewise_window_sizes.append(window_size)
-			window_size *= 2
-		self.framewise_window_sizes = framewise_window_sizes # 各フレームのグラフ描画窓幅(分)
-		self.window_size_max = self.framewise_window_sizes[-1]
+		self.window_size = window_size
 
 		# 全データ読み込み
 		self.records = read_records(binary_filepath)
@@ -123,7 +119,7 @@ class TradeEnvironment:
 			raise Exception('No area exists for episode in histrical data.')
 		valid_episode_exists = False
 		for i in range(self.episodes.shape[0] - 1):
-			if self.window_size_max * 2 <= self.episodes[i + 1] - self.episodes[i]:
+			if self.window_size * 2 <= self.episodes[i + 1] - self.episodes[i]:
 				valid_episode_exists = True
 				break
 		if not valid_episode_exists:
@@ -132,7 +128,7 @@ class TradeEnvironment:
 		# その他変数初期化
 		self.num_acions = 4 # 選択可能アクション数
 		self.spread = 5 # スプレッド
-		self.loss_cut = 10000 # これ以上損したらロスカットされる
+		self.loss_cut = 100 # これ以上損したらロスカットされる
 
 		# 注文関係
 		self.position_type = 0 # ポジションタイプ、0: なし、1: 買い、-1: 売り
@@ -147,26 +143,23 @@ class TradeEnvironment:
 
 		# １エピソードの対象となるエリアをランダムに選択
 		self.cur_episode = -1 # 現在のエピソードのインデックス
-		self.episode_records = None # １エピソード全体分のレコード
-		self.index_in_episode = 0 # episode_records 内での現在値に対応するインデックス
-		self.framewise_records = [None for _ in range(self.frames)] # フレーム番号が大きいほど過去に向かって増えるレコード
-
-	def update_framewise_records(self):
-		er = self.episode_records
-		i = self.index_in_episode + 1
-		fr = self.framewise_records
-		fws = self.framewise_window_sizes
-		for f in range(self.frames):
-			fr[f] = er[i - fws[f]:i]
+		self.episode_time = None # １エピソード全体分の time 値
+		self.episode_values = None # １エピソード全体分の open, high, low, close 値
+		self.index_in_episode = 0 # episode_values 内での現在値に対応するインデックス
 
 	def draw_img(self):
-		fr = self.framewise_records
-		fws = self.framewise_window_sizes
-		img = self.img
-		w = self.w
-		h = self.h
-		chart_x = 5
-		chart_w = w - 10 - 1
+		end = self.index_in_episode + 1 # エピソード内での現在の最新値インデックス+1
+		img = self.img # 描画先バッファ
+		w = self.w # 画像幅(px)
+		h = self.h # 画像高さ(px)
+		chart_x = 5 # チャート部のX左端(px)
+		chart_y = 0 # チャート部のY上端(px)
+		chart_w = w - 10 # チャート部の幅(px)
+		chart_h = h # チャート部の高さ(px)
+		chart_w_for_scale = chart_w - 1 # チャート部X座標スケーリング用のチャート幅(px)
+		chart_h_for_scale = chart_h - 1 # チャート部Y座標スケーリング用のチャート高さ(px)
+		chart_right = chart_x + chart_w # チャート右端のX左端(px)+1
+		chart_bottom = chart_y + chart_h # チャート下端のY左端(px)+1
 		h_max = self.h_max
 
 		img[:] = 0
@@ -174,7 +167,6 @@ class TradeEnvironment:
 		position_start_value = self.position_start_value
 		positional_reward = self.calc_positional_reward() if position_start_value else 0
 
-		ind_color = 0.5
 		if positional_reward < 0:
 			ind_x1 = 0
 			ind_x2 = 5
@@ -182,57 +174,84 @@ class TradeEnvironment:
 			ind_x1 = w - 5
 			ind_x2 = w
 
-		for f in range(self.frames):
-			window_size = fws[f]
-			windowed_records = fr[f]
+		window_size = self.window_size
+		time = self.episode_time[end - window_size:end]
+		values = self.episode_values[end - window_size:end]
+		ma = []
 
-			time = records_to_time(windowed_records)
-			values = values_view_from_records(windowed_records)
+		# 可能なら移動平均を計算
+		for ki in range(len(ma_kernel_sizes)):
+			size_needed = window_size + ma_kernel_size_halfs[ki] * 2
+			if size_needed <= end:
+				start = end - size_needed
+				ma.append(np.convolve(self.episode_values[start:end, 1], ma_kernels[ki], mode='valid'))
+				ma.append(np.convolve(self.episode_values[start:end, 2], ma_kernels[ki], mode='valid'))
+				ma.append(np.convolve(self.episode_values[start:end, 3], ma_kernels[ki], mode='valid'))
 
-			time_max = time.max()
-			time_min = time_max - window_size * 60
-			values_min = values.min()
-			values_max = values.max()
-			if position_type:
-				values_min = min(values_min, position_start_value)
-				values_max = max(values_max, position_start_value)
-			values_min -= values_min % 250
-			values_max += 250 - values_max % 250
+		# 表示範囲となる最大最小を探す
+		time_max = time.max()
+		time_min = time_max - window_size * 60
+		values_min = values.min()
+		values_max = values.max()
 
-			time_scale = chart_w / (time_max - time_min)
-			value_scale = -h_max / (values_max - values_min)
-			value_translate = h_max - values_min * value_scale
+		for y in ma:
+			values_min = min(values_min, y.min())
+			values_max = max(values_max, y.max())
 
-			cur = int(np.rint(values[-1, 3] * value_scale + value_translate).item())
-			if position_type:
-				pos = int(np.rint(position_start_value * value_scale + value_translate).item())
-			else:
-				pos = 0
+		if position_type:
+			values_min = min(values_min, position_start_value)
+			values_max = max(values_max, position_start_value)
 
-			ch_start = f * overlay_num
-			pts = np.empty((windowed_records.shape[0], 1, 2), dtype=np.int32)
-			pts[:, 0, 0] = np.rint(chart_x + (time - time_min) * time_scale)
-			for value_type in range(4):
-				trg = img[ch_start]
+		# values_min -= values_min % 100
+		# values_max += 100 - values_max % 100
 
-				# チャートを描画
-				pts[:, 0, 1] = np.rint(values[:, value_type] * value_scale + value_translate)
-				cv2.polylines(trg, [pts], False, 0.5 if value_type != 3 else 1.0)
+		time_scale = chart_w_for_scale / (time_max - time_min)
+		value_scale = -chart_h_for_scale / (values_max - values_min)
+		value_translate = chart_h_for_scale - values_min * value_scale
 
-				# インジケーター描画
+		cur = int(np.rint(values[-1, 3] * value_scale + value_translate).item())
+		if position_type:
+			pos = int(np.rint(position_start_value * value_scale + value_translate).item())
+		else:
+			pos = 0
 
-				# ポジション持っていたら、ポジった値から現在値まで塗りつぶす
-				if position_type and positional_reward:
-					ind_y1 = max(min(pos, cur), 0)
-					ind_y2 = min(max(pos, cur), h_max) + 1
-					trg[ind_y1:ind_y2, ind_x1:ind_x2] = ind_color
+		trg = img[0]
+		chart_trg = trg[chart_y:chart_bottom, chart_x:chart_right]
 
-				# 現在値に水平線を加算
-				if 0 <= cur and cur < h:
-					cur_y1 = max(cur - 0, 0)
-					cur_y2 = min(cur + 0, h_max) + 1
-					# trg[cur_y1:cur_y2, w_chart_max:] = 1.0
-					trg[cur_y1:cur_y2, :] = 1.0
+		# インジケーター描画
+
+		# 目盛り描画
+		for y in np.rint(
+		    np.arange(values_min - values_min % 50, values_max + 51 - (values_max % 50), 50) * value_scale +
+		    value_translate).astype(np.int32):
+			if 0 <= y and y < chart_trg.shape[0]:
+				chart_trg[y, :] = 0.1
+
+		# ポジション持っていたら、ポジった値から現在値まで塗りつぶす
+		if position_type and positional_reward:
+			ind_y1 = max(min(pos, cur), 0)
+			ind_y2 = min(max(pos, cur), h_max) + 1
+			trg[ind_y1:ind_y2, ind_x1:ind_x2] = 1
+
+		# 現在値として水平線を描画
+		if 0 <= cur and cur < h:
+			cur_y1 = max(cur - 1, 0)
+			cur_y2 = min(cur + 1, h_max) + 1
+			trg[cur_y1:cur_y2, :] = 1.0
+
+		# チャートを描画開始
+		pts = np.empty((values.shape[0], 1, 2), dtype=np.int32)
+		pts[:, 0, 0] = np.rint((time - time_min) * time_scale)
+
+		# 可能なら移動平均線を描画
+		for y in ma:
+			pts[:, 0, 1] = np.rint(y * value_scale + value_translate)
+			cv2.polylines(chart_trg, [pts], False, 0.3)
+
+		# open, high, low, close を描画
+		for value_type in range(4):
+			pts[:, 0, 1] = np.rint(values[:, value_type] * value_scale + value_translate)
+			cv2.polylines(chart_trg, [pts], False, 0.7)
 
 	def reset(self, random_episode=True):
 		"""エピソードをリセットしエピソードの先頭初期状態に戻る.
@@ -242,21 +261,25 @@ class TradeEnvironment:
 		"""
 		self.settle()
 
-		min_episode_len = self.window_size_max * 2
+		min_episode_len = self.window_size * 2
+		eps = self.episodes
 		while True:
 
 			if random_episode:
-				self.cur_episode = random.randint(0, self.episodes.shape[0] - 2)
+				self.cur_episode = random.randint(0, eps.shape[0] - 2)
 			else:
 				self.cur_episode += 1
-				if self.episodes.shape[0] - 1 <= self.cur_episode:
+				if eps.shape[0] - 1 <= self.cur_episode:
 					self.cur_episode = 0
 
-			self.episode_records = self.records[self.episodes[self.cur_episode]:self.episodes[self.cur_episode + 1]]
+			i1 = eps[self.cur_episode]
+			i2 = eps[self.cur_episode + 1]
 
-			if min_episode_len <= self.episode_records.shape[0]:
-				self.index_in_episode = self.window_size_max
-				self.update_framewise_records()
+			if min_episode_len <= i2 - i1:
+				rcds = self.records[i1:i2]
+				self.episode_time = records_to_time(rcds)
+				self.episode_values = values_view_from_records(rcds)
+				self.index_in_episode = self.window_size
 				self.draw_img()
 				return self.img
 
@@ -266,7 +289,7 @@ class TradeEnvironment:
 		Return:
 			現在値.
 		"""
-		return self.episode_records[self.index_in_episode][4].item()
+		return self.episode_values[self.index_in_episode, 3].item()
 
 	def order(self, position_type):
 		"""注文する.
@@ -282,17 +305,18 @@ class TradeEnvironment:
 		self.position_type = position_type
 		self.position_episode = self.cur_episode
 		self.position_index = self.index_in_episode
-		self.position_start_value = self.get_value()
+		self.position_start_value = self.get_value() + position_type * self.spread
 
 	def calc_positional_reward(self):
 		"""現在のポジションと現在値から損益を計算する.
 		"""
-		return (self.get_value() - self.position_start_value) * self.position_type - self.spread if self.position_type != 0 else 0
+		return (self.get_value() - self.position_start_value) * self.position_type if self.position_type != 0 else 0
 
-	def calc_reward(self):
+	def calc_reward(self, settle=True):
 		"""現在の報酬値を取得.
 		"""
-		return self.calc_positional_reward(), self.position_type, self.position_episode, self.position_index, self.position_start_value
+		rew = self.calc_positional_reward()
+		return rew if settle else 0, self.position_type, self.position_episode, self.position_index, self.position_start_value
 
 	def settle(self):
 		"""決済する.
@@ -321,46 +345,40 @@ class TradeEnvironment:
 		Returns:
 			(状態, 報酬, エピソード終了かどうか, その他情報) のタプル.
 		"""
-		terminal = self.episode_records.shape[0] - 1 <= self.index_in_episode
-		if action == 1:
+		terminal = self.episode_values.shape[0] - 1 <= self.index_in_episode
+
+		buy = action == 1 and self.position_type != 1
+		sell = action == 2 and self.position_type != -1
+		exit = action == 3 or terminal
+		losscut = self.position_type != 0 and self.calc_positional_reward() < -self.loss_cut
+		reward = self.settle() if buy or sell or exit or losscut else self.calc_reward(False)
+
+		if buy:
 			# 買い
-			reward = self.settle()
 			self.order(1)
-		elif action == 2:
+		elif sell:
 			# 売り
-			reward = self.settle()
 			self.order(-1)
-		elif action == 3 or terminal:
-			# 決済
-			reward = self.settle()
-		elif self.position_type != 0 and self.calc_positional_reward() < -self.loss_cut:
-			# ロスカット
-			reward = self.settle()
-		else:
-			# 何もしない
-			reward = self.calc_reward()
 
 		# 次の分足が窓に入る様に進める
 		if not terminal:
 			self.index_in_episode += 1
-		self.update_framewise_records()
 		self.draw_img()
 
 		return self.img, reward, terminal, None
 
-	def render(self):
-		"""現在の状態をグラフ表示する.
-		"""
-		if self.fig is None:
-			self.fig = plt.figure()
-			self.ax_img = self.fig.add_subplot(2, 3, 1)
-			self.axs = [self.fig.add_subplot(2, 3, 2 + i) for i in range(self.frames)]
+	# def render(self):
+	# 	"""現在の状態をグラフ表示する.
+	# 	"""
+	# 	if self.fig is None:
+	# 		self.fig = plt.figure()
+	# 		self.ax_img = self.fig.add_subplot(2, 3, 1)
+	# 		self.ax = self.fig.add_subplot(2, 3, 2 + i)
 
-		for f in range(self.frames):
-			df = records_to_dataframe(self.framewise_records[f])
-			self.axs[f].cla()
-			df.plot(ax=self.axs[f])
+	# 	df = records_to_dataframe(self.episode_values.framewise_records[f])
+	# 	self.axs[f].cla()
+	# 	df.plot(ax=self.axs[f])
 
-		self.ax_img.cla()
-		self.ax_img.imshow(self.img.sum(axis=0))
-		plt.pause(0.001)
+	# 	self.ax_img.cla()
+	# 	self.ax_img.imshow(self.img.sum(axis=0))
+	# 	plt.pause(0.001)

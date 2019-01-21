@@ -42,8 +42,7 @@ class Learner(object):
 		self.cur = self.conn.cursor()
 
 		self.device = torch.device("cuda:{}".format(gpu) if 0 <= gpu and torch.cuda.is_available() else "cpu")
-		self.frames_height_width = tuple(ep['frames_height_width'])
-		self.state_shape = trade_environment.get_state_shape(self.frames_height_width)
+		self.state_shape = tuple(ep['frames_height_width'])
 		self.batch_size = lp['replay_sample_size']
 		self.action_dim = trade_environment.action_num
 		self.q_target_sync_freq = lp['q_target_sync_freq']
