@@ -39,7 +39,7 @@ class ActorData(db.Tbl):
 		self.actor_id = db.int16
 		self.timestamp = db.timestamp
 		self.train_num = db.int32
-		self.spread = db.int16
+		self.value_close = db.int32
 		self.action = db.int16
 		self.q_action = db.int16
 		self.reward = db.float32
@@ -47,6 +47,7 @@ class ActorData(db.Tbl):
 		self.position_episode = db.int32
 		self.position_index = db.int32
 		self.position_start_value = db.float32
+		self.index_in_episode = db.int32
 		self.ep_len = db.int32
 		self.ep_reward = db.float32
 		self.sum_reward = db.float32

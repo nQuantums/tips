@@ -240,9 +240,9 @@ class Actor:
 						    f'Actor#: {self.actor_id} t: {t} rew: {reward_org} {reward} act: {action[0]} ep_len: {ep_len} ep_rew: {ep_reward} sum_rew: {sum_reward}'
 						)
 					train_num = status_dict['train_num']
-					record = record_type(param_set_id, terminal, actor_id, now(), train_num, self.env.spread, action[0],
+					record = record_type(param_set_id, terminal, actor_id, now(), train_num, self.env.get_value(), action[0],
 					                     action[1], reward_info[0], reward_info[1], reward_info[2], reward_info[3],
-					                     reward_info[4], ep_len, ep_reward, sum_reward)
+					                     reward_info[4], self.env.index_in_episode, ep_len, ep_reward, sum_reward)
 					with conn.cursor() as cur:
 						record_insert(cur, record)
 

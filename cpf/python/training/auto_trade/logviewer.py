@@ -62,10 +62,10 @@ with psycopg2.connect(dbp['connection_string']) as conn:
 
 			df = pd.read_sql(f'SELECT {index}, action FROM actor_data WHERE {cond} AND action=q_action ORDER BY {index}', conn)
 			if df.shape[0] != 0:
-				df.plot(x=index, ax=ax_q_action_number, linestyle='None', marker='o')
+				df.plot(x=index, ax=ax_q_action_number, linestyle='None', marker='.')
 			df = pd.read_sql(f'SELECT {index}, action FROM actor_data WHERE {cond} AND action<>q_action ORDER BY {index}', conn)
 			if df.shape[0] != 0:
-				df.plot(x=index, ax=ax_q_action_number, linestyle='None', marker='o')
+				df.plot(x=index, ax=ax_q_action_number, linestyle='None', marker='.')
 
 		# print(df)
 		plt.show()
