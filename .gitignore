@@ -334,3 +334,6 @@ __pycache__/
 
 **/python/**/*.mdl
 **/python/**/*.opt
+
+# mypy
+**/.mypy_cache/*
