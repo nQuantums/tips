@@ -91,7 +91,8 @@ class Actor:
 
 		wait_shared_memory_clear = ap['wait_shared_memory_clear']
 
-		self.env.spread = ap['spread'] # 最初はスプレッド０でやらないとポジってくれなくてまともに学習できないので注意
+		self.env.spread = ap['spread']
+		self.env.loss_cut = ap['loss_cut']
 
 		# Actorの最後のステータスを読み込む
 		actor_state_file = f'{db_initializer.get_state_dict_name(self.params)}.{self.actor_id}.json'

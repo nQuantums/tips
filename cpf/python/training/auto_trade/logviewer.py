@@ -1,6 +1,7 @@
 import sys
 import datetime
 import json
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import psycopg2
@@ -46,6 +47,7 @@ with psycopg2.connect(dbp['connection_string']) as conn:
 
 			df = pd.read_sql(f'SELECT {index}, reward FROM actor_data WHERE {cond} AND action=q_action ORDER BY {index}', conn)
 			if df.shape[0] != 0:
+				df['reward'] = np.cumsum(df['reward'].values)
 				df.plot(x=index, ax=ax_action)
 
 			df = pd.read_sql(f'SELECT sum(reward) FROM actor_data WHERE {cond} AND action<>q_action', conn)
@@ -54,6 +56,7 @@ with psycopg2.connect(dbp['connection_string']) as conn:
 
 			df = pd.read_sql(f'SELECT {index}, reward FROM actor_data WHERE {cond} AND action<>q_action ORDER BY {index}', conn)
 			if df.shape[0] != 0:
+				df['reward'] = np.cumsum(df['reward'].values)
 				df.plot(x=index, ax=ax_q_action)
 
 			df = pd.read_sql(f'SELECT {index}, sum_reward FROM actor_data WHERE {cond} ORDER BY {index}', conn)

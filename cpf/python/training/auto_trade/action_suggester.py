@@ -118,15 +118,27 @@ class TpActionSuggester:
 
 class TpRewardAdjuster:
 	"""TpActionSuggester 用の指定アクションから報酬調整処理を行うクラス.
+
+	Args:
+		action_suggester: お勧めアクション提示オブジェクト.
+		adj_rate: 想定される損益から報酬調整量に換算する係数.
+		loss_cut_check: 適切に損切りできているかチェックを行うかどうか.
+		securing_profit_check: 適切に利確できているかチェックを行うかどうか.
 	"""
 
-	def __init__(self, action_suggester: TpActionSuggester):
+	def __init__(self,
+	             action_suggester: TpActionSuggester,
+	             adj_rate: float = 0.01,
+	             loss_cut_check: bool = False,
+	             securing_profit_check: bool = False):
 		self.action_suggester = action_suggester
+		self.adj_rate = adj_rate
+		self.loss_cut_check = loss_cut_check
+		self.securing_profit_check = securing_profit_check
 		self.env = action_suggester.env
 		self.threshould = action_suggester.threshould
-		self.idle_decrease_rate = 0.03 # チャンスを無駄にした際に報酬から減衰させる比率
 
-	def adjust_reward(self, action) -> float:
+	def adjust_reward(self, action: int) -> float:
 		"""現状の状態で指定のアクションを行った際の報酬調整料の取得."""
 		tp_indices = self.action_suggester.tp_indices # 折返し点インデックス列
 		tp_values = self.action_suggester.tp_values # 折り返し点値列
@@ -146,18 +158,35 @@ class TpRewardAdjuster:
 
 		reward = 0.0
 
+		# 現状のポジションから行っても無視されるアクションを排除
+		if self.env.is_action_ignored(action):
+			action = 0
+
 		if 1 <= action and action <= 3 and self.env.position_type != 0:
 			# 決済するなら残りの損益から報酬を調整する
 			if tp_delta is not None and not on_tp:
-				reward -= 0.01 * self.env.position_type * tp_delta
+				reward -= self.adj_rate * self.env.position_type * tp_delta
 
 		if action == 0:
-			# チャンスがある状態で何もしていないなら報酬を減衰させる
-			if tp_delta is not None and self.threshould < abs(tp_delta) and self.env.position_type == 0:
-				reward -= self.idle_decrease_rate * abs(tp_delta)
+			if tp_delta is not None:
+				if self.env.position_type == 0:
+					# チャンスがある状態で何もしていないなら報酬を減衰させる
+					if self.threshould < abs(tp_delta):
+						reward -= self.adj_rate * abs(tp_delta)
+				else:
+					pr = self.env.calc_positional_reward()
+					miss_position = tp_delta * self.env.position_type < 0
+
+					# 間違ったポジションなら報酬を減衰させ続ける
+					if self.loss_cut_check and miss_position and pr < 0:
+						reward += pr * self.adj_rate
+
+					# 正しいポジションなら利確すべきタイミングを逃した瞬間に報酬を減衰させる
+					if self.securing_profit_check and on_tp and miss_position and 0 < pr:
+						reward -= pr * self.adj_rate
 		elif action == 1 or action == 2:
 			# 売買の方向と次の折り返し点への差分から報酬を調整する
 			if tp_delta is not None:
-				reward += 0.01 * (1.0 if action == 1 else -1.0) * tp_delta
+				reward += self.adj_rate * (1.0 if action == 1 else -1.0) * tp_delta
 
 		return reward

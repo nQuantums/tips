@@ -1,3 +1,4 @@
+import typing
 import random
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
@@ -147,7 +148,7 @@ class TradeEnvironment:
 		self.episode_values = None # １エピソード全体分の open, high, low, close 値
 		self.index_in_episode = 0 # episode_values 内での現在値に対応するインデックス
 
-	def draw_img(self):
+	def draw_img(self) -> None:
 		end = self.index_in_episode + 1 # エピソード内での現在の最新値インデックス+1
 		img = self.img # 描画先バッファ
 		w = self.w # 画像幅(px)
@@ -253,7 +254,7 @@ class TradeEnvironment:
 			pts[:, 0, 1] = np.rint(values[:, value_type] * value_scale + value_translate)
 			cv2.polylines(chart_trg, [pts], False, 0.7)
 
-	def reset(self, random_episode=True):
+	def reset(self, random_episode=True) -> np.ndarray:
 		"""エピソードをリセットしエピソードの先頭初期状態に戻る.
 
 		Returns:
@@ -283,7 +284,7 @@ class TradeEnvironment:
 				self.draw_img()
 				return self.img
 
-	def get_value(self):
+	def get_value(self) -> float:
 		"""現在の値を取得する.
 
 		Return:
@@ -291,7 +292,7 @@ class TradeEnvironment:
 		"""
 		return self.episode_values[self.index_in_episode, 3].item()
 
-	def order(self, position_type):
+	def order(self, position_type: int) -> None:
 		"""注文する.
 
 		Args:
@@ -307,18 +308,18 @@ class TradeEnvironment:
 		self.position_index = self.index_in_episode
 		self.position_start_value = self.get_value() + position_type * self.spread
 
-	def calc_positional_reward(self):
+	def calc_positional_reward(self) -> float:
 		"""現在のポジションと現在値から損益を計算する.
 		"""
 		return (self.get_value() - self.position_start_value) * self.position_type if self.position_type != 0 else 0
 
-	def calc_reward(self, settle=True):
+	def calc_reward(self, settle: bool = True) -> typing.Tuple[float, int, int, int, int]:
 		"""現在の報酬値を取得.
 		"""
-		rew = self.calc_positional_reward()
-		return rew if settle else 0, self.position_type, self.position_episode, self.position_index, self.position_start_value
+		return (self.calc_positional_reward()
+		        if settle else 0), self.position_type, self.position_episode, self.position_index, self.position_start_value
 
-	def settle(self):
+	def settle(self) -> typing.Tuple[float, int, int, int, int]:
 		"""決済する.
 
 		Returns:
@@ -336,7 +337,11 @@ class TradeEnvironment:
 
 		return reward
 
-	def step(self, action):
+	def is_action_ignored(self, action: int) -> bool:
+		"""step メソッドにアクションを指定しても無視されるかどうか調べる."""
+		return action == 1 and 0 < self.position_type or action == 2 and self.position_type < 0 or action == 3 and self.position_type == 0
+
+	def step(self, action: int) -> typing.Tuple[np.ndarray, typing.Tuple[float, int, int, int, int], bool, object]:
 		"""指定のアクションを行い次の状態を得る.
 
 		Args:
