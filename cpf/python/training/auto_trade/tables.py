@@ -35,29 +35,25 @@ class ActorData(db.Tbl):
 	def __init__(self, alias=None):
 		super().__init__('actor_data', alias)
 		self.param_set_id = db.int16
-		self.terminal = db.boolean
 		self.actor_id = db.int16
 		self.timestamp = db.timestamp
 		self.train_num = db.int32
-		self.value_close = db.int32
+		self.ep_count = db.int32
+		self.episode_index = db.int32
+		self.index_in_episode = db.int32
 		self.action = db.int16
 		self.q_action = db.int16
 		self.reward = db.float32
-		self.position_type = db.int16
-		self.position_episode = db.int32
-		self.position_index = db.int32
-		self.position_start_value = db.float32
-		self.index_in_episode = db.int32
-		self.ep_len = db.int32
-		self.ep_reward = db.float32
+		self.position_action = db.int16
+		self.position_q_action = db.int16
+		self.position_index_in_episode = db.int32
 		self.sum_reward = db.float32
 
 		self.idx([self.param_set_id])
-		self.idx([self.terminal])
 		self.idx([self.actor_id])
 		self.idx([self.timestamp])
 		self.idx([self.train_num])
-		self.idx([self.param_set_id, self.timestamp])
+		self.idx([self.ep_count])
 
 
 class LearnerData(db.Tbl):

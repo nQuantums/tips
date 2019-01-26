@@ -13,7 +13,7 @@ env.spread = 5
 sum_reward = 0.0
 
 suggester = action_suggester.TpActionSuggester(env)
-rew_adjuster = action_suggester.TpRewardAdjuster(suggester, loss_cut_check=True, securing_profit_check=True)
+rew_adjuster = action_suggester.TpRewardAdjuster(suggester, adj_rate=0.1, loss_cut_check=True, securing_profit_check=True)
 
 plt.style.use('seaborn-whitegrid')
 
@@ -29,7 +29,7 @@ while True:
 	state = env.reset(False)
 	suggester.start_episode()
 	for _ in range(frame_num - 1):
-		frame, reward_info, terminal, info = env.step(0)
+		frame, reward_info, terminal, info = env.step(0, 0)
 		if terminal:
 			break
 		state = make_state(state, frame)
@@ -55,9 +55,9 @@ while True:
 		# 	action = random.randrange(0, 4)
 		# action = suggester.get_suggested_action()
 		# action = random.randrange(0, 4)
-		action = 2
-		if env.is_action_ignored(action):
-			action = 0
+		action = 3
+		# if env.is_action_ignored(action):
+		# 	action = 0
 
 		reward_adj = rew_adjuster.adjust_reward(action)
 		reward_adjs[env.index_in_episode] = reward_adj
@@ -70,7 +70,7 @@ while True:
 			exit_indices.append(env.index_in_episode)
 
 		# アクションを指定して次の状態を得る
-		frame, reward_info, terminal, info = env.step(action)
+		frame, reward_info, terminal, info = env.step(action, action)
 		next_state = make_state(state, frame)
 		reward_org = reward_info[0]
 		reward = reward_info[0] + reward_adj

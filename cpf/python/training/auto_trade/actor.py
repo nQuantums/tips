@@ -74,6 +74,7 @@ class Actor:
 		param_set_id = self.param_set_id
 		actor_id = self.actor_id
 		now = datetime.datetime.now
+		ep_count = 0
 		ep_len = 0
 		ep_reward = 0.0
 		sum_reward = 0.0
@@ -100,6 +101,7 @@ class Actor:
 		if os.path.isfile(actor_state_file):
 			with open(actor_state_file, 'r') as f:
 				actor_state = json.load(f)
+				ep_count = actor_state['ep_count']
 				sum_reward = actor_state['sum_reward']
 
 		# お勧めアクション生成、報酬調整オブジェクトを取得する
@@ -129,6 +131,7 @@ class Actor:
 
 		while not status_dict['request_quit']:
 			ep_len = 0
+			ep_count += 1
 			ep_reward = 0.0
 			terminal = False
 
@@ -136,7 +139,7 @@ class Actor:
 			state = self.env.reset()
 			suggester.start_episode()
 			for _ in range(self.frame_num - 1):
-				frame, reward_info, terminal, _ = self.env.step(0)
+				frame, reward_info, terminal, _ = self.env.step(0, 0)
 				if terminal:
 					break
 				state = self.make_state(state, frame)
@@ -156,7 +159,8 @@ class Actor:
 				reward_adj = reward_adjuster.adjust_reward(action[0])
 
 				# 環境に行動を適用し次の状態を取得する
-				frame, reward_info, terminal, _ = self.env.step(action[0])
+				index_in_episode = self.env.index_in_episode
+				frame, reward_info, terminal, _ = self.env.step(action[0], action[1])
 				next_state = self.make_state(state, frame)
 				reward_org = reward_info[0]
 				reward = reward_org + reward_adj
@@ -241,13 +245,14 @@ class Actor:
 						    f'Actor#: {self.actor_id} t: {t} rew: {reward_org} {reward} act: {action[0]} ep_len: {ep_len} ep_rew: {ep_reward} sum_rew: {sum_reward}'
 						)
 					train_num = status_dict['train_num']
-					record = record_type(param_set_id, terminal, actor_id, now(), train_num, self.env.get_value(), action[0],
-					                     action[1], reward_info[0], reward_info[1], reward_info[2], reward_info[3],
-					                     reward_info[4], self.env.index_in_episode, ep_len, ep_reward, sum_reward)
+					record = record_type(param_set_id, actor_id, now(), train_num, ep_count, self.env.cur_episode,
+					                     index_in_episode, action[0], action[1], reward_info[0], reward_info[1],
+					                     reward_info[2], reward_info[3], sum_reward)
 					with conn.cursor() as cur:
 						record_insert(cur, record)
 
 		# Actor の現在のステータスを保存しておく
+		actor_state['ep_count'] = ep_count
 		actor_state['sum_reward'] = sum_reward
 		with open(actor_state_file, 'w') as f:
 			json.dump(actor_state, f)

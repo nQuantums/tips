@@ -133,8 +133,9 @@ class TradeEnvironment:
 
 		# 注文関係
 		self.position_type = 0 # ポジションタイプ、0: なし、1: 買い、-1: 売り
-		self.position_episode = -1 # ポジション持った時のエピソードインデックス
-		self.position_index = -1 # ポジション持った時のエピソード内でのインデックス
+		self.position_action = 0 # ポジション決めた際のアクション
+		self.position_q_action = 0 # ポジション決めた際のQアクション
+		self.position_index_in_episode = -1 # ポジション持った時のエピソード内でのインデックス
 		self.position_start_value = 0 # ポジション持った時の pip
 
 		# グラフ表示用変数初期化
@@ -254,7 +255,7 @@ class TradeEnvironment:
 			pts[:, 0, 1] = np.rint(values[:, value_type] * value_scale + value_translate)
 			cv2.polylines(chart_trg, [pts], False, 0.7)
 
-	def reset(self, random_episode=True) -> np.ndarray:
+	def reset(self, random_episode_or_index=True) -> np.ndarray:
 		"""エピソードをリセットしエピソードの先頭初期状態に戻る.
 
 		Returns:
@@ -266,12 +267,19 @@ class TradeEnvironment:
 		eps = self.episodes
 		while True:
 
-			if random_episode:
-				self.cur_episode = random.randint(0, eps.shape[0] - 2)
-			else:
-				self.cur_episode += 1
-				if eps.shape[0] - 1 <= self.cur_episode:
-					self.cur_episode = 0
+			if isinstance(random_episode_or_index, bool):
+				if random_episode_or_index:
+					self.cur_episode = random.randint(0, len(eps) - 2)
+				else:
+					self.cur_episode += 1
+					if len(eps) - 1 <= self.cur_episode:
+						self.cur_episode = 0
+			elif isinstance(random_episode_or_index, int):
+				if random_episode_or_index < 0:
+					random_episode_or_index = 0
+				elif len(eps) <= random_episode_or_index:
+					random_episode_or_index = len(eps) - 1
+				self.cur_episode = random_episode_or_index
 
 			i1 = eps[self.cur_episode]
 			i2 = eps[self.cur_episode + 1]
@@ -292,11 +300,13 @@ class TradeEnvironment:
 		"""
 		return self.episode_values[self.index_in_episode, 3].item()
 
-	def order(self, position_type: int) -> None:
+	def order(self, position_type: int, action: int, q_action: int) -> None:
 		"""注文する.
 
 		Args:
-			position_type: -1 売り、1 買い
+			position_type: -1 売り、1 買い.
+			action: ポジション決めた際のアクション.
+			q_action: ポジション決めた際のQアクション.
 
 		Returns:
 			報酬.
@@ -304,8 +314,9 @@ class TradeEnvironment:
 		if self.position_type != 0:
 			raise Exception('Can not order when you already have position.')
 		self.position_type = position_type
-		self.position_episode = self.cur_episode
-		self.position_index = self.index_in_episode
+		self.position_action = action
+		self.position_q_action = q_action
+		self.position_index_in_episode = self.index_in_episode
 		self.position_start_value = self.get_value() + position_type * self.spread
 
 	def calc_positional_reward(self) -> float:
@@ -313,17 +324,20 @@ class TradeEnvironment:
 		"""
 		return (self.get_value() - self.position_start_value) * self.position_type if self.position_type != 0 else 0
 
-	def calc_reward(self, settle: bool = True) -> typing.Tuple[float, int, int, int, int]:
+	def calc_reward(self, settle: bool = True) -> typing.Tuple[float, int, int, int]:
 		"""現在の報酬値を取得.
+
+		Return:
+			(報酬, ポジションを決めた際のアクション, ポジションを決めた際のQアクション,  ポジションを決めた際のエピソード内でのインデックス) のタプル.
 		"""
 		return (self.calc_positional_reward()
-		        if settle else 0), self.position_type, self.position_episode, self.position_index, self.position_start_value
+		        if settle else 0), self.position_action, self.position_q_action, self.position_index_in_episode
 
-	def settle(self) -> typing.Tuple[float, int, int, int, int]:
+	def settle(self) -> typing.Tuple[float, int, int, int]:
 		"""決済する.
 
 		Returns:
-			報酬.
+			(報酬, ポジションを決めた際のアクション, ポジションを決めた際のQアクション,  ポジションを決めた際のエピソード内でのインデックス) のタプル.
 		"""
 		reward = self.calc_reward()
 
@@ -331,8 +345,9 @@ class TradeEnvironment:
 			return reward
 
 		self.position_type = 0
-		self.position_episode = -1
-		self.position_index = -1
+		self.position_action = 0
+		self.position_q_action = 0
+		self.position_index_in_episode = -1
 		self.position_start_value = 0
 
 		return reward
@@ -341,11 +356,13 @@ class TradeEnvironment:
 		"""step メソッドにアクションを指定しても無視されるかどうか調べる."""
 		return action == 1 and 0 < self.position_type or action == 2 and self.position_type < 0 or action == 3 and self.position_type == 0
 
-	def step(self, action: int) -> typing.Tuple[np.ndarray, typing.Tuple[float, int, int, int, int], bool, object]:
+	def step(self, action: int,
+	         q_actino: int) -> typing.Tuple[np.ndarray, typing.Tuple[float, int, int, int], bool, object]:
 		"""指定のアクションを行い次の状態を得る.
 
 		Args:
-			action: 0 何もしない、1 買う、2 売る、3 決済.
+			action: アクション、0 何もしない、1 買う、2 売る、3 決済.
+			action: Qアクション、ポジションと共に情報記録するために使用.
 
 		Returns:
 			(状態, 報酬, エピソード終了かどうか, その他情報) のタプル.
@@ -354,16 +371,16 @@ class TradeEnvironment:
 
 		buy = action == 1 and self.position_type != 1
 		sell = action == 2 and self.position_type != -1
-		exit = action == 3 or terminal
+		exit = (action == 3 or terminal) and self.position_type != 0
 		losscut = self.position_type != 0 and self.calc_positional_reward() < -self.loss_cut
 		reward = self.settle() if buy or sell or exit or losscut else self.calc_reward(False)
 
 		if buy:
 			# 買い
-			self.order(1)
+			self.order(1, action, q_actino)
 		elif sell:
 			# 売り
-			self.order(-1)
+			self.order(-1, action, q_actino)
 
 		# 次の分足が窓に入る様に進める
 		if not terminal:

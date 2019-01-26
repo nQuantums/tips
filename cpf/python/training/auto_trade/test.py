@@ -33,6 +33,8 @@ action_dim = trade_environment.action_num
 model_formula = f'model.{lp["model"]}(state_shape, action_dim, "TestMode", hidden_size={lp["hidden_size"]})'
 
 env = TradeEnvironment('test.dat', window_size, state_shape[1:])
+env.spread = ap['spread']
+env.loss_cut = ap['loss_cut']
 
 Q = eval(model_formula)
 
