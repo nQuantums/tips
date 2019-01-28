@@ -16,6 +16,19 @@ class Type:
 		return self.type_name
 
 
+<<<<<<< HEAD
+class Col:
+
+	def __init__(self, name, type):
+		self.name = name
+		self.type = type
+
+	def __str__(self):
+		return f'{self.name} {self.type.type_name}'
+
+	def __repr__(self):
+		return f'{self.name} {self.type.type_name}'
+=======
 serial32 = Type('serial', True)
 serial64 = Type('bigserial', True)
 int16 = Type('smallint')
@@ -54,6 +67,7 @@ class Col:
 			return f'{self.tbl}.{self.name}'
 		else:
 			return f'{self.name} {self.type.type_name}'
+>>>>>>> 7ccf25c06a5f51c36df8b79b70c79a45014bb9ed
 
 
 class Idx:
@@ -69,6 +83,10 @@ class Idx:
 
 class Tbl:
 
+<<<<<<< HEAD
+	def __init__(self, name):
+		self._name = name
+=======
 	def __init__(self, name, alias=None):
 		self._name = name
 		self._alias = alias
@@ -78,13 +96,18 @@ class Tbl:
 
 	def __repr__(self):
 		return self._alias if self._alias else self._name
+>>>>>>> 7ccf25c06a5f51c36df8b79b70c79a45014bb9ed
 
 	def __setattr__(self, name, value):
 		d = self.__dict__
 		if not name.startswith('_') and isinstance(value, Type):
 			if '_cols' not in d:
 				d['_cols'] = []
+<<<<<<< HEAD
+			value = Col(name, value)
+=======
 			value = Col(name, value, self)
+>>>>>>> 7ccf25c06a5f51c36df8b79b70c79a45014bb9ed
 			d['_cols'].append(value)
 		d[name] = value
 
@@ -192,6 +215,26 @@ class Tbl:
 		return find
 
 
+<<<<<<< HEAD
+serial32 = Type('serial', True)
+serial64 = Type('bigserial', True)
+int16 = Type('smallint')
+int32 = Type('integer')
+int64 = Type('bigint')
+float32 = Type('real')
+float64 = Type('double precision')
+text = Type('text')
+timestamp = Type('timestamp')
+array_serial32 = Type('serial[]')
+array_serial64 = Type('bigserial[]')
+array_int16 = Type('smallint[]')
+array_int32 = Type('integer[]')
+array_int64 = Type('bigint[]')
+array_float32 = Type('real[]')
+array_float64 = Type('double precision[]')
+array_text = Type('text[]')
+array_timestamp = Type('timestamp[]')
+=======
 class SqlBuildable:
 
 	def __init__(self, owner):
@@ -355,3 +398,4 @@ class Limit(SqlBuildable):
 
 def select(cols):
 	return Select(cols)
+>>>>>>> 7ccf25c06a5f51c36df8b79b70c79a45014bb9ed

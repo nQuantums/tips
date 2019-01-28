@@ -1,0 +1,42 @@
+{
+    "db": {
+        "connection_string": "dbname=auto_trade user=postgres"
+    },
+    "env": {
+        "window_size": 30,
+        "frames_height_width": [5, 80, 90]
+    },
+
+    "actor": {
+        "num_actors": 8,
+        "T": 100000000,
+        "num_steps": 3,
+        "epsilon": 0.8,
+        "alpha": 7,
+        "gamma": 0.99,
+        "n_step_transition_batch_size": 16,
+        "Q_network_sync_freq": 100,
+        "wait_shared_memory_clear": true,
+        "spread": 5,
+        "action_suggester": "TpActionSuggester({})",
+        "reward_adjuster": "TpRewardAdjuster({})",
+        "policy": "plc_suggested"
+    },
+
+    "learner": {
+        "q_target_sync_freq": 503,
+        "send_to_actor_freq": 7,
+        "min_replay_mem_size": 5000,
+        "replay_sample_size": 32,
+        "state_dict_prefix": "NoChart",
+        "model": "dqn_prelu_long_dense",
+        "hidden_size": 32,
+        "optimizer": "torch.optim.Adamax({})"
+    },
+
+    "replay_memory": {
+        "soft_capacity": 12000,
+        "priority_exponent": 0.6,
+        "importance_sampling_exponent": 0.4
+    }
+}
