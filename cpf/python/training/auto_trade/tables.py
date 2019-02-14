@@ -76,3 +76,19 @@ class LearnerData(db.Tbl):
 		self.idx([self.train_num])
 		self.idx([self.timestamp])
 		self.idx([self.param_set_id, self.timestamp])
+
+
+class RewardAdjData(db.Tbl):
+
+	def __init__(self, alias=None):
+		super().__init__('reward_adj_data', alias)
+		self.param_set_id = db.int16
+		self.actor_id = db.int16
+		self.ep_count = db.int32
+		self.index_in_episode = db.int32
+		self.reward_adj = db.float32
+
+		self.idx([self.param_set_id])
+		self.idx([self.actor_id])
+		self.idx([self.ep_count])
+		self.idx([self.index_in_episode])

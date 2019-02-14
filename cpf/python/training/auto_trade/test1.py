@@ -12,7 +12,7 @@ env = TradeEnvironment('test.dat', 30, (100, 110))
 env.spread = 5
 sum_reward = 0.0
 
-suggester = action_suggester.TpActionSuggester(env)
+suggester = action_suggester.TpActionSuggester(env, spread_adj=3)
 rew_adjuster = action_suggester.TpRewardAdjuster(suggester, adj_rate=0.1, loss_cut_check=True, securing_profit_check=True)
 
 plt.style.use('seaborn-whitegrid')
@@ -49,13 +49,13 @@ while True:
 	last_action = 0
 
 	while not terminal:
-		# if random.random() < 0.5:
-		# 	action = suggester.get_suggested_action()
-		# else:
-		# 	action = random.randrange(0, 4)
+		if random.random() < 0.9:
+			action = suggester.get_suggested_action()
+		else:
+			action = random.randrange(0, 4)
 		# action = suggester.get_suggested_action()
 		# action = random.randrange(0, 4)
-		action = 3
+		# action = 3
 		# if env.is_action_ignored(action):
 		# 	action = 0
 
@@ -122,6 +122,8 @@ while True:
 	ax.plot(x[buy_indices], c[buy_indices], label='buy', linestyle='None', marker='^')
 	ax.plot(x[sell_indices], c[sell_indices], label='sell', linestyle='None', marker='v')
 	ax.plot(x[exit_indices], c[exit_indices], label='exit', linestyle='None', marker='o')
+
+	print(f'ep_len {ep_len} ep_rew {ep_reward} sum_rew {sum_reward}')
 
 	plt.legend()
 	plt.show()

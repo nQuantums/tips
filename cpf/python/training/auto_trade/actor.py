@@ -71,6 +71,11 @@ class Actor:
 		t = tables.ActorData()
 		record_type = t.get_record_type()
 		record_insert = t.get_insert()
+
+		t = tables.RewardAdjData()
+		reward_adj_record_type = t.get_record_type()
+		reward_adj_insert = t.get_insert()
+
 		param_set_id = self.param_set_id
 		actor_id = self.actor_id
 		now = datetime.datetime.now
@@ -246,10 +251,15 @@ class Actor:
 						)
 					train_num = status_dict['train_num']
 					record = record_type(param_set_id, actor_id, now(), train_num, ep_count, self.env.cur_episode,
-					                     index_in_episode, action[0], action[1], reward_info[0], reward_info[1],
-					                     reward_info[2], reward_info[3], sum_reward)
+					                     index_in_episode, action[0], action[1], reward_info[0], reward_info[1], reward_info[2],
+					                     reward_info[3], sum_reward)
 					with conn.cursor() as cur:
 						record_insert(cur, record)
+
+				# 報酬調整量をDBへ登録
+				with conn.cursor() as cur:
+					reward_adj_insert(cur, reward_adj_record_type(param_set_id, actor_id, ep_count, index_in_episode,
+					                                              reward_adj))
 
 		# Actor の現在のステータスを保存しておく
 		actor_state['ep_count'] = ep_count

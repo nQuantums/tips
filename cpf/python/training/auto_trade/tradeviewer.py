@@ -66,6 +66,11 @@ if __name__ == "__main__":
 	reward = df['reward'].values
 	print(df)
 
+	df = pd.read_sql(
+	    f'SELECT index_in_episode, reward_adj FROM reward_adj_data WHERE param_set_id={param_set_id} AND actor_id={actor_id} AND ep_count={ep_count} ORDER BY index_in_episode',
+	    conn)
+	print(df)
+
 	env = trade_environment.TradeEnvironment('test.dat', ep['window_size'], ep['frames_height_width'][1:])
 	suggester = action_suggester.TpActionSuggester(env)
 

@@ -13,6 +13,8 @@ with psycopg2.connect(dbp['connection_string']) as conn:
 		ps = tables.ParamSet()
 		ad = tables.ActorData()
 		ld = tables.LearnerData()
+		rad = tables.RewardAdjData()
 		cur.execute(ps.get_drop_statement())
 		cur.execute(ad.get_drop_statement())
 		cur.execute(ld.get_drop_statement())
+		cur.execute(rad.get_drop_statement())

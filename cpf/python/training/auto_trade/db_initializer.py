@@ -21,9 +21,11 @@ def initialize(params):
 			ps = tables.ParamSet()
 			ad = tables.ActorData()
 			ld = tables.LearnerData()
+			rad = tables.RewardAdjData()
 			cur.execute(ps.get_create_statement())
 			cur.execute(ad.get_create_statement())
 			cur.execute(ld.get_create_statement())
+			cur.execute(rad.get_create_statement())
 
 			filter = lambda c: not c.type.is_serial
 			record = ps.get_record_type(filter)
