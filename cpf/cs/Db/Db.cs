@@ -1,12 +1,24 @@
-﻿using MySql.Data.MySqlClient;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
-using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
+using System.Reflection;
+using MySql.Data.MySqlClient;
 
-namespace Db {
+namespace SusDbHelperTest {
+	/// <summary>
+	/// <see cref="DbType"/>に付与するフラグ
+	/// </summary>
+	[Flags]
+	public enum DbTypeFlags {
+		/// <summary>
+		/// 型が可変長である事を示す
+		/// </summary>
+		IsVariableLength = 1 << 0,
+	}
+
 	/// <summary>
 	/// DB上での型
 	/// </summary>
@@ -17,6 +29,7 @@ namespace Db {
 		public static readonly DbType int8 = new DbType("int8");
 		public static readonly DbType text = new DbType("text");
 		public static readonly DbType timestamp = new DbType("timestamp");
+		public static readonly DbType binary = new DbType("binary");
 
 		public static DbType Map(Type type) {
 			if (type == typeof(sbyte)) {
@@ -49,18 +62,49 @@ namespace Db {
 		/// <summary>
 		/// 型名
 		/// </summary>
-		public readonly string Name;
+		public string Name { get; private set; }
 
-		public DbType(string name) {
+		/// <summary>
+		/// 型名
+		/// </summary>
+		public DbTypeFlags Flags { get; private set; }
+
+		/// <summary>
+		/// 桁数又は要素数
+		/// </summary>
+		public int Length { get; private set; }
+
+		/// <summary>
+		/// コンストラクタ、型名と桁数又は要素数を指定して初期化する
+		/// </summary>
+		/// <param name="name">型名</param>
+		/// <param name="flags">型に対する追加情報のフラグ</param>
+		/// <param name="length">桁数又は要素数</param>
+		public DbType(string name, DbTypeFlags flags = 0, int length = 0) {
 			this.Name = name;
+			this.Flags = flags;
+			this.Length = length;
 		}
 
 		public static implicit operator string(DbType value) {
-			return value.Name;
+			return value.ToString();
 		}
 
 		public override string ToString() {
-			return this.Name;
+			return this.Length == 0 ? this.Name : this.Name + "(" + this.Length + ")";
+		}
+
+		/// <summary>
+		/// 指定の属性をオーバーライドしたクローンを作成する
+		/// </summary>
+		/// <param name="flags">型に対する追加情報のフラグ</param>
+		/// <param name="length">桁数又は要素数</param>
+		/// <returns>クローン</returns>
+		public DbType As(DbTypeFlags flags, int length) {
+			var c = this.MemberwiseClone() as DbType;
+			c.Flags = flags;
+			c.Length = length;
+			return c;
 		}
 	}
 
@@ -77,6 +121,11 @@ namespace Db {
 		/// インデックス
 		/// </summary>
 		Index,
+
+		/// <summary>
+		/// ユニークキー制約
+		/// </summary>
+		Unique,
 
 		/// <summary>
 		/// 自動採番
@@ -122,6 +171,14 @@ namespace Db {
 	/// </summary>
 	public class Index : Cr {
 		public Index(params Col[] cols) : base(CrType.Index, cols) {
+		}
+	}
+
+	/// <summary>
+	/// ユニークキー制約
+	/// </summary>
+	public class Unique : Cr {
+		public Unique(params Col[] cols) : base(CrType.Unique, cols) {
 		}
 	}
 
@@ -245,10 +302,18 @@ namespace Db {
 		}
 
 		/// <summary>
-		/// コンストラクタ、列名を指定して初期化する
+		/// コンストラクタ、列名を指定して初期化する、型は<see cref="DbType.Map(Type)"/>により自動的に判断される
 		/// </summary>
 		/// <param name="name">列名</param>
 		public Col(string name) : base(name, typeof(T), DbType.Map(typeof(T))) {
+		}
+
+		/// <summary>
+		/// コンストラクタ、列名と型を指定して初期化する
+		/// </summary>
+		/// <param name="name">列名</param>
+		/// <param name="dbType">DB内での型</param>
+		public Col(string name, DbType dbType) : base(name, typeof(T), dbType) {
 		}
 
 		/// <summary>
@@ -303,20 +368,46 @@ namespace Db {
 		}
 
 		/// <summary>
+		/// スキーマ名
+		/// </summary>
+		public string Schema { get; protected set; }
+
+		/// <summary>
 		/// テーブル名またはエイリアス
 		/// </summary>
 		public string Name { get; protected set; }
+
+		/// <summary>
+		/// ` で括られたスキーマ名も含むテーブル名の取得
+		/// </summary>
+		public string FullNameQuoted {
+			get {
+				var sb = new StringBuilder();
+				if (this.Schema != null) {
+					sb.Append('`');
+					sb.Append(this.Schema);
+					sb.Append("`.`");
+					sb.Append(this.Name);
+					sb.Append('`');
+				} else {
+					sb.Append('`');
+					sb.Append(this.Name);
+					sb.Append('`');
+				}
+				return sb.ToString();
+			}
+		}
 
 		/// <summary>
 		/// ` で括られたテーブル名の取得
 		/// </summary>
 		public string NameQuoted {
 			get {
-				if (this.Name.StartsWith("`")) {
-					return this.Name;
-				} else {
-					return '`' + this.Name + '`';
-				}
+				var sb = new StringBuilder();
+				sb.Append('`');
+				sb.Append(this.Name);
+				sb.Append('`');
+				return sb.ToString();
 			}
 		}
 
@@ -342,11 +433,36 @@ namespace Db {
 		}
 
 		/// <summary>
+		/// コンストラクタ、スキーマ名、テーブル名（またはエイリアス）と列一覧を指定して初期化する
+		/// </summary>
+		/// <param name="schema">スキーマ名</param>
+		/// <param name="name">テーブル名またはエイリアス</param>
+		/// <param name="cols">列一覧</param>
+		public Tbl(string schema, string name, params Col[] cols) {
+			this.Schema = schema;
+			this.Name = name;
+			this.ColsArray = cols;
+			this.Constraints = new Cr[0];
+		}
+
+		/// <summary>
 		/// コンストラクタ、テーブル名（またはエイリアス）と列一覧を指定して初期化する
 		/// </summary>
 		/// <param name="name">テーブル名またはエイリアス</param>
 		/// <param name="cols">列一覧値</param>
 		public Tbl(string name, object cols) {
+			this.Name = name;
+			SetCols(cols);
+		}
+
+		/// <summary>
+		/// コンストラクタ、スキーマ名、テーブル名（またはエイリアス）と列一覧を指定して初期化する
+		/// </summary>
+		/// <param name="schema">スキーマ名</param>
+		/// <param name="name">テーブル名またはエイリアス</param>
+		/// <param name="cols">列一覧値</param>
+		public Tbl(string schema, string name, object cols) {
+			this.Schema = schema;
 			this.Name = name;
 			SetCols(cols);
 		}
@@ -375,10 +491,6 @@ namespace Db {
 
 		public static implicit operator string(Tbl value) {
 			return value.Name;
-		}
-
-		public string CreateTableIfNotExists() {
-			return Db.CreateTableIfNotExists(this.Name, this.ColsArray, this.Constraints);
 		}
 	}
 
@@ -410,6 +522,16 @@ namespace Db {
 		}
 
 		/// <summary>
+		/// コンストラクタ、スキーマ名、テーブル名（またはエイリアス）と列一覧を指定して初期化する
+		/// </summary>
+		/// <param name="schema">スキーマ名</param>
+		/// <param name="name">テーブル名またはエイリアス</param>
+		/// <param name="constraintCreators">制約作成デリゲート一覧</param>
+		public Tbl(string schema, string name, params Func<T, Cr>[] constraintCreators) : base(schema, name, new T()) {
+			this.Constraints = constraintCreators.Select(c => c(this.Cols)).ToArray();
+		}
+
+		/// <summary>
 		/// 指定名のエイリアスを作成
 		/// </summary>
 		/// <param name="aliasName">エイリアス名</param>
@@ -417,6 +539,7 @@ namespace Db {
 		public Tbl<T> Alias(string aliasName) {
 			var c = this.MemberwiseClone() as Tbl<T>;
 			c.BaseTbl = this;
+			c.Schema = null;
 			c.Name = aliasName;
 			c.Cols = AliasingCols<T>.Invoke(c.Cols, aliasName);
 			c.ColsArray = ColsGetter<T>.Invoke(c.Cols);
@@ -478,13 +601,13 @@ namespace Db {
 					return c.NameQuoted;
 				}
 			} else if ((t = element as Tbl) != null) {
-				if ((flags & ToStringFlags.WithAlias) != 0 && t.NameQuoted != t.Underlying.NameQuoted) {
-					return t.Underlying.NameQuoted + " " + t.NameQuoted;
+				if ((flags & ToStringFlags.WithAlias) != 0 && t.FullNameQuoted != t.Underlying.FullNameQuoted) {
+					return t.Underlying.FullNameQuoted + " " + t.FullNameQuoted;
 				}
 				if ((flags & ToStringFlags.Underlying) != 0) {
 					t = t.Underlying;
 				}
-				return t.NameQuoted;
+				return t.FullNameQuoted;
 			} else if ((p = element as Param) != null) {
 				return GetPrmName(p);
 			} else {
@@ -544,11 +667,11 @@ namespace Db {
 			if ((tbl = this.Tbl as Tbl) != null) {
 				var utbl = tbl.Underlying;
 				if (tbl.Name != utbl.Name) {
-					sb.Append(utbl.Name);
+					sb.Append(utbl.FullNameQuoted);
 					sb.Append(" ");
 					sb.Append(tbl.Name);
 				} else {
-					sb.Append(tbl.Name);
+					sb.Append(tbl.FullNameQuoted);
 				}
 			} else {
 				sb.Append(sqlBuffer.ToString(this.Tbl, flags));
@@ -1114,16 +1237,32 @@ namespace Db {
 			return "(" + expression + " IS NULL OR length(" + expression + ")=0)";
 		}
 
-		/// <summary>
-		/// CREATE TABLE IF NOT EXISTS のSQL文文字列を生成する
-		/// </summary>
-		/// <param name="table">テーブル名</param>
-		/// <param name="cols">列一覧</param>
-		/// <param name="constraints">制約一覧</param>
-		/// <returns>SQL文</returns>
-		public static string CreateTableIfNotExists(string table, Col[] cols, params Cr[] constraints) {
+		static string ColNameForIndex(Col col) {
+			var dbt = col.DbType;
 			var sb = new StringBuilder();
-			sb.AppendLine("CREATE TABLE IF NOT EXISTS " + table + "(");
+			sb.Append(col.NameQuoted);
+			if ((dbt.Flags & DbTypeFlags.IsVariableLength) != 0 && dbt.Length != 0) {
+				sb.Append("(");
+				sb.Append(dbt.Length);
+				sb.Append(")");
+			}
+			return sb.ToString();
+		}
+
+		/// <summary>
+		/// 指定のテーブルが存在しなかったら作成する
+		/// </summary>
+		/// <param name="cmd">使用するコマンドオブジェクト</param>
+		/// <param name="tbl">テーブルの定義</param>
+		public static void CreateTableIfNotExists(MySqlCommand cmd, Tbl tbl) {
+			var schemaName = tbl.Schema;
+			var tableName = tbl.Name;
+			var cols = tbl.ColsArray;
+			var constraints = tbl.Constraints;
+			var sb = new StringBuilder();
+
+			// テーブル作成
+			sb.AppendLine("CREATE TABLE IF NOT EXISTS " + tbl.FullNameQuoted + "(");
 			for (int i = 0; i < cols.Length; i++) {
 				var col = cols[i];
 				if (i == 0) {
@@ -1144,12 +1283,103 @@ namespace Db {
 					if (i != 0) {
 						sb.Append(", ");
 					}
-					sb.Append(pk.Cols[i].NameQuoted);
+					sb.Append(ColNameForIndex(pk.Cols[i]));
 				}
 				sb.AppendLine(")");
 			}
 			sb.AppendLine(");");
-			return sb.ToString();
+			cmd.CommandText = sb.ToString();
+			cmd.ExecuteNonQuery();
+
+			// 制約追加
+			foreach (var cr in constraints) {
+				if (cr.Type == CrType.PrimaryKey || cr.Type == CrType.AutoIncrement) {
+					continue;
+				}
+
+				switch (cr.Type) {
+				case CrType.Index: {
+						var name = "idx_" + tableName + "_" + string.Join("_", cr.Cols.Select(c => c.Name));
+						if (schemaName != null) {
+							cmd.CommandText = "SELECT count(*) FROM information_schema.statistics WHERE table_schema='" + schemaName + "' AND table_name='" + tableName + "' AND index_name='" + name + "';";
+						} else {
+							cmd.CommandText = "SELECT count(*) FROM information_schema.statistics WHERE table_schema=database() AND table_name='" + tableName + "' AND index_name='" + name + "';";
+						}
+						var exists = false;
+						using (var dr = cmd.ExecuteReader()) {
+							while (dr.Read()) {
+								exists = 0 < Convert.ToInt32(dr[0]);
+							}
+						}
+						if (!exists) {
+							cmd.CommandText = "ALTER TABLE " + tbl.FullNameQuoted + " ADD INDEX " + name + "(" + string.Join(", ", cr.Cols.Select(c => ColNameForIndex(c))) + ");";
+							cmd.ExecuteNonQuery();
+						}
+					}
+					break;
+
+				case CrType.Unique: {
+						var name = "idx_" + tableName + "_" + string.Join("_", cr.Cols.Select(c => c.Name));
+						if (schemaName != null) {
+							cmd.CommandText = "SELECT count(*) FROM information_schema.statistics WHERE table_schema='" + schemaName + "' AND table_name='" + tableName + "' AND index_name='" + name + "';";
+						} else {
+							cmd.CommandText = "SELECT count(*) FROM information_schema.statistics WHERE table_schema=database() AND table_name='" + tableName + "' AND index_name='" + name + "';";
+						}
+						var exists = false;
+						using (var dr = cmd.ExecuteReader()) {
+							while (dr.Read()) {
+								exists = 0 < Convert.ToInt32(dr[0]);
+							}
+						}
+						if (!exists) {
+							cmd.CommandText = "ALTER TABLE " + tbl.FullNameQuoted + " ADD UNIQUE " + name + "(" + string.Join(", ", cr.Cols.Select(c => ColNameForIndex(c))) + ");";
+							cmd.ExecuteNonQuery();
+						}
+					}
+					break;
+				}
+			}
+		}
+
+		/// <summary>
+		/// 指定の型にマッピングしつつデータ読み込む
+		/// <para>レコードは<see cref="List{T}"/>に読み込まれる</para>
+		/// </summary>
+		/// <param name="cmd">実行するコマンド</param>
+		/// <param name="byName">列名とプロパティ名をマッチングさせて取得するなら true 、列順とプロパティ順を使うなら false</param>
+		/// <param name="columns">マッピングする<see cref="Col{T}"/>を指定する new { Cols.title, Cols.date } の様な匿名クラス</param>
+		/// <returns>レコードコレクション</returns>
+		public static List<T> Read<T>(MySqlCommand cmd, bool byName, T columns) {
+			var result = new List<T>();
+			var dr2cols = byName ? DataReaderToCols<T>.InvokeByName : DataReaderToCols<T>.InvokeByIndex;
+			using (var dr = cmd.ExecuteReader()) {
+				while (dr.Read()) {
+					result.Add(dr2cols(dr, columns));
+				}
+				return result;
+			}
+		}
+
+		/// <summary>
+		/// 指定のコマンドをログ残しつつ実行する
+		/// <para>レコードは<see cref="List{T}"/>に読み込まれる、その際列順とプロパティ順をマッチングさせて取得する</para>
+		/// </summary>
+		/// <param name="cmd">実行するコマンド</param>
+		/// <param name="columns">マッピングする<see cref="Col{T}"/>を指定する new { Cols.title, Cols.date } の様な匿名クラス</param>
+		/// <returns>レコードコレクション</returns>
+		public static List<T> ReadByIndex<T>(MySqlCommand cmd, T columns) {
+			return Read<T>(cmd, false, columns);
+		}
+
+		/// <summary>
+		/// 指定のコマンドをログ残しつつ実行する
+		/// <para>レコードは<see cref="List{T}"/>に読み込まれる、その際列名とプロパティ名をマッチングさせて取得する</para>
+		/// </summary>
+		/// <param name="cmd">実行するコマンド</param>
+		/// <param name="columns">マッピングする<see cref="Col{T}"/>を指定する new { Cols.title, Cols.date } の様な匿名クラス</param>
+		/// <returns>レコードコレクション</returns>
+		public static List<T> ReadByName<T>(MySqlCommand cmd, T columns) {
+			return Read<T>(cmd, true, columns);
 		}
 		#endregion
 	}
@@ -1292,7 +1522,125 @@ namespace Db {
 	/// <para>失敗時にはカラム名が分かる様に例外を投げる</para>
 	/// </summary>
 	public static class DataReaderAccessor {
-		public static string GetString(MySqlDataReader dr, string colName) {
+		public static byte[] GetBytesByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? null : (byte[])v;
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static string GetStringByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? null : v.ToString();
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static bool GetBoolByIndex(MySqlDataReader dr, int index) {
+			try {
+				return Convert.ToBoolean(dr[index]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static short GetInt16ByIndex(MySqlDataReader dr, int index) {
+			try {
+				return Convert.ToInt16(dr[index]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static int GetInt32ByIndex(MySqlDataReader dr, int index) {
+			try {
+				return Convert.ToInt32(dr[index]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static DateTime GetDateTimeByIndex(MySqlDataReader dr, int index) {
+			try {
+				return Convert.ToDateTime(dr[index]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static Guid GetGuidByIndex(MySqlDataReader dr, int index) {
+			try {
+				return (Guid)dr[index];
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+
+		public static byte[] GetNullableBytesByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? null : (byte[])v;
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static string GetNullableStringByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? null : v.ToString();
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static bool? GetNullableBoolByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? default(bool?) : Convert.ToBoolean(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static short? GetNullableInt16ByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? default(short?) : Convert.ToInt16(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static int? GetNullableInt32ByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? default(int?) : Convert.ToInt32(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static DateTime? GetNullableDateTimeByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? default(DateTime?) : Convert.ToDateTime(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static Guid? GetNullableGuidByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? default(Guid?) : (Guid)v;
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+
+
+		public static byte[] GetBytesByName(MySqlDataReader dr, string colName) {
+			try {
+				var v = dr[colName];
+				return v == DBNull.Value ? null : (byte[])v;
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static string GetStringByName(MySqlDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? null : v.ToString();
@@ -1300,35 +1648,35 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static bool GetBool(MySqlDataReader dr, string colName) {
+		public static bool GetBoolByName(MySqlDataReader dr, string colName) {
 			try {
 				return Convert.ToBoolean(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static short GetInt16(MySqlDataReader dr, string colName) {
+		public static short GetInt16ByName(MySqlDataReader dr, string colName) {
 			try {
 				return Convert.ToInt16(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static int GetInt32(MySqlDataReader dr, string colName) {
+		public static int GetInt32ByName(MySqlDataReader dr, string colName) {
 			try {
 				return Convert.ToInt32(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static DateTime GetDateTime(MySqlDataReader dr, string colName) {
+		public static DateTime GetDateTimeByName(MySqlDataReader dr, string colName) {
 			try {
 				return Convert.ToDateTime(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static Guid GetGuid(MySqlDataReader dr, string colName) {
+		public static Guid GetGuidByName(MySqlDataReader dr, string colName) {
 			try {
 				return (Guid)dr[colName];
 			} catch (Exception ex) {
@@ -1336,7 +1684,15 @@ namespace Db {
 			}
 		}
 
-		public static string GetNullableString(MySqlDataReader dr, string colName) {
+		public static byte[] GetNullableBytesByName(MySqlDataReader dr, string colName) {
+			try {
+				var v = dr[colName];
+				return v == DBNull.Value ? null : (byte[])v;
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static string GetNullableStringByName(MySqlDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? null : v.ToString();
@@ -1344,7 +1700,7 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static bool? GetNullableBool(MySqlDataReader dr, string colName) {
+		public static bool? GetNullableBoolByName(MySqlDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(bool?) : Convert.ToBoolean(v);
@@ -1352,7 +1708,7 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static short? GetNullableInt16(MySqlDataReader dr, string colName) {
+		public static short? GetNullableInt16ByName(MySqlDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(short?) : Convert.ToInt16(v);
@@ -1360,7 +1716,7 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static int? GetNullableInt32(MySqlDataReader dr, string colName) {
+		public static int? GetNullableInt32ByName(MySqlDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(int?) : Convert.ToInt32(v);
@@ -1368,7 +1724,7 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static DateTime? GetNullableDateTime(MySqlDataReader dr, string colName) {
+		public static DateTime? GetNullableDateTimeByName(MySqlDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(DateTime?) : Convert.ToDateTime(v);
@@ -1376,7 +1732,7 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static Guid? GetNullableGuid(MySqlDataReader dr, string colName) {
+		public static Guid? GetNullableGuidByName(MySqlDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(Guid?) : (Guid)v;
@@ -1387,13 +1743,24 @@ namespace Db {
 	}
 
 	/// <summary>
-	/// <see cref="MySqlDataReader"/>から値を読み込み<see cref="Col{S}"/>をプロパティとして持つクラスを取得する処理を提供
+	/// <see cref="MySqlDataReader"/>から値を読み込み<see cref="Col{S}"/>をプロパティとして持つクラスを取得する処理を提供、その際列名とプロパティ名でマッチングさせ取得する
 	/// </summary>
 	/// <typeparam name="T"><see cref="Col{S}"/>をプロパティとして持つクラス型</typeparam>
 	public static class DataReaderToCols<T> {
-		public static readonly Func<MySqlDataReader, T, T> Invoke;
+		public static readonly Func<MySqlDataReader, T, T> InvokeByIndex;
+		public static readonly Func<MySqlDataReader, T, T> InvokeByName;
 
 		static DataReaderToCols() {
+			InvokeByIndex = Generate(false);
+			InvokeByName = Generate(false);
+		}
+
+		/// <summary>
+		/// DataReader から<typeparamref name="T"/>へ値を読み込むデリゲートを生成する
+		/// </summary>
+		/// <param name="byName">列名とプロパティ名をマッチングさせて取得するなら true 、列順とプロパティ順を使うなら false</param>
+		/// <returns>DataReader から<typeparamref name="T"/>へ値を読み込むデリゲート</returns>
+		static Func<MySqlDataReader, T, T> Generate(bool byName) {
 			var type = typeof(T);
 
 			// クラスのプロパティ数と型に一致するコンストラクタが存在しないならエラーとする
@@ -1419,7 +1786,9 @@ namespace Db {
 
 				// 列の型に対応した DataReader から取得メソッド名を選ぶ
 				var getMethodName = "";
-				if (t == typeof(string)) {
+				if (t == typeof(byte[])) {
+					getMethodName = "Bytes";
+				} else if (t == typeof(string)) {
 					getMethodName = "String";
 				} else if (t == typeof(bool)) {
 					getMethodName = "Bool";
@@ -1437,7 +1806,7 @@ namespace Db {
 				if (nct != null) {
 					getMethodName = "Nullable" + getMethodName;
 				}
-				getMethodName = "Get" + getMethodName;
+				getMethodName = "Get" + getMethodName + (byName ? "ByName" : "ByIndex");
 
 				var getter = typeof(DataReaderAccessor).GetMethod(getMethodName, BindingFlags.Public | BindingFlags.Static);
 				if (getter == null) {
@@ -1445,18 +1814,18 @@ namespace Db {
 				}
 
 				var col = Expression.Property(paramBaseCols, p);
-				var colName = Expression.Constant(p.Name);
+				var colId = byName ? Expression.Constant(p.Name) : Expression.Constant(i);
 
 				var pctor = pt.GetConstructor(new Type[] { pt, ct });
 				if (pctor == null) {
 					throw new ApplicationException("内部エラー");
 				}
 
-				argExprs[i] = Expression.New(pctor, col, Expression.Call(null, getter, paramDr, colName));
+				argExprs[i] = Expression.New(pctor, col, Expression.Call(null, getter, paramDr, colId));
 			}
 
 			// コンストラクタ呼び出しをコンパイル
-			Invoke = Expression.Lambda<Func<MySqlDataReader, T, T>>(Expression.New(ctor, argExprs), paramDr, paramBaseCols).Compile();
+			return Expression.Lambda<Func<MySqlDataReader, T, T>>(Expression.New(ctor, argExprs), paramDr, paramBaseCols).Compile();
 		}
 	}
 }
