@@ -16,7 +16,7 @@ namespace SusDbHelperTest {
 		/// <summary>
 		/// 型が可変長である事を示す
 		/// </summary>
-		IsVariableLength = 1 << 0,
+		IsVariableLengthType = 1 << 0,
 	}
 
 	/// <summary>
@@ -27,9 +27,9 @@ namespace SusDbHelperTest {
 		public static readonly DbType int2 = new DbType("int2");
 		public static readonly DbType int4 = new DbType("int4");
 		public static readonly DbType int8 = new DbType("int8");
-		public static readonly DbType text = new DbType("text");
+		public static readonly DbType text = new DbType("text", DbTypeFlags.IsVariableLengthType);
 		public static readonly DbType timestamp = new DbType("timestamp");
-		public static readonly DbType binary = new DbType("binary");
+		public static readonly DbType binary = new DbType("binary", DbTypeFlags.IsVariableLengthType);
 
 		public static DbType Map(Type type) {
 			if (type == typeof(sbyte)) {
@@ -97,12 +97,12 @@ namespace SusDbHelperTest {
 		/// <summary>
 		/// 指定の属性をオーバーライドしたクローンを作成する
 		/// </summary>
-		/// <param name="flags">型に対する追加情報のフラグ</param>
+		/// <param name="flagsAdd">型に対する追加情報のフラグ</param>
 		/// <param name="length">桁数又は要素数</param>
 		/// <returns>クローン</returns>
-		public DbType As(DbTypeFlags flags, int length) {
+		public DbType As(DbTypeFlags flagsAdd, int length) {
 			var c = this.MemberwiseClone() as DbType;
-			c.Flags = flags;
+			c.Flags |= flagsAdd;
 			c.Length = length;
 			return c;
 		}
@@ -951,6 +951,51 @@ namespace SusDbHelperTest {
 		}
 	}
 
+	public class SqlOnDuplicateKeyUpdate : ISqlElement {
+		public List<Tuple<object, object>> ColAndValues = new List<Tuple<object, object>>();
+
+		public SqlOnDuplicateKeyUpdate() {
+		}
+
+		public SqlOnDuplicateKeyUpdate Set(object col, object value) {
+			this.ColAndValues.Add(new Tuple<object, object>(col, value));
+			return this;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			sb.Append("ON DUPLICATE KEY UPDATE ");
+			for (int i = 0; i < this.ColAndValues.Count; i++) {
+				var cav = this.ColAndValues[i];
+				if (i != 0) {
+					sb.Append(", ");
+				}
+				sb.Append(sqlBuffer.ToString(cav.Item1));
+				sb.Append("=");
+				sb.Append(sqlBuffer.ToString(cav.Item2));
+			}
+			return sb.ToString();
+		}
+	}
+
+	public class SqlLastInsertId : ISqlElement {
+		public object Expr;
+
+		public SqlLastInsertId(object expr = null) {
+			this.Expr = expr;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			sb.Append("LAST_INSERT_ID(");
+			if (this.Expr != null) {
+				sb.Append(sqlBuffer.ToString(this.Expr));
+			}
+			sb.Append(")");
+			return sb.ToString();
+		}
+	}
+
 	/// <summary>
 	/// SQL文生成をサポートするクラス
 	/// </summary>
@@ -992,113 +1037,113 @@ namespace SusDbHelperTest {
 			return applyToCmd;
 		}
 
-		public static Func<Param, Action<MySqlCommand, T1>> Sql<T1>(params object[] elements) {
-			var applier = Sql(elements);
-			return (param1) => {
-				return (cmd, arg1) => {
-					param1.Value = arg1;
-					applier(cmd);
-				};
-			};
-		}
+		//public static Func<Param, Action<MySqlCommand, T1>> Sql<T1>(params object[] elements) {
+		//	var applier = Sql(elements);
+		//	return (param1) => {
+		//		return (cmd, arg1) => {
+		//			param1.Value = arg1;
+		//			applier(cmd);
+		//		};
+		//	};
+		//}
 
-		public static Func<Param, Param, Action<MySqlCommand, T1, T2>> Sql<T1, T2>(params object[] elements) {
-			var applier = Sql(elements);
-			return (param1, param2) => {
-				return (cmd, arg1, arg2) => {
-					param1.Value = arg1;
-					param2.Value = arg2;
-					applier(cmd);
-				};
-			};
-		}
+		//public static Func<Param, Param, Action<MySqlCommand, T1, T2>> Sql<T1, T2>(params object[] elements) {
+		//	var applier = Sql(elements);
+		//	return (param1, param2) => {
+		//		return (cmd, arg1, arg2) => {
+		//			param1.Value = arg1;
+		//			param2.Value = arg2;
+		//			applier(cmd);
+		//		};
+		//	};
+		//}
 
-		public static Func<Param, Param, Param, Action<MySqlCommand, T1, T2, T3>> Sql<T1, T2, T3>(params object[] elements) {
-			var applier = Sql(elements);
-			return (param1, param2, param3) => {
-				return (cmd, arg1, arg2, arg3) => {
-					param1.Value = arg1;
-					param2.Value = arg2;
-					param3.Value = arg3;
-					applier(cmd);
-				};
-			};
-		}
+		//public static Func<Param, Param, Param, Action<MySqlCommand, T1, T2, T3>> Sql<T1, T2, T3>(params object[] elements) {
+		//	var applier = Sql(elements);
+		//	return (param1, param2, param3) => {
+		//		return (cmd, arg1, arg2, arg3) => {
+		//			param1.Value = arg1;
+		//			param2.Value = arg2;
+		//			param3.Value = arg3;
+		//			applier(cmd);
+		//		};
+		//	};
+		//}
 
-		public static Func<Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4>> Sql<T1, T2, T3, T4>(params object[] elements) {
-			var applier = Sql(elements);
-			return (param1, param2, param3, param4) => {
-				return (cmd, arg1, arg2, arg3, arg4) => {
-					param1.Value = arg1;
-					param2.Value = arg2;
-					param3.Value = arg3;
-					param4.Value = arg4;
-					applier(cmd);
-				};
-			};
-		}
+		//public static Func<Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4>> Sql<T1, T2, T3, T4>(params object[] elements) {
+		//	var applier = Sql(elements);
+		//	return (param1, param2, param3, param4) => {
+		//		return (cmd, arg1, arg2, arg3, arg4) => {
+		//			param1.Value = arg1;
+		//			param2.Value = arg2;
+		//			param3.Value = arg3;
+		//			param4.Value = arg4;
+		//			applier(cmd);
+		//		};
+		//	};
+		//}
 
-		public static Func<Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5>> Sql<T1, T2, T3, T4, T5>(params object[] elements) {
-			var applier = Sql(elements);
-			return (param1, param2, param3, param4, param5) => {
-				return (cmd, arg1, arg2, arg3, arg4, arg5) => {
-					param1.Value = arg1;
-					param2.Value = arg2;
-					param3.Value = arg3;
-					param4.Value = arg4;
-					param5.Value = arg5;
-					applier(cmd);
-				};
-			};
-		}
+		//public static Func<Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5>> Sql<T1, T2, T3, T4, T5>(params object[] elements) {
+		//	var applier = Sql(elements);
+		//	return (param1, param2, param3, param4, param5) => {
+		//		return (cmd, arg1, arg2, arg3, arg4, arg5) => {
+		//			param1.Value = arg1;
+		//			param2.Value = arg2;
+		//			param3.Value = arg3;
+		//			param4.Value = arg4;
+		//			param5.Value = arg5;
+		//			applier(cmd);
+		//		};
+		//	};
+		//}
 
-		public static Func<Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6>> Sql<T1, T2, T3, T4, T5, T6>(params object[] elements) {
-			var applier = Sql(elements);
-			return (param1, param2, param3, param4, param5, param6) => {
-				return (cmd, arg1, arg2, arg3, arg4, arg5, arg6) => {
-					param1.Value = arg1;
-					param2.Value = arg2;
-					param3.Value = arg3;
-					param4.Value = arg4;
-					param5.Value = arg5;
-					param6.Value = arg6;
-					applier(cmd);
-				};
-			};
-		}
+		//public static Func<Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6>> Sql<T1, T2, T3, T4, T5, T6>(params object[] elements) {
+		//	var applier = Sql(elements);
+		//	return (param1, param2, param3, param4, param5, param6) => {
+		//		return (cmd, arg1, arg2, arg3, arg4, arg5, arg6) => {
+		//			param1.Value = arg1;
+		//			param2.Value = arg2;
+		//			param3.Value = arg3;
+		//			param4.Value = arg4;
+		//			param5.Value = arg5;
+		//			param6.Value = arg6;
+		//			applier(cmd);
+		//		};
+		//	};
+		//}
 
-		public static Func<Param, Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6, T7>> Sql<T1, T2, T3, T4, T5, T6, T7>(params object[] elements) {
-			var applier = Sql(elements);
-			return (param1, param2, param3, param4, param5, param6, param7) => {
-				return (cmd, arg1, arg2, arg3, arg4, arg5, arg6, arg7) => {
-					param1.Value = arg1;
-					param2.Value = arg2;
-					param3.Value = arg3;
-					param4.Value = arg4;
-					param5.Value = arg5;
-					param6.Value = arg6;
-					param7.Value = arg7;
-					applier(cmd);
-				};
-			};
-		}
+		//public static Func<Param, Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6, T7>> Sql<T1, T2, T3, T4, T5, T6, T7>(params object[] elements) {
+		//	var applier = Sql(elements);
+		//	return (param1, param2, param3, param4, param5, param6, param7) => {
+		//		return (cmd, arg1, arg2, arg3, arg4, arg5, arg6, arg7) => {
+		//			param1.Value = arg1;
+		//			param2.Value = arg2;
+		//			param3.Value = arg3;
+		//			param4.Value = arg4;
+		//			param5.Value = arg5;
+		//			param6.Value = arg6;
+		//			param7.Value = arg7;
+		//			applier(cmd);
+		//		};
+		//	};
+		//}
 
-		public static Func<Param, Param, Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6, T7, T8>> Sql<T1, T2, T3, T4, T5, T6, T7, T8>(params object[] elements) {
-			var applier = Sql(elements);
-			return (param1, param2, param3, param4, param5, param6, param7, param8) => {
-				return (cmd, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) => {
-					param1.Value = arg1;
-					param2.Value = arg2;
-					param3.Value = arg3;
-					param4.Value = arg4;
-					param5.Value = arg5;
-					param6.Value = arg6;
-					param7.Value = arg7;
-					param8.Value = arg8;
-					applier(cmd);
-				};
-			};
-		}
+		//public static Func<Param, Param, Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6, T7, T8>> Sql<T1, T2, T3, T4, T5, T6, T7, T8>(params object[] elements) {
+		//	var applier = Sql(elements);
+		//	return (param1, param2, param3, param4, param5, param6, param7, param8) => {
+		//		return (cmd, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) => {
+		//			param1.Value = arg1;
+		//			param2.Value = arg2;
+		//			param3.Value = arg3;
+		//			param4.Value = arg4;
+		//			param5.Value = arg5;
+		//			param6.Value = arg6;
+		//			param7.Value = arg7;
+		//			param8.Value = arg8;
+		//			applier(cmd);
+		//		};
+		//	};
+		//}
 
 		/// <summary>
 		/// 指定列の SELECT を表すSQL要素を生成する
@@ -1222,6 +1267,29 @@ namespace SusDbHelperTest {
 		}
 
 		/// <summary>
+		/// ON DUPLICATE KEY UPDATE を表すSQL要素を生成する
+		/// </summary>
+		/// <returns><see cref="SqlOnDuplicateKeyUpdate"/></returns>
+		public static SqlOnDuplicateKeyUpdate OnDuplicateKeyUpdate() {
+			return new SqlOnDuplicateKeyUpdate();
+		}
+
+		/// <summary>
+		/// LAST_INSERT_ID を表すSQL要素を生成する
+		/// </summary>
+		/// <returns><see cref="SqlLastInsertId"/></returns>
+		public static SqlLastInsertId LastInsertId(object expr = null) {
+			return new SqlLastInsertId(expr);
+		}
+
+		/// <summary>
+		/// １つのコマンドの終了を示す記号を取得する
+		/// </summary>
+		public static string End() {
+			return ";";
+		}
+
+		/// <summary>
 		/// 指定式を括弧で括る
 		/// </summary>
 		/// <param name="expression">式</param>
@@ -1241,7 +1309,7 @@ namespace SusDbHelperTest {
 			var dbt = col.DbType;
 			var sb = new StringBuilder();
 			sb.Append(col.NameQuoted);
-			if ((dbt.Flags & DbTypeFlags.IsVariableLength) != 0 && dbt.Length != 0) {
+			if ((dbt.Flags & DbTypeFlags.IsVariableLengthType) != 0 && dbt.Length != 0) {
 				sb.Append("(");
 				sb.Append(dbt.Length);
 				sb.Append(")");
@@ -1297,9 +1365,19 @@ namespace SusDbHelperTest {
 					continue;
 				}
 
+				uint hashCode = 0;
+				for (int i = 0; i < cr.Cols.Length; i++) {
+					var c = cr.Cols[i];
+					if (i == 0) {
+						hashCode = (uint)c.Name.GetHashCode();
+					} else {
+						hashCode *= (uint)c.Name.GetHashCode();
+					}
+				}
+
 				switch (cr.Type) {
 				case CrType.Index: {
-						var name = "idx_" + tableName + "_" + string.Join("_", cr.Cols.Select(c => c.Name));
+						var name = "idx_" + tableName + "_" + hashCode;
 						if (schemaName != null) {
 							cmd.CommandText = "SELECT count(*) FROM information_schema.statistics WHERE table_schema='" + schemaName + "' AND table_name='" + tableName + "' AND index_name='" + name + "';";
 						} else {
@@ -1319,7 +1397,7 @@ namespace SusDbHelperTest {
 					break;
 
 				case CrType.Unique: {
-						var name = "idx_" + tableName + "_" + string.Join("_", cr.Cols.Select(c => c.Name));
+						var name = "idx_" + tableName + "_" + hashCode;
 						if (schemaName != null) {
 							cmd.CommandText = "SELECT count(*) FROM information_schema.statistics WHERE table_schema='" + schemaName + "' AND table_name='" + tableName + "' AND index_name='" + name + "';";
 						} else {
@@ -1380,6 +1458,22 @@ namespace SusDbHelperTest {
 		/// <returns>レコードコレクション</returns>
 		public static List<T> ReadByName<T>(MySqlCommand cmd, T columns) {
 			return Read<T>(cmd, true, columns);
+		}
+
+		/// <summary>
+		/// 0カラム目の値を int 値として取得する
+		/// </summary>
+		/// <param name="cmd">実行するコマンド</param>
+		/// <param name="defaultValue">読み込まれたレコード数が０の場合用の既定値</param>
+		/// <returns>読み込まれた値</returns>
+		public static int ReadInt(MySqlCommand cmd, int defaultValue = 0) {
+			var value = defaultValue;
+			using (var dr = cmd.ExecuteReader()) {
+				while (dr.Read()) {
+					value = Convert.ToInt32(dr[0]);
+				}
+			}
+			return value;
 		}
 		#endregion
 	}
