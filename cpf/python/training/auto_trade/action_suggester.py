@@ -112,6 +112,8 @@ class TpActionSuggester:
 						suggested_action = 1
 					elif tp_delta < -threshould and self.env.position_type != -1:
 						suggested_action = 2
+					# elif tp_delta * self.env.position_type < 0:
+					# 	suggested_action = 3
 
 		return suggested_action
 

@@ -13,7 +13,7 @@ from trade_environment import TradeEnvironment
 import model
 import action_suggester
 
-model.plot_enabled = False
+model.plot_enabled = True
 
 
 def make_state(state, frame):
@@ -33,6 +33,8 @@ action_dim = trade_environment.action_num
 model_formula = f'model.{lp["model"]}(state_shape, action_dim, "TestMode", hidden_size={lp["hidden_size"]})'
 
 env = TradeEnvironment('test.dat', window_size, state_shape[1:])
+env.spread = ap['spread']
+env.loss_cut = ap['loss_cut']
 
 Q = eval(model_formula)
 
@@ -49,7 +51,7 @@ terminal = False
 # 初期状態の取得
 state = env.reset()
 for _ in range(frame_num - 1):
-	frame, reward_info, terminal, _ = env.step(0)
+	frame, reward_info, terminal, _ = env.step(0, 0)
 	if terminal:
 		break
 	state = make_state(state, frame)
@@ -64,7 +66,7 @@ while not terminal:
 	action = torch.argmax(q, 0).item()
 
 	# 環境に行動を適用し次の状態を取得する
-	frame, reward_info, terminal, _ = env.step(action)
+	frame, reward_info, terminal, _ = env.step(action, action)
 	next_state = make_state(state, frame)
 	reward = reward_info[0]
 	img = next_state.sum(axis=0)
