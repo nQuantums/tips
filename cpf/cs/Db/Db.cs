@@ -6,17 +6,23 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Reflection;
 using MySql.Data.MySqlClient;
+using System.Collections;
 
-namespace SusDbHelperTest {
+namespace Db {
 	/// <summary>
 	/// <see cref="DbType"/>に付与するフラグ
 	/// </summary>
 	[Flags]
 	public enum DbTypeFlags {
 		/// <summary>
+		/// 型がベースの型からクローン
+		/// </summary>
+		IsCloned = 1 << 0,
+
+		/// <summary>
 		/// 型が可変長である事を示す
 		/// </summary>
-		IsVariableLengthType = 1 << 0,
+		IsVariableLengthType = 1 << 1,
 	}
 
 	/// <summary>
@@ -30,6 +36,7 @@ namespace SusDbHelperTest {
 		public static readonly DbType text = new DbType("text", DbTypeFlags.IsVariableLengthType);
 		public static readonly DbType timestamp = new DbType("timestamp");
 		public static readonly DbType binary = new DbType("binary", DbTypeFlags.IsVariableLengthType);
+        public static readonly DbType varbinary = new DbType("varbinary", DbTypeFlags.IsVariableLengthType);
 
 		public static DbType Map(Type type) {
 			if (type == typeof(sbyte)) {
@@ -67,12 +74,12 @@ namespace SusDbHelperTest {
 		/// <summary>
 		/// 型名
 		/// </summary>
-		public DbTypeFlags Flags { get; private set; }
+		public DbTypeFlags TypeFlags { get; private set; }
 
 		/// <summary>
 		/// 桁数又は要素数
 		/// </summary>
-		public int Length { get; private set; }
+		public int TypeLength { get; private set; }
 
 		/// <summary>
 		/// コンストラクタ、型名と桁数又は要素数を指定して初期化する
@@ -82,8 +89,8 @@ namespace SusDbHelperTest {
 		/// <param name="length">桁数又は要素数</param>
 		public DbType(string name, DbTypeFlags flags = 0, int length = 0) {
 			this.Name = name;
-			this.Flags = flags;
-			this.Length = length;
+			this.TypeFlags = flags;
+			this.TypeLength = length;
 		}
 
 		public static implicit operator string(DbType value) {
@@ -91,19 +98,29 @@ namespace SusDbHelperTest {
 		}
 
 		public override string ToString() {
-			return this.Length == 0 ? this.Name : this.Name + "(" + this.Length + ")";
+			return this.TypeLength == 0 ? this.Name : this.Name + "(" + this.TypeLength + ")";
 		}
 
 		/// <summary>
-		/// 指定の属性をオーバーライドしたクローンを作成する
+		/// 桁数又は要素数をオーバーライドしたクローンを作成する
 		/// </summary>
-		/// <param name="flagsAdd">型に対する追加情報のフラグ</param>
 		/// <param name="length">桁数又は要素数</param>
 		/// <returns>クローン</returns>
-		public DbType As(DbTypeFlags flagsAdd, int length) {
-			var c = this.MemberwiseClone() as DbType;
-			c.Flags |= flagsAdd;
-			c.Length = length;
+		public DbType Len(int length) {
+			var c = (this.TypeFlags & DbTypeFlags.IsCloned) != 0 ? this : this.MemberwiseClone() as DbType;
+			c.TypeFlags |= DbTypeFlags.IsCloned;
+			c.TypeLength = length;
+			return c;
+		}
+
+		/// <summary>
+		/// 型に対する追加情報をオーバーライドしたクローンを作成する
+		/// </summary>
+		/// <param name="flagsAdd">型に対する追加情報のフラグ</param>
+		/// <returns>クローン</returns>
+		public DbType Flags(DbTypeFlags flagsAdd) {
+			var c = (this.TypeFlags & DbTypeFlags.IsCloned) != 0 ? this : this.MemberwiseClone() as DbType;
+			c.TypeFlags |= DbTypeFlags.IsCloned | flagsAdd;
 			return c;
 		}
 	}
@@ -789,33 +806,39 @@ namespace SusDbHelperTest {
 	}
 
 	public class SqlValues : ISqlElement {
-		public object[][] Values;
+		public object[,] Values;
 
 		public SqlValues(params object[] value) {
-			this.Values = new object[][] { value };
+			this.Values = new object[1, value.Length];
+			var values = this.Values;
+			for (int i = 0; i < value.Length; i++) {
+				values[0, i] = value[i];
+			}
 		}
 
-		public SqlValues(object[][] values) {
+		public SqlValues(object[,] values) {
 			this.Values = values;
 		}
 
 		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
 			var sb = new StringBuilder();
+			var values = this.Values;
+			var rowsCount = values.GetLength(0);
+			var colsCount = values.GetLength(1);
 			sb.Append("VALUES");
 			sb.AppendLine();
-			for (int i = 0; i < this.Values.Length; i++) {
+			for (int i = 0; i < rowsCount; i++) {
 				if (i != 0) {
 					sb.Append(",");
 				} else {
 					sb.Append(" ");
 				}
-				var value = this.Values[i];
 				sb.Append("(");
-				for (int j = 0; j < value.Length; j++) {
+				for (int j = 0; j < colsCount; j++) {
 					if (j != 0) {
 						sb.Append(", ");
 					}
-					sb.Append(sqlBuffer.ToString(value[j], flags));
+					sb.Append(sqlBuffer.ToString(values[i, j], flags));
 				}
 				sb.AppendLine(")");
 			}
@@ -913,6 +936,61 @@ namespace SusDbHelperTest {
 		}
 	}
 
+	public class SqlGroupBy : ISqlElement {
+		public object[] Cols;
+
+		public SqlGroupBy(params object[] cols) {
+			this.Cols = cols;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			sb.Append("GROUP BY ");
+			for (int i = 0; i < this.Cols.Length; i++) {
+				if (i != 0) {
+					sb.Append(", ");
+				}
+				sb.Append(sqlBuffer.ToString(this.Cols[i], ToStringFlags.WithAlias));
+			}
+			return sb.ToString();
+		}
+	}
+
+	public class SqlOrderBy : ISqlElement {
+		public object[] Cols;
+
+		public SqlOrderBy(params object[] cols) {
+			this.Cols = cols;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			sb.Append("ORDER BY ");
+			for (int i = 0; i < this.Cols.Length; i++) {
+				if (i != 0) {
+					sb.Append(", ");
+				}
+				sb.Append(sqlBuffer.ToString(this.Cols[i], ToStringFlags.WithAlias));
+			}
+			return sb.ToString();
+		}
+	}
+
+	public class SqlDesc : ISqlElement {
+		public object Col;
+
+		public SqlDesc(object col) {
+			this.Col = col;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			sb.Append(sqlBuffer.ToString(this.Col, ToStringFlags.WithAlias));
+			sb.Append(" DESC");
+			return sb.ToString();
+		}
+	}
+
 	public class SqlAnd : ISqlElement {
 		public object[] Expressions;
 
@@ -1006,10 +1084,10 @@ namespace SusDbHelperTest {
 		/// </summary>
 		/// <param name="elements">SQL文モジュール</param>
 		/// <returns><see cref="MySqlCommand"/>にSQL文を適用するデリゲート</returns>
-		public static Action<MySqlCommand> Sql(params object[] elements) {
+		public static Func<MySqlCommand, MySqlCommand> Sql(params object[] elements) {
 			var buffer = new SqlBuffer();
 
-			// 各モジュールを文字列に変換してSQL分を生成する
+			// 各モジュールを文字列に変換してSQL文を生成する
 			var sb = new StringBuilder();
 			for (int i = 0; i < elements.Length; i++) {
 				if (i < elements.Length - 1) {
@@ -1022,7 +1100,7 @@ namespace SusDbHelperTest {
 			var commandText = sb.ToString();
 
 			// SQLコマンドに内容を適用するデリゲート作成
-			Action<MySqlCommand> applyToCmd = cmd => {
+			Func<MySqlCommand, MySqlCommand> applyToCmd = cmd => {
 				// 生成されたSQL分を適用
 				cmd.CommandText = commandText;
 
@@ -1032,6 +1110,8 @@ namespace SusDbHelperTest {
 				foreach (var p in buffer.Params) {
 					parameters.AddWithValue(p.Value, p.Key.Value);
 				}
+
+				return cmd;
 			};
 
 			return applyToCmd;
@@ -1207,7 +1287,7 @@ namespace SusDbHelperTest {
 		/// </summary>
 		/// <param name="values">複数レコード分の各列の値一覧</param>
 		/// <returns><see cref="SqlValues"/></returns>
-		public static SqlValues Values(object[][] values) {
+		public static SqlValues Values(object[,] values) {
 			return new SqlValues(values);
 		}
 
@@ -1246,6 +1326,33 @@ namespace SusDbHelperTest {
 		/// <returns><see cref="SqlJoin"/></returns>
 		public static SqlJoin LeftJoin(object tbl) {
 			return new SqlJoin(JoinType.Left, tbl);
+		}
+
+		/// <summary>
+		/// GROUP BY を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="cols">列一覧</param>
+		/// <returns><see cref="SqlGroupBy"/></returns>
+		public static SqlGroupBy GroupBy(params object[] cols) {
+			return new SqlGroupBy(cols);
+		}
+
+		/// <summary>
+		/// ORDER BY を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="cols">列一覧</param>
+		/// <returns><see cref="SqlOrderBy"/></returns>
+		public static SqlOrderBy OrderBy(params object[] cols) {
+			return new SqlOrderBy(cols);
+		}
+
+		/// <summary>
+		/// DESC を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="col">列</param>
+		/// <returns><see cref="SqlDesc"/></returns>
+		public static SqlDesc Desc(object col) {
+			return new SqlDesc(col);
 		}
 
 		/// <summary>
@@ -1309,9 +1416,9 @@ namespace SusDbHelperTest {
 			var dbt = col.DbType;
 			var sb = new StringBuilder();
 			sb.Append(col.NameQuoted);
-			if ((dbt.Flags & DbTypeFlags.IsVariableLengthType) != 0 && dbt.Length != 0) {
+			if ((dbt.TypeFlags & DbTypeFlags.IsVariableLengthType) != 0 && dbt.TypeLength != 0) {
 				sb.Append("(");
-				sb.Append(dbt.Length);
+				sb.Append(dbt.TypeLength);
 				sb.Append(")");
 			}
 			return sb.ToString();
@@ -1419,6 +1526,17 @@ namespace SusDbHelperTest {
 			}
 		}
 
+
+		/// <summary>
+		/// 指定のテーブルが存在したら捨てる
+		/// </summary>
+		/// <param name="cmd">使用するコマンドオブジェクト</param>
+		/// <param name="tbl">テーブルの定義</param>
+		public static void DropTableIfExists(MySqlCommand cmd, Tbl tbl) {
+			cmd.CommandText = "DROP TABLE IF EXISTS " + tbl.FullNameQuoted + ";";
+			cmd.ExecuteNonQuery();
+		}
+
 		/// <summary>
 		/// 指定の型にマッピングしつつデータ読み込む
 		/// <para>レコードは<see cref="List{T}"/>に読み込まれる</para>
@@ -1461,19 +1579,44 @@ namespace SusDbHelperTest {
 		}
 
 		/// <summary>
-		/// 0カラム目の値を int 値として取得する
+		/// 指定カラムの値を<typeparamref name="T"/>型の値として取得する
 		/// </summary>
+		/// <typeparam name="T">取得値型</typeparam>
 		/// <param name="cmd">実行するコマンド</param>
-		/// <param name="defaultValue">読み込まれたレコード数が０の場合用の既定値</param>
+		/// <param name="defaultValue">読み込まれたレコードが存在しない場合の既定値</param>
+		/// <param name="index">カラムインデックス</param>
 		/// <returns>読み込まれた値</returns>
-		public static int ReadInt(MySqlCommand cmd, int defaultValue = 0) {
+		public static T Read<T>(MySqlCommand cmd, T defaultValue = default(T), int index = 0) {
 			var value = defaultValue;
 			using (var dr = cmd.ExecuteReader()) {
 				while (dr.Read()) {
-					value = Convert.ToInt32(dr[0]);
+					value = DataReaderToValue<T>.InvokeByIndex(dr, index);
 				}
 			}
 			return value;
+		}
+
+		/// <summary>
+		/// コマンドを実行し、指定カラムから<typeparamref name="T"/>型の値を取得し列挙するオブジェクトを取得する
+		/// </summary>
+		/// <typeparam name="T">取得値型</typeparam>
+		/// <param name="cmd">実行するコマンド</param>
+		/// <param name="index">カラムインデックス</param>
+		/// <returns>値列挙オブジェクト</returns>
+		public static DataReaderEnumerableByIndex<T> Enumerate<T>(MySqlCommand cmd, int index = 0) {
+			return new DataReaderEnumerableByIndex<T>(cmd.ExecuteReader(), DataReaderToValue<T>.InvokeByIndex, index);
+		}
+
+		/// <summary>
+		/// コマンドを実行し、<typeparamref name="T"/>型の値を取得し列挙するオブジェクトを取得する
+		/// </summary>
+		/// <typeparam name="T">取得値型</typeparam>
+		/// <param name="cmd">実行するコマンド</param>
+		/// <param name="baseValue">列挙される値の基となる値、<see cref="Col{S}"/>型のプロパティを複製する際に使用される</param>
+		/// <param name="byName">プロパティ名とカラム名をマッチングさせて値取得するなら true を指定する、false ならプロパティインデックスとカラムインデックスのマッチングとなる</param>
+		/// <returns>値列挙オブジェクト</returns>
+		public static DataReaderEnumerable<T> Enumerate<T>(MySqlCommand cmd, T baseValue, bool byName = false) {
+			return new DataReaderEnumerable<T>(cmd.ExecuteReader(), byName ? DataReaderToCols<T>.InvokeByName : DataReaderToCols<T>.InvokeByIndex, baseValue);
 		}
 		#endregion
 	}
@@ -1624,62 +1767,35 @@ namespace SusDbHelperTest {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static string GetStringByIndex(MySqlDataReader dr, int index) {
+		public static byte[] GetBytesByName(MySqlDataReader dr, string colName) {
 			try {
-				var v = dr[index];
-				return v == DBNull.Value ? null : v.ToString();
+				var v = dr[colName];
+				return v == DBNull.Value ? null : (byte[])v;
 			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
-			}
-		}
-		public static bool GetBoolByIndex(MySqlDataReader dr, int index) {
-			try {
-				return Convert.ToBoolean(dr[index]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
-			}
-		}
-		public static short GetInt16ByIndex(MySqlDataReader dr, int index) {
-			try {
-				return Convert.ToInt16(dr[index]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
-			}
-		}
-		public static int GetInt32ByIndex(MySqlDataReader dr, int index) {
-			try {
-				return Convert.ToInt32(dr[index]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
-			}
-		}
-		public static DateTime GetDateTimeByIndex(MySqlDataReader dr, int index) {
-			try {
-				return Convert.ToDateTime(dr[index]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
-			}
-		}
-		public static Guid GetGuidByIndex(MySqlDataReader dr, int index) {
-			try {
-				return (Guid)dr[index];
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
 
-		public static byte[] GetNullableBytesByIndex(MySqlDataReader dr, int index) {
+		public static string GetStringByIndex(MySqlDataReader dr, int index) {
 			try {
 				var v = dr[index];
-				return v == DBNull.Value ? null : (byte[])v;
+				return v == DBNull.Value ? null : (string)v;
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static string GetNullableStringByIndex(MySqlDataReader dr, int index) {
+		public static string GetStringByName(MySqlDataReader dr, string colName) {
 			try {
-				var v = dr[index];
-				return v == DBNull.Value ? null : v.ToString();
+				var v = dr[colName];
+				return v == DBNull.Value ? null : (string)v;
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+
+		public static bool GetBoolByIndex(MySqlDataReader dr, int index) {
+			try {
+				return Convert.ToBoolean(dr[index]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
@@ -1692,104 +1808,9 @@ namespace SusDbHelperTest {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static short? GetNullableInt16ByIndex(MySqlDataReader dr, int index) {
-			try {
-				var v = dr[index];
-				return v == DBNull.Value ? default(short?) : Convert.ToInt16(v);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
-			}
-		}
-		public static int? GetNullableInt32ByIndex(MySqlDataReader dr, int index) {
-			try {
-				var v = dr[index];
-				return v == DBNull.Value ? default(int?) : Convert.ToInt32(v);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
-			}
-		}
-		public static DateTime? GetNullableDateTimeByIndex(MySqlDataReader dr, int index) {
-			try {
-				var v = dr[index];
-				return v == DBNull.Value ? default(DateTime?) : Convert.ToDateTime(v);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
-			}
-		}
-		public static Guid? GetNullableGuidByIndex(MySqlDataReader dr, int index) {
-			try {
-				var v = dr[index];
-				return v == DBNull.Value ? default(Guid?) : (Guid)v;
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
-			}
-		}
-
-
-		public static byte[] GetBytesByName(MySqlDataReader dr, string colName) {
-			try {
-				var v = dr[colName];
-				return v == DBNull.Value ? null : (byte[])v;
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		public static string GetStringByName(MySqlDataReader dr, string colName) {
-			try {
-				var v = dr[colName];
-				return v == DBNull.Value ? null : v.ToString();
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
 		public static bool GetBoolByName(MySqlDataReader dr, string colName) {
 			try {
 				return Convert.ToBoolean(dr[colName]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		public static short GetInt16ByName(MySqlDataReader dr, string colName) {
-			try {
-				return Convert.ToInt16(dr[colName]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		public static int GetInt32ByName(MySqlDataReader dr, string colName) {
-			try {
-				return Convert.ToInt32(dr[colName]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		public static DateTime GetDateTimeByName(MySqlDataReader dr, string colName) {
-			try {
-				return Convert.ToDateTime(dr[colName]);
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		public static Guid GetGuidByName(MySqlDataReader dr, string colName) {
-			try {
-				return (Guid)dr[colName];
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-
-		public static byte[] GetNullableBytesByName(MySqlDataReader dr, string colName) {
-			try {
-				var v = dr[colName];
-				return v == DBNull.Value ? null : (byte[])v;
-			} catch (Exception ex) {
-				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
-			}
-		}
-		public static string GetNullableStringByName(MySqlDataReader dr, string colName) {
-			try {
-				var v = dr[colName];
-				return v == DBNull.Value ? null : v.ToString();
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
@@ -1802,10 +1823,87 @@ namespace SusDbHelperTest {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
+
+		public static short GetInt8ByIndex(MySqlDataReader dr, int index) {
+			try {
+				return Convert.ToSByte(dr[index]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static short? GetNullableInt8ByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? default(short?) : Convert.ToSByte(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static short GetInt8ByName(MySqlDataReader dr, string colName) {
+			try {
+				return Convert.ToSByte(dr[colName]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static short? GetNullableInt8ByName(MySqlDataReader dr, string colName) {
+			try {
+				var v = dr[colName];
+				return v == DBNull.Value ? default(short?) : Convert.ToSByte(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+
+		public static short GetInt16ByIndex(MySqlDataReader dr, int index) {
+			try {
+				return Convert.ToInt16(dr[index]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static short? GetNullableInt16ByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? default(short?) : Convert.ToInt16(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static short GetInt16ByName(MySqlDataReader dr, string colName) {
+			try {
+				return Convert.ToInt16(dr[colName]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
 		public static short? GetNullableInt16ByName(MySqlDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(short?) : Convert.ToInt16(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+
+		public static int GetInt32ByIndex(MySqlDataReader dr, int index) {
+			try {
+				return Convert.ToInt32(dr[index]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static int? GetNullableInt32ByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? default(int?) : Convert.ToInt32(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static int GetInt32ByName(MySqlDataReader dr, string colName) {
+			try {
+				return Convert.ToInt32(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
@@ -1818,10 +1916,87 @@ namespace SusDbHelperTest {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
+
+		public static long GetInt64ByIndex(MySqlDataReader dr, int index) {
+			try {
+				return Convert.ToInt64(dr[index]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static long? GetNullableInt64ByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? default(long?) : Convert.ToInt64(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static long GetInt64ByName(MySqlDataReader dr, string colName) {
+			try {
+				return Convert.ToInt64(dr[colName]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+		public static long? GetNullableInt64ByName(MySqlDataReader dr, string colName) {
+			try {
+				var v = dr[colName];
+				return v == DBNull.Value ? default(long?) : Convert.ToInt64(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+
+		public static DateTime GetDateTimeByIndex(MySqlDataReader dr, int index) {
+			try {
+				return Convert.ToDateTime(dr[index]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static DateTime? GetNullableDateTimeByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? default(DateTime?) : Convert.ToDateTime(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static DateTime GetDateTimeByName(MySqlDataReader dr, string colName) {
+			try {
+				return Convert.ToDateTime(dr[colName]);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
 		public static DateTime? GetNullableDateTimeByName(MySqlDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(DateTime?) : Convert.ToDateTime(v);
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
+			}
+		}
+
+		public static Guid GetGuidByIndex(MySqlDataReader dr, int index) {
+			try {
+				return (Guid)dr[index];
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static Guid? GetNullableGuidByIndex(MySqlDataReader dr, int index) {
+			try {
+				var v = dr[index];
+				return v == DBNull.Value ? default(Guid?) : (Guid)v;
+			} catch (Exception ex) {
+				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
+			}
+		}
+		public static Guid GetGuidByName(MySqlDataReader dr, string colName) {
+			try {
+				return (Guid)dr[colName];
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
@@ -1834,12 +2009,167 @@ namespace SusDbHelperTest {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
+
+		public static MethodInfo GetMethodByType(Type type, bool byName) {
+			var nt = Nullable.GetUnderlyingType(type);
+			var t = nt ?? type;
+
+			// 列の型に対応した DataReader から取得メソッド名を選ぶ
+			var getMethodName = "";
+			if (t == typeof(byte[])) {
+				getMethodName = "Bytes";
+			} else if (t == typeof(string)) {
+				getMethodName = "String";
+			} else if (t == typeof(bool)) {
+				getMethodName = "Bool";
+			} else if (t == typeof(sbyte)) {
+				getMethodName = "Int8";
+			} else if (t == typeof(short)) {
+				getMethodName = "Int16";
+			} else if (t == typeof(int)) {
+				getMethodName = "Int32";
+			} else if (t == typeof(long)) {
+				getMethodName = "Int64";
+			} else if (t == typeof(DateTime)) {
+				getMethodName = "DateTime";
+			} else if (t == typeof(Guid)) {
+				getMethodName = "Guid";
+			} else {
+				throw new ApplicationException("DataReader からの " + t + " 値取得メソッドは実装されていません。");
+			}
+			if (nt != null) {
+				getMethodName = "Nullable" + getMethodName;
+			}
+			getMethodName = "Get" + getMethodName + (byName ? "ByName" : "ByIndex");
+
+			var getter = typeof(DataReaderAccessor).GetMethod(getMethodName, BindingFlags.Public | BindingFlags.Static);
+			if (getter == null) {
+				throw new ApplicationException("内部エラー、 DataReaderAccessor." + getMethodName + " メソッドは存在しません。");
+			}
+
+			return getter;
+		}
 	}
 
 	/// <summary>
-	/// <see cref="MySqlDataReader"/>から値を読み込み<see cref="Col{S}"/>をプロパティとして持つクラスを取得する処理を提供、その際列名とプロパティ名でマッチングさせ取得する
+	/// DataReader の指定カラムから<typeparamref name="T"/>型の値を取得、列挙する処理を提供する
 	/// </summary>
-	/// <typeparam name="T"><see cref="Col{S}"/>をプロパティとして持つクラス型</typeparam>
+	/// <typeparam name="T">取得値型</typeparam>
+	public class DataReaderEnumerableByIndex<T> : IDisposable, IEnumerable<T> {
+		MySqlDataReader DataReader;
+		Func<MySqlDataReader, int, T> Getter;
+		int Index;
+
+		public DataReaderEnumerableByIndex(MySqlDataReader dataReader, Func<MySqlDataReader, int, T> getter, int index) {
+			this.DataReader = dataReader;
+			this.Getter = getter;
+			this.Index = index;
+		}
+
+		public IEnumerator<T> GetEnumerator() {
+			var dr = this.DataReader;
+			var getter = this.Getter;
+			var index = this.Index;
+			while (this.DataReader.Read()) {
+				yield return getter(dr, index);
+			}
+		}
+
+		IEnumerator IEnumerable.GetEnumerator() {
+			return this.GetEnumerator();
+		}
+
+		#region IDisposable Support
+		protected virtual void Dispose(bool disposing) {
+			if (this.DataReader != null) {
+				this.DataReader.Dispose();
+				this.DataReader = null;
+			}
+		}
+
+		~DataReaderEnumerableByIndex() {
+			// このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
+			Dispose(false);
+		}
+
+		// このコードは、破棄可能なパターンを正しく実装できるように追加されました。
+		public void Dispose() {
+			// このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
+			Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+		#endregion
+	}
+
+
+	/// <summary>
+	/// DataReader から<typeparamref name="T"/>型の値を取得、列挙する処理を提供する
+	/// </summary>
+	/// <typeparam name="T">取得値型、基本的に匿名クラス</typeparam>
+	public class DataReaderEnumerable<T> : IDisposable, IEnumerable<T> {
+		MySqlDataReader DataReader;
+		Func<MySqlDataReader, T, T> Getter;
+		T BaseValue;
+
+		public DataReaderEnumerable(MySqlDataReader dataReader, Func<MySqlDataReader, T, T> getter, T baseValue) {
+			this.DataReader = dataReader;
+			this.Getter = getter;
+			this.BaseValue = baseValue;
+		}
+
+		public IEnumerator<T> GetEnumerator() {
+			var dr = this.DataReader;
+			var getter = this.Getter;
+			var baseValue = this.BaseValue;
+			while (this.DataReader.Read()) {
+				yield return getter(dr, baseValue);
+			}
+		}
+
+		IEnumerator IEnumerable.GetEnumerator() {
+			return this.GetEnumerator();
+		}
+
+		#region IDisposable Support
+		protected virtual void Dispose(bool disposing) {
+			if (this.DataReader != null) {
+				this.DataReader.Dispose();
+				this.DataReader = null;
+			}
+		}
+
+		~DataReaderEnumerable() {
+			// このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
+			Dispose(false);
+		}
+
+		// このコードは、破棄可能なパターンを正しく実装できるように追加されました。
+		public void Dispose() {
+			// このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
+			Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+		#endregion
+	}
+
+	/// <summary>
+	/// <see cref="MySqlDataReader"/>から<typeparamref name="T"/>型の値を取得する処理を提供
+	/// </summary>
+	/// <typeparam name="T">取得先の値の型</typeparam>
+	public static class DataReaderToValue<T> {
+		public static readonly Func<MySqlDataReader, int, T> InvokeByIndex;
+
+		static DataReaderToValue() {
+			var type = typeof(T);
+			var getter = DataReaderAccessor.GetMethodByType(type, false);
+			InvokeByIndex = (Func<MySqlDataReader, int, T>)getter.CreateDelegate(typeof(Func<MySqlDataReader, int, T>));
+		}
+	}
+
+	/// <summary>
+	/// <see cref="MySqlDataReader"/>から値を読み込みプロパティへ値を設定する処理を提供
+	/// </summary>
+	/// <typeparam name="T">プロパティを持つクラス型、基本的に匿名クラス</typeparam>
 	public static class DataReaderToCols<T> {
 		public static readonly Func<MySqlDataReader, T, T> InvokeByIndex;
 		public static readonly Func<MySqlDataReader, T, T> InvokeByName;
@@ -1871,51 +2201,47 @@ namespace SusDbHelperTest {
 			for (int i = 0; i < properties.Length; i++) {
 				var p = properties[i];
 				var pt = p.PropertyType;
-				if (!pt.IsGenericType || pt.GetGenericTypeDefinition() != typeof(Col<>)) {
-					throw new ApplicationException(type + " の " + p.Name + " が未対応の型 " + pt + " となっています。Col<T> でなければなりません。");
-				}
-				var ct = pt.GetGenericArguments()[0];
-				var nct = Nullable.GetUnderlyingType(ct);
-				var t = nct ?? ct;
 
-				// 列の型に対応した DataReader から取得メソッド名を選ぶ
-				var getMethodName = "";
-				if (t == typeof(byte[])) {
-					getMethodName = "Bytes";
-				} else if (t == typeof(string)) {
-					getMethodName = "String";
-				} else if (t == typeof(bool)) {
-					getMethodName = "Bool";
-				} else if (t == typeof(short)) {
-					getMethodName = "Int16";
-				} else if (t == typeof(int)) {
-					getMethodName = "Int32";
-				} else if (t == typeof(DateTime)) {
-					getMethodName = "DateTime";
-				} else if (t == typeof(Guid)) {
-					getMethodName = "Guid";
-				} else {
-					throw new ApplicationException(type + " の " + p.Name + " の値が未対応の型 " + t + " となっています。");
-				}
-				if (nct != null) {
-					getMethodName = "Nullable" + getMethodName;
-				}
-				getMethodName = "Get" + getMethodName + (byName ? "ByName" : "ByIndex");
-
-				var getter = typeof(DataReaderAccessor).GetMethod(getMethodName, BindingFlags.Public | BindingFlags.Static);
-				if (getter == null) {
-					throw new ApplicationException("内部エラー");
-				}
-
-				var col = Expression.Property(paramBaseCols, p);
+				// カラム指定
 				var colId = byName ? Expression.Constant(p.Name) : Expression.Constant(i);
 
-				var pctor = pt.GetConstructor(new Type[] { pt, ct });
-				if (pctor == null) {
-					throw new ApplicationException("内部エラー");
-				}
+				if (pt.IsGenericType && pt.GetGenericTypeDefinition() == typeof(Col<>)) {
+					// メンバが Col<> 型の場合
 
-				argExprs[i] = Expression.New(pctor, col, Expression.Call(null, getter, paramDr, colId));
+					// Col<> に指定されたジェネリック型の取得
+					var ct = pt.GetGenericArguments()[0];
+
+					// DataReader から指定型の値を取得するデリゲートの取得
+					MethodInfo getter;
+					try {
+						getter = DataReaderAccessor.GetMethodByType(ct, byName);
+					} catch (Exception ex) {
+						throw new ApplicationException("DataReader から " + type + "." + p.Name + " の値への変換メソッドが存在しません。", ex);
+					}
+
+					// Col<> のコンストラクタ取得、ベースとなる Col<> と値を指定して初期化するコンストラクタを取得する
+					var pctor = pt.GetConstructor(new Type[] { pt, ct }); 
+					if (pctor == null) {
+						throw new ApplicationException("内部エラー");
+					}
+
+					// ベースとなる Col<>
+					var col = Expression.Property(paramBaseCols, p);
+
+					// DataReader から取得した値を基に Col<> を new する処理登録
+					argExprs[i] = Expression.New(pctor, col, Expression.Call(null, getter, paramDr, colId));
+				} else {
+					// DataReader から指定型の値を取得するデリゲートの取得
+					MethodInfo getter;
+					try {
+						getter = DataReaderAccessor.GetMethodByType(pt, byName);
+					} catch (Exception ex) {
+						throw new ApplicationException("DataReader から " + type + "." + p.Name + " の値への変換メソッドが存在しません。", ex);
+					}
+
+					// DataReader から値取得する処理登録
+					argExprs[i] = Expression.Call(null, getter, paramDr, colId);
+				}
 			}
 
 			// コンストラクタ呼び出しをコンパイル
