@@ -214,6 +214,11 @@ namespace Db {
 					//	insert8(cmd).ExecuteNonQuery();
 					//}
 
+					var selectTest1 = Db.Sql(
+						Db.Select(t1.Cols),
+						Db.From(t1)
+					);
+
 					var select = Db.Sql(
 						Db.Select(),
 						Db.From(t1),
@@ -230,11 +235,20 @@ namespace Db {
 					var sw = new System.Diagnostics.Stopwatch();
 					sw.Start();
 
-					using (var records = Db.Enumerate(select(cmd), new { i1 = 0, i2 = 0, i3 = 0, i4 = 0 })) {
+					using (var records = Db.Enumerate(selectTest1(cmd), t1.Cols)) {
+						var count = 0;
 						foreach (var r in records) {
-							//Console.WriteLine(r.i1 + " " + r.i2);
+							count++;
+							//Console.WriteLine(r.id1.Value + ", " + r.id2.Value);
 						}
+						//Console.WriteLine(count);
 					}
+
+					//using (var records = Db.Enumerate(select(cmd), new { i1 = 0, i2 = 0, i3 = 0, i4 = 0 })) {
+					//	foreach (var r in records) {
+					//		//Console.WriteLine(r.i1 + " " + r.i2);
+					//	}
+					//}
 
 					Console.WriteLine(sw.ElapsedMilliseconds);
 

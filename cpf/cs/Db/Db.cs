@@ -644,8 +644,21 @@ namespace Db {
 	public class SqlSelect : ISqlElement {
 		public object[] Cols;
 
-		public SqlSelect(params object[] cols) {
+		public SqlSelect() {
+			this.Cols = new object[0];
+		}
+
+		public SqlSelect(object[] cols) {
 			this.Cols = cols;
+		}
+
+		public SqlSelect(object col, params object[] cols) {
+			var combinedCols = new object[1 + cols.Length];
+			combinedCols[0] = col;
+			for (int i = 0; i < cols.Length; i++) {
+				combinedCols[i + 1] = cols[i];
+			}
+			this.Cols = combinedCols;
 		}
 
 		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
@@ -1226,12 +1239,30 @@ namespace Db {
 		//}
 
 		/// <summary>
+		/// 指定列の SELECT * を表すSQL要素を生成する
+		/// </summary>
+		/// <returns><see cref="SqlSelect"/></returns>
+		public static SqlSelect Select() {
+			return new SqlSelect();
+		}
+
+		/// <summary>
 		/// 指定列の SELECT を表すSQL要素を生成する
 		/// </summary>
-		/// <param name="cols">列一覧、数が0なら * 扱いになる</param>
+		/// <param name="col">列</param>
+		/// <param name="cols">列一覧</param>
 		/// <returns><see cref="SqlSelect"/></returns>
-		public static SqlSelect Select(params object[] cols) {
-			return new SqlSelect(cols);
+		public static SqlSelect Select(object col, params object[] cols) {
+			return new SqlSelect(col, cols);
+		}
+
+		/// <summary>
+		/// 指定列の SELECT を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="cols">列一覧を<see cref="Col{T}"/>型のメンバとして持つオブジェクト</param>
+		/// <returns><see cref="SqlSelect"/></returns>
+		public static SqlSelect Select<T>(T cols) {
+			return new SqlSelect(ColsGetter<T>.Invoke(cols));
 		}
 
 		/// <summary>
@@ -1622,7 +1653,7 @@ namespace Db {
 	}
 
 	/// <summary>
-	/// 指定値から<see cref="Col{T}"/>型のフィールドとプロパティを抜き出し配列化する
+	/// 指定値から<see cref="Col{T}"/>型のフィールドとプロパティを抜き出し配列化する処理を提供する
 	/// </summary>
 	/// <typeparam name="T"><see cref="Col{T}"/>プロパティを持つ型</typeparam>
 	public static class ColsGetter<T> {
@@ -1632,7 +1663,7 @@ namespace Db {
 			var type = typeof(T);
 			var input = Expression.Parameter(type);
 			var fields = type.GetFields();
-			var properties = type.GetProperties();
+			var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 			var colFields = fields.Where(f => f.IsPublic && f.FieldType.IsGenericType && f.FieldType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
 			var colProperties = properties.Where(p => p.GetSetMethod(false).IsPublic && p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
 			var arrayType = typeof(Col[]);
@@ -1674,7 +1705,7 @@ namespace Db {
 			var paramSb = Expression.Parameter(sbType);
 			var paramValue = Expression.Parameter(type);
 			var name = Expression.Parameter(typeof(string));
-			var properties = type.GetProperties();
+			var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 			var intToString = typeof(int).GetMethod("ToString", new Type[0]);
 			var addWithValue = typeof(MySqlParameterCollection).GetMethod("AddWithValue", new Type[] { typeof(string), typeof(object) });
 			var countProperty = paramsType.GetProperty("Count");
@@ -1720,7 +1751,7 @@ namespace Db {
 			var inputCols = Expression.Parameter(colsType);
 			var inputAliasName = Expression.Parameter(typeof(string));
 			var fieldsOfCols = colsType.GetFields().Where(f => f.IsPublic && f.FieldType.IsGenericType && f.FieldType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
-			var propertiesOfCols = colsType.GetProperties().Where(p => p.GetSetMethod(false).IsPublic && p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
+			var propertiesOfCols = colsType.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.GetSetMethod(false).IsPublic && p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
 			var cols = Expression.Parameter(colsType);
 			var expressions = new List<Expression>();
 			var colsCtor = colsType.GetConstructor(new Type[0]);
@@ -2101,7 +2132,6 @@ namespace Db {
 		#endregion
 	}
 
-
 	/// <summary>
 	/// DataReader から<typeparamref name="T"/>型の値を取得、列挙する処理を提供する
 	/// </summary>
@@ -2167,9 +2197,9 @@ namespace Db {
 	}
 
 	/// <summary>
-	/// <see cref="MySqlDataReader"/>から値を読み込みプロパティへ値を設定する処理を提供
+	/// <see cref="MySqlDataReader"/>から値を読み込みプロパティまたはフィールドへ値を設定する処理を提供
 	/// </summary>
-	/// <typeparam name="T">プロパティを持つクラス型、基本的に匿名クラス</typeparam>
+	/// <typeparam name="T">プロパティまたはフィールドを持つクラス型、基本的に匿名クラス</typeparam>
 	public static class DataReaderToCols<T> {
 		public static readonly Func<MySqlDataReader, T, T> InvokeByIndex;
 		public static readonly Func<MySqlDataReader, T, T> InvokeByName;
@@ -2187,65 +2217,118 @@ namespace Db {
 		static Func<MySqlDataReader, T, T> Generate(bool byName) {
 			var type = typeof(T);
 
-			// クラスのプロパティ数と型に一致するコンストラクタが存在しないならエラーとする
-			var properties = type.GetProperties();
-			var ctor = type.GetConstructor(properties.Select(p => p.PropertyType).ToArray());
-			if (ctor == null) {
-				throw new ApplicationException(type + " にプロパティ値を引数として受け取るコンストラクタがありません。");
+			// プロパティとフィールド一覧取得、両方存在する場合は順序が定かではなくなるため対応できない
+			var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+			var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
+			if (properties.Length != 0 && fields.Length != 0) {
+				throw new ApplicationException(type + " プロパティとフィールド両方を使用するクラスには対応していません。");
 			}
 
-			// コンストラクタに渡す引数を作成
-			var argExprs = new Expression[properties.Length];
-			var paramDr = Expression.Parameter(typeof(MySqlDataReader));
-			var paramBaseCols = Expression.Parameter(type);
-			for (int i = 0; i < properties.Length; i++) {
-				var p = properties[i];
-				var pt = p.PropertyType;
+			// メンバー型、名前一覧作成
+			Type[] memberTypes;
+			string[] memberNames;
+			if (properties.Length != 0) {
+				memberTypes = properties.Select(p => p.PropertyType).ToArray();
+				memberNames = properties.Select(p => p.Name).ToArray();
+			} else {
+				memberTypes = fields.Select(f => f.FieldType).ToArray();
+				memberNames = fields.Select(f => f.Name).ToArray();
+			}
+
+			// 指定インデックスメンバーを表す式の取得
+			Func<Expression, int, Expression> member = (obj, i) => {
+				return properties.Length != 0 ? Expression.Property(obj, properties[i]) : Expression.Field(obj, fields[i]);
+			};
+
+			// 作成するデリゲートの入力引数となる式
+			var inputDr = Expression.Parameter(typeof(MySqlDataReader));
+			var inputBaseCols = Expression.Parameter(type);
+
+			// メンバーの基となる値一覧作成
+			var memberSourceExprs = new Expression[memberTypes.Length];
+			for (int i = 0; i < memberTypes.Length; i++) {
+				var name = memberNames[i];
+				var mt = memberTypes[i];
 
 				// カラム指定
-				var colId = byName ? Expression.Constant(p.Name) : Expression.Constant(i);
+				var colId = byName ? Expression.Constant(name) : Expression.Constant(i);
 
-				if (pt.IsGenericType && pt.GetGenericTypeDefinition() == typeof(Col<>)) {
+				if (mt.IsGenericType && mt.GetGenericTypeDefinition() == typeof(Col<>)) {
 					// メンバが Col<> 型の場合
 
 					// Col<> に指定されたジェネリック型の取得
-					var ct = pt.GetGenericArguments()[0];
+					var ct = mt.GetGenericArguments()[0];
 
 					// DataReader から指定型の値を取得するデリゲートの取得
 					MethodInfo getter;
 					try {
 						getter = DataReaderAccessor.GetMethodByType(ct, byName);
 					} catch (Exception ex) {
-						throw new ApplicationException("DataReader から " + type + "." + p.Name + " の値への変換メソッドが存在しません。", ex);
+						throw new ApplicationException("DataReader から " + type + "." + name + " の値への変換メソッドが存在しません。", ex);
 					}
 
 					// Col<> のコンストラクタ取得、ベースとなる Col<> と値を指定して初期化するコンストラクタを取得する
-					var pctor = pt.GetConstructor(new Type[] { pt, ct }); 
+					var pctor = mt.GetConstructor(new Type[] { mt, ct });
 					if (pctor == null) {
-						throw new ApplicationException("内部エラー");
+						throw new ApplicationException("内部エラー、Col<T>(" + mt.Name + ", " + ct.Name + ") コンストラクタが存在しません。");
 					}
 
 					// ベースとなる Col<>
-					var col = Expression.Property(paramBaseCols, p);
+					var col = member(inputBaseCols, i);
 
-					// DataReader から取得した値を基に Col<> を new する処理登録
-					argExprs[i] = Expression.New(pctor, col, Expression.Call(null, getter, paramDr, colId));
+					// DataReader から取得した値を基に Col<> を new する処理
+					memberSourceExprs[i] = Expression.New(pctor, col, Expression.Call(null, getter, inputDr, colId));
 				} else {
 					// DataReader から指定型の値を取得するデリゲートの取得
 					MethodInfo getter;
 					try {
-						getter = DataReaderAccessor.GetMethodByType(pt, byName);
+						getter = DataReaderAccessor.GetMethodByType(mt, byName);
 					} catch (Exception ex) {
-						throw new ApplicationException("DataReader から " + type + "." + p.Name + " の値への変換メソッドが存在しません。", ex);
+						throw new ApplicationException("DataReader から " + type + "." + name + " の値への変換メソッドが存在しません。", ex);
 					}
 
-					// DataReader から値取得する処理登録
-					argExprs[i] = Expression.Call(null, getter, paramDr, colId);
+					// DataReader から値取得する処理
+					memberSourceExprs[i] = Expression.Call(null, getter, inputDr, colId);
 				}
 			}
 
-			// コンストラクタ呼び出しをコンパイル
-			return Expression.Lambda<Func<MySqlDataReader, T, T>>(Expression.New(ctor, argExprs), paramDr, paramBaseCols).Compile();
+			var ctor = type.GetConstructor(memberTypes);
+			if (ctor != null) {
+				// コンストラクタが使えるなら new でコンストラクタ呼び出し
+				return Expression.Lambda<Func<MySqlDataReader, T, T>>(
+					Expression.New(ctor, memberSourceExprs),
+					inputDr,
+					inputBaseCols
+				).Compile();
+			} else {
+				// コンストラクタ使えないならデフォルトコンストラクタで生成してメンバー毎に設定していく処理を生成
+
+				// デフォルトコンストラクタ取得
+				ctor = type.GetConstructor(new Type[0]);
+				if (ctor == null) {
+					throw new ApplicationException(type + " にデフォルトコンストラクタが存在しません。");
+				}
+
+				var result = Expression.Parameter(type);
+				var expressions = new List<Expression>();
+
+				// type 型の一時変数作成
+				expressions.Add(Expression.Assign(result, Expression.New(ctor)));
+
+				// 一時変数のメンバに値を取得していく
+				for (int i = 0; i < memberSourceExprs.Length; i++) {
+					expressions.Add(Expression.Assign(member(result, i), memberSourceExprs[i]));
+				}
+
+				// 一時変数を戻り値とする
+				expressions.Add(result);
+
+				return Expression.Lambda<Func<MySqlDataReader, T, T>>(
+					Expression.Block(new ParameterExpression[] { result }, expressions),
+					inputDr,
+					inputBaseCols
+				).Compile();
+			}
 		}
 	}
 }
