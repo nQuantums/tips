@@ -36,7 +36,7 @@ namespace Db {
 		public static readonly DbType text = new DbType("text", DbTypeFlags.IsVariableLengthType);
 		public static readonly DbType timestamp = new DbType("timestamp");
 		public static readonly DbType binary = new DbType("binary", DbTypeFlags.IsVariableLengthType);
-        public static readonly DbType varbinary = new DbType("varbinary", DbTypeFlags.IsVariableLengthType);
+		public static readonly DbType varbinary = new DbType("varbinary", DbTypeFlags.IsVariableLengthType);
 
 		public static DbType Map(Type type) {
 			if (type == typeof(sbyte)) {
@@ -553,7 +553,7 @@ namespace Db {
 		/// </summary>
 		/// <param name="aliasName">エイリアス名</param>
 		/// <returns>エイリアス</returns>
-		public Tbl<T> Alias(string aliasName) {
+		public Tbl<T> As(string aliasName) {
 			var c = this.MemberwiseClone() as Tbl<T>;
 			c.BaseTbl = this;
 			c.Schema = null;
@@ -1130,113 +1130,113 @@ namespace Db {
 			return applyToCmd;
 		}
 
-		//public static Func<Param, Action<MySqlCommand, T1>> Sql<T1>(params object[] elements) {
-		//	var applier = Sql(elements);
-		//	return (param1) => {
-		//		return (cmd, arg1) => {
-		//			param1.Value = arg1;
-		//			applier(cmd);
-		//		};
-		//	};
-		//}
+		public static Func<Param, Func<MySqlCommand, T1, MySqlCommand>> Sql<T1>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1) => {
+				return (cmd, arg1) => {
+					param1.Value = arg1;
+					return applier(cmd);
+				};
+			};
+		}
 
-		//public static Func<Param, Param, Action<MySqlCommand, T1, T2>> Sql<T1, T2>(params object[] elements) {
-		//	var applier = Sql(elements);
-		//	return (param1, param2) => {
-		//		return (cmd, arg1, arg2) => {
-		//			param1.Value = arg1;
-		//			param2.Value = arg2;
-		//			applier(cmd);
-		//		};
-		//	};
-		//}
+		public static Func<Param, Param, Func<MySqlCommand, T1, T2, MySqlCommand>> Sql<T1, T2>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2) => {
+				return (cmd, arg1, arg2) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					return applier(cmd);
+				};
+			};
+		}
 
-		//public static Func<Param, Param, Param, Action<MySqlCommand, T1, T2, T3>> Sql<T1, T2, T3>(params object[] elements) {
-		//	var applier = Sql(elements);
-		//	return (param1, param2, param3) => {
-		//		return (cmd, arg1, arg2, arg3) => {
-		//			param1.Value = arg1;
-		//			param2.Value = arg2;
-		//			param3.Value = arg3;
-		//			applier(cmd);
-		//		};
-		//	};
-		//}
+		public static Func<Param, Param, Param, Func<MySqlCommand, T1, T2, T3, MySqlCommand>> Sql<T1, T2, T3>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3) => {
+				return (cmd, arg1, arg2, arg3) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					return applier(cmd);
+				};
+			};
+		}
 
-		//public static Func<Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4>> Sql<T1, T2, T3, T4>(params object[] elements) {
-		//	var applier = Sql(elements);
-		//	return (param1, param2, param3, param4) => {
-		//		return (cmd, arg1, arg2, arg3, arg4) => {
-		//			param1.Value = arg1;
-		//			param2.Value = arg2;
-		//			param3.Value = arg3;
-		//			param4.Value = arg4;
-		//			applier(cmd);
-		//		};
-		//	};
-		//}
+		public static Func<Param, Param, Param, Param, Func<MySqlCommand, T1, T2, T3, T4, MySqlCommand>> Sql<T1, T2, T3, T4>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3, param4) => {
+				return (cmd, arg1, arg2, arg3, arg4) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					param4.Value = arg4;
+					return applier(cmd);
+				};
+			};
+		}
 
-		//public static Func<Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5>> Sql<T1, T2, T3, T4, T5>(params object[] elements) {
-		//	var applier = Sql(elements);
-		//	return (param1, param2, param3, param4, param5) => {
-		//		return (cmd, arg1, arg2, arg3, arg4, arg5) => {
-		//			param1.Value = arg1;
-		//			param2.Value = arg2;
-		//			param3.Value = arg3;
-		//			param4.Value = arg4;
-		//			param5.Value = arg5;
-		//			applier(cmd);
-		//		};
-		//	};
-		//}
+		public static Func<Param, Param, Param, Param, Param, Func<MySqlCommand, T1, T2, T3, T4, T5, MySqlCommand>> Sql<T1, T2, T3, T4, T5>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3, param4, param5) => {
+				return (cmd, arg1, arg2, arg3, arg4, arg5) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					param4.Value = arg4;
+					param5.Value = arg5;
+					return applier(cmd);
+				};
+			};
+		}
 
-		//public static Func<Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6>> Sql<T1, T2, T3, T4, T5, T6>(params object[] elements) {
-		//	var applier = Sql(elements);
-		//	return (param1, param2, param3, param4, param5, param6) => {
-		//		return (cmd, arg1, arg2, arg3, arg4, arg5, arg6) => {
-		//			param1.Value = arg1;
-		//			param2.Value = arg2;
-		//			param3.Value = arg3;
-		//			param4.Value = arg4;
-		//			param5.Value = arg5;
-		//			param6.Value = arg6;
-		//			applier(cmd);
-		//		};
-		//	};
-		//}
+		public static Func<Param, Param, Param, Param, Param, Param, Func<MySqlCommand, T1, T2, T3, T4, T5, T6, MySqlCommand>> Sql<T1, T2, T3, T4, T5, T6>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3, param4, param5, param6) => {
+				return (cmd, arg1, arg2, arg3, arg4, arg5, arg6) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					param4.Value = arg4;
+					param5.Value = arg5;
+					param6.Value = arg6;
+					return applier(cmd);
+				};
+			};
+		}
 
-		//public static Func<Param, Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6, T7>> Sql<T1, T2, T3, T4, T5, T6, T7>(params object[] elements) {
-		//	var applier = Sql(elements);
-		//	return (param1, param2, param3, param4, param5, param6, param7) => {
-		//		return (cmd, arg1, arg2, arg3, arg4, arg5, arg6, arg7) => {
-		//			param1.Value = arg1;
-		//			param2.Value = arg2;
-		//			param3.Value = arg3;
-		//			param4.Value = arg4;
-		//			param5.Value = arg5;
-		//			param6.Value = arg6;
-		//			param7.Value = arg7;
-		//			applier(cmd);
-		//		};
-		//	};
-		//}
+		public static Func<Param, Param, Param, Param, Param, Param, Param, Func<MySqlCommand, T1, T2, T3, T4, T5, T6, T7, MySqlCommand>> Sql<T1, T2, T3, T4, T5, T6, T7>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3, param4, param5, param6, param7) => {
+				return (cmd, arg1, arg2, arg3, arg4, arg5, arg6, arg7) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					param4.Value = arg4;
+					param5.Value = arg5;
+					param6.Value = arg6;
+					param7.Value = arg7;
+					return applier(cmd);
+				};
+			};
+		}
 
-		//public static Func<Param, Param, Param, Param, Param, Param, Param, Param, Action<MySqlCommand, T1, T2, T3, T4, T5, T6, T7, T8>> Sql<T1, T2, T3, T4, T5, T6, T7, T8>(params object[] elements) {
-		//	var applier = Sql(elements);
-		//	return (param1, param2, param3, param4, param5, param6, param7, param8) => {
-		//		return (cmd, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) => {
-		//			param1.Value = arg1;
-		//			param2.Value = arg2;
-		//			param3.Value = arg3;
-		//			param4.Value = arg4;
-		//			param5.Value = arg5;
-		//			param6.Value = arg6;
-		//			param7.Value = arg7;
-		//			param8.Value = arg8;
-		//			applier(cmd);
-		//		};
-		//	};
-		//}
+		public static Func<Param, Param, Param, Param, Param, Param, Param, Param, Func<MySqlCommand, T1, T2, T3, T4, T5, T6, T7, T8, MySqlCommand>> Sql<T1, T2, T3, T4, T5, T6, T7, T8>(params object[] elements) {
+			var applier = Sql(elements);
+			return (param1, param2, param3, param4, param5, param6, param7, param8) => {
+				return (cmd, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) => {
+					param1.Value = arg1;
+					param2.Value = arg2;
+					param3.Value = arg3;
+					param4.Value = arg4;
+					param5.Value = arg5;
+					param6.Value = arg6;
+					param7.Value = arg7;
+					param8.Value = arg8;
+					return applier(cmd);
+				};
+			};
+		}
 
 		/// <summary>
 		/// 指定列の SELECT * を表すSQL要素を生成する
@@ -1855,32 +1855,32 @@ namespace Db {
 			}
 		}
 
-		public static short GetInt8ByIndex(MySqlDataReader dr, int index) {
+		public static sbyte GetInt8ByIndex(MySqlDataReader dr, int index) {
 			try {
 				return Convert.ToSByte(dr[index]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static short? GetNullableInt8ByIndex(MySqlDataReader dr, int index) {
+		public static sbyte? GetNullableInt8ByIndex(MySqlDataReader dr, int index) {
 			try {
 				var v = dr[index];
-				return v == DBNull.Value ? default(short?) : Convert.ToSByte(v);
+				return v == DBNull.Value ? default(sbyte?) : Convert.ToSByte(v);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static short GetInt8ByName(MySqlDataReader dr, string colName) {
+		public static sbyte GetInt8ByName(MySqlDataReader dr, string colName) {
 			try {
 				return Convert.ToSByte(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static short? GetNullableInt8ByName(MySqlDataReader dr, string colName) {
+		public static sbyte? GetNullableInt8ByName(MySqlDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
-				return v == DBNull.Value ? default(short?) : Convert.ToSByte(v);
+				return v == DBNull.Value ? default(sbyte?) : Convert.ToSByte(v);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
