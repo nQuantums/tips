@@ -293,6 +293,66 @@ namespace Db {
 		public override string ToString() {
 			return this.NameQuotedWithAlias;
 		}
+
+		/// <summary>
+		/// 指定型の<see cref="Col{T}"/>フィールド一覧の取得
+		/// </summary>
+		public static FieldInfo[] GetFields(Type type) {
+			var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
+			return fields.Where(f => f.FieldType.IsGenericType && f.FieldType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
+		}
+
+		/// <summary>
+		/// 指定型の<see cref="Col{T}"/>プロパティ一覧の取得
+		/// </summary>
+		public static PropertyInfo[] GetProperties(Type type) {
+			var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+			return properties.Where(p => p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
+		}
+
+		/// <summary>
+		/// 指定型内での列にマッピング可能なフィールド又は列一覧の取得
+		/// </summary>
+		public static Tuple<FieldInfo[], PropertyInfo[]> GetMembers(Type type) {
+			var fields = GetFields(type);
+			var properties = GetProperties(type);
+			if (fields.Length != 0 && properties.Length != 0) {
+				throw new ApplicationException("型 " + type + " はフィールドとプロパティ両方に Col<T> メンバを持っています。このパターンは順序が判断できないためメンバを列にマッピングできません。");
+			}
+			return new Tuple<FieldInfo[], PropertyInfo[]>(fields, properties);
+		}
+
+		/// <summary>
+		/// 指定オブジェクト内の列オブジェクト一覧(<see cref="Col{T}"/>型のメンバの値)を取得する
+		/// <para>cols が値型の場合には処理対象外とされ、長さ０の配列が返る</para>
+		/// </summary>
+		public static Col[] GetMemberValues(object cols) {
+			var type = cols.GetType();
+			if (type.IsValueType) {
+				// 値型は処理対象外
+				return new Col[0];
+			}
+
+			var members = GetMembers(type);
+			var fields = members.Item1;
+			var properties = members.Item2;
+
+			Col[] result;
+
+			if (fields.Length != 0) {
+				result = new Col[fields.Length];
+				for (int i = 0; i < result.Length; i++) {
+					result[i] = fields[i].GetValue(cols) as Col;
+				}
+			} else {
+				result = new Col[properties.Length];
+				for (int i = 0; i < result.Length; i++) {
+					result[i] = properties[i].GetValue(cols) as Col;
+				}
+			}
+
+			return result;
+		}
 	}
 
 	/// <summary>
@@ -644,21 +704,17 @@ namespace Db {
 	public class SqlSelect : ISqlElement {
 		public object[] Cols;
 
-		public SqlSelect() {
-			this.Cols = new object[0];
-		}
-
-		public SqlSelect(object[] cols) {
-			this.Cols = cols;
-		}
-
-		public SqlSelect(object col, params object[] cols) {
-			var combinedCols = new object[1 + cols.Length];
-			combinedCols[0] = col;
-			for (int i = 0; i < cols.Length; i++) {
-				combinedCols[i + 1] = cols[i];
+		public SqlSelect(params object[] cols) {
+			var list = new List<object>();
+			foreach (var c in cols) {
+				var colMemberValues = Col.GetMemberValues(c);
+				if (colMemberValues.Length == 0) {
+					list.Add(c);
+				} else {
+					list.AddRange(colMemberValues);
+				}
 			}
-			this.Cols = combinedCols;
+			this.Cols = list.ToArray();
 		}
 
 		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
@@ -793,7 +849,16 @@ namespace Db {
 
 		public SqlInsertInto(object tbl, params object[] cols) {
 			this.Tbl = tbl;
-			this.Cols = cols;
+			var list = new List<object>();
+			foreach (var c in cols) {
+				var colMemberValues = Col.GetMemberValues(c);
+				if (colMemberValues.Length == 0) {
+					list.Add(c);
+				} else {
+					list.AddRange(colMemberValues);
+				}
+			}
+			this.Cols = list.ToArray();
 		}
 
 		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
@@ -1239,30 +1304,12 @@ namespace Db {
 		}
 
 		/// <summary>
-		/// 指定列の SELECT * を表すSQL要素を生成する
-		/// </summary>
-		/// <returns><see cref="SqlSelect"/></returns>
-		public static SqlSelect Select() {
-			return new SqlSelect();
-		}
-
-		/// <summary>
 		/// 指定列の SELECT を表すSQL要素を生成する
 		/// </summary>
-		/// <param name="col">列</param>
 		/// <param name="cols">列一覧</param>
 		/// <returns><see cref="SqlSelect"/></returns>
-		public static SqlSelect Select(object col, params object[] cols) {
-			return new SqlSelect(col, cols);
-		}
-
-		/// <summary>
-		/// 指定列の SELECT を表すSQL要素を生成する
-		/// </summary>
-		/// <param name="cols">列一覧を<see cref="Col{T}"/>型のメンバとして持つオブジェクト</param>
-		/// <returns><see cref="SqlSelect"/></returns>
-		public static SqlSelect Select<T>(T cols) {
-			return new SqlSelect(ColsGetter<T>.Invoke(cols));
+		public static SqlSelect Select(params object[] cols) {
+			return new SqlSelect(cols);
 		}
 
 		/// <summary>
@@ -1661,11 +1708,10 @@ namespace Db {
 
 		static ColsGetter() {
 			var type = typeof(T);
+			var colMembers = Col.GetMembers(type);
+			var colFields = colMembers.Item1;
+			var colProperties = colMembers.Item2;
 			var input = Expression.Parameter(type);
-			var fields = type.GetFields();
-			var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-			var colFields = fields.Where(f => f.IsPublic && f.FieldType.IsGenericType && f.FieldType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
-			var colProperties = properties.Where(p => p.GetSetMethod(false).IsPublic && p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
 			var arrayType = typeof(Col[]);
 			var variable = Expression.Parameter(arrayType);
 			var expressions = new List<Expression>();
@@ -1750,7 +1796,7 @@ namespace Db {
 			var colsType = typeof(T);
 			var inputCols = Expression.Parameter(colsType);
 			var inputAliasName = Expression.Parameter(typeof(string));
-			var fieldsOfCols = colsType.GetFields().Where(f => f.IsPublic && f.FieldType.IsGenericType && f.FieldType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
+			var fieldsOfCols = colsType.GetFields(BindingFlags.Public | BindingFlags.Instance).Where(f => f.IsPublic && f.FieldType.IsGenericType && f.FieldType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
 			var propertiesOfCols = colsType.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.GetSetMethod(false).IsPublic && p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
 			var cols = Expression.Parameter(colsType);
 			var expressions = new List<Expression>();
