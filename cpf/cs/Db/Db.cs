@@ -313,7 +313,7 @@ namespace Db {
 		/// <summary>
 		/// 指定型内での列にマッピング可能なフィールド又は列一覧の取得
 		/// </summary>
-		public static Tuple<FieldInfo[], PropertyInfo[]> GetMembers(Type type) {
+		public static Tuple<FieldInfo[], PropertyInfo[]> GetFieldsAndProperties(Type type) {
 			var fields = GetFields(type);
 			var properties = GetProperties(type);
 			if (fields.Length != 0 && properties.Length != 0) {
@@ -333,7 +333,7 @@ namespace Db {
 				return new Col[0];
 			}
 
-			var members = GetMembers(type);
+			var members = GetFieldsAndProperties(type);
 			var fields = members.Item1;
 			var properties = members.Item2;
 
@@ -1490,18 +1490,6 @@ namespace Db {
 			return "(" + expression + " IS NULL OR length(" + expression + ")=0)";
 		}
 
-		static string ColNameForIndex(Col col) {
-			var dbt = col.DbType;
-			var sb = new StringBuilder();
-			sb.Append(col.NameQuoted);
-			if ((dbt.TypeFlags & DbTypeFlags.IsVariableLengthType) != 0 && dbt.TypeLength != 0) {
-				sb.Append("(");
-				sb.Append(dbt.TypeLength);
-				sb.Append(")");
-			}
-			return sb.ToString();
-		}
-
 		/// <summary>
 		/// 指定のテーブルが存在しなかったら作成する
 		/// </summary>
@@ -1697,6 +1685,20 @@ namespace Db {
 			return new DataReaderEnumerable<T>(cmd.ExecuteReader(), byName ? DataReaderToCols<T>.InvokeByName : DataReaderToCols<T>.InvokeByIndex, baseValue);
 		}
 		#endregion
+
+		#region 非公開メソッド
+		static string ColNameForIndex(Col col) {
+			var dbt = col.DbType;
+			var sb = new StringBuilder();
+			sb.Append(col.NameQuoted);
+			if ((dbt.TypeFlags & DbTypeFlags.IsVariableLengthType) != 0 && dbt.TypeLength != 0) {
+				sb.Append("(");
+				sb.Append(dbt.TypeLength);
+				sb.Append(")");
+			}
+			return sb.ToString();
+		}
+		#endregion
 	}
 
 	/// <summary>
@@ -1708,7 +1710,7 @@ namespace Db {
 
 		static ColsGetter() {
 			var type = typeof(T);
-			var colMembers = Col.GetMembers(type);
+			var colMembers = Col.GetFieldsAndProperties(type);
 			var colFields = colMembers.Item1;
 			var colProperties = colMembers.Item2;
 			var input = Expression.Parameter(type);
@@ -1796,8 +1798,8 @@ namespace Db {
 			var colsType = typeof(T);
 			var inputCols = Expression.Parameter(colsType);
 			var inputAliasName = Expression.Parameter(typeof(string));
-			var fieldsOfCols = colsType.GetFields(BindingFlags.Public | BindingFlags.Instance).Where(f => f.IsPublic && f.FieldType.IsGenericType && f.FieldType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
-			var propertiesOfCols = colsType.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.GetSetMethod(false).IsPublic && p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
+			var fieldsOfCols = Col.GetFields(colsType);
+			var propertiesOfCols = Col.GetProperties(colsType);
 			var cols = Expression.Parameter(colsType);
 			var expressions = new List<Expression>();
 			var colsCtor = colsType.GetConstructor(new Type[0]);
@@ -1832,10 +1834,10 @@ namespace Db {
 	}
 
 	/// <summary>
-	/// <see cref="MySqlDataReader"/>からの値取得用
+	/// <see cref="MySqlDataReader"/>からの基本的な値取得用、１列毎のアクセスを提供する
 	/// <para>失敗時にはカラム名が分かる様に例外を投げる</para>
 	/// </summary>
-	public static class DataReaderAccessor {
+	public static class SingleColumnAccessor {
 		public static byte[] GetBytesByIndex(MySqlDataReader dr, int index) {
 			try {
 				var v = dr[index];
@@ -2087,7 +2089,7 @@ namespace Db {
 			}
 		}
 
-		public static MethodInfo GetMethodByType(Type type, bool byName) {
+		public static MethodInfo GetMethodByType(Type type, bool byName, bool throwOnTypeUnmatch = true) {
 			var nt = Nullable.GetUnderlyingType(type);
 			var t = nt ?? type;
 
@@ -2112,14 +2114,18 @@ namespace Db {
 			} else if (t == typeof(Guid)) {
 				getMethodName = "Guid";
 			} else {
-				throw new ApplicationException("DataReader からの " + t + " 値取得メソッドは実装されていません。");
+				if (throwOnTypeUnmatch) {
+					throw new ApplicationException("DataReader からの " + t + " 値取得メソッドは実装されていません。");
+				} else {
+					return null;
+				}
 			}
 			if (nt != null) {
 				getMethodName = "Nullable" + getMethodName;
 			}
 			getMethodName = "Get" + getMethodName + (byName ? "ByName" : "ByIndex");
 
-			var getter = typeof(DataReaderAccessor).GetMethod(getMethodName, BindingFlags.Public | BindingFlags.Static);
+			var getter = typeof(SingleColumnAccessor).GetMethod(getMethodName, BindingFlags.Public | BindingFlags.Static);
 			if (getter == null) {
 				throw new ApplicationException("内部エラー、 DataReaderAccessor." + getMethodName + " メソッドは存在しません。");
 			}
@@ -2237,8 +2243,155 @@ namespace Db {
 
 		static DataReaderToValue() {
 			var type = typeof(T);
-			var getter = DataReaderAccessor.GetMethodByType(type, false);
+			var getter = SingleColumnAccessor.GetMethodByType(type, false);
 			InvokeByIndex = (Func<MySqlDataReader, int, T>)getter.CreateDelegate(typeof(Func<MySqlDataReader, int, T>));
+		}
+	}
+
+	public static class DataReaderExpression {
+		public static Expression ReadClass(Type type, Expression dataReader, ref int index, Expression baseValue) {
+			// プロパティとフィールド一覧取得、両方存在する場合は順序が定かではなくなるため対応できない
+			var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
+			var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+			if (fields.Length != 0 && properties.Length != 0) {
+				throw new ApplicationException(type + " 型はフィールドとプロパティ両方を使用しており、マッピングする列順を判定できないため使用できません。");
+			} else if (fields.Length == 0 && properties.Length == 0) {
+				throw new ApplicationException(type + " 型はフィールドとプロパティ両方が存在せず列のマッピングが行えません。");
+			}
+
+			// メンバー情報一覧取得
+			MemberInfo[] members;
+			Type[] memberTypes;
+			if (fields.Length != 0) {
+				members = fields;
+				memberTypes = fields.Select(p => p.FieldType).ToArray();
+			} else {
+				members = properties;
+				memberTypes = properties.Select(p => p.PropertyType).ToArray();
+			}
+
+			// 各メンバーに設定する値を生成する式一覧生成
+			var memberSourceExprs = new Expression[members.Length];
+			for (int i = 0; i < memberSourceExprs.Length; i++) {
+				memberSourceExprs[i] = ReadMemberValue(members[i], dataReader, ref index, baseValue);
+			}
+
+			var ctor = type.GetConstructor(memberTypes);
+			if (ctor != null) {
+				// コンストラクタが使えるなら new でコンストラクタ呼び出し
+				return Expression.New(ctor, memberSourceExprs);
+			} else {
+				// コンストラクタ使えないならデフォルトコンストラクタで生成してメンバー毎に設定していく処理を生成
+
+				// デフォルトコンストラクタ取得
+				ctor = type.GetConstructor(new Type[0]);
+				if (ctor == null) {
+					throw new ApplicationException(type + " にデフォルトコンストラクタが存在しないため DataReader からのマッピングが行えません。");
+				}
+
+				var result = Expression.Parameter(type);
+				var expressions = new List<Expression>();
+
+				// type 型の一時変数作成
+				expressions.Add(Expression.Assign(result, Expression.New(ctor)));
+
+				// 一時変数のメンバに値を取得していく
+				for (int i = 0; i < memberSourceExprs.Length; i++) {
+					expressions.Add(Expression.Assign(MemberExpression(result, members[i]), memberSourceExprs[i]));
+				}
+
+				// 一時変数を戻り値とする
+				expressions.Add(result);
+
+				return Expression.Block(new ParameterExpression[] { result }, expressions);
+			}
+		}
+
+		public static Expression ReadMemberValue(MemberInfo mi, Expression dataReader, ref int index, Expression baseValue) {
+			// メンバー名
+			var name = mi.Name;
+
+			// カラム指定
+			Expression colId;
+			string colSymbol;
+			if (index < 0) {
+				colId = Expression.Constant(name);
+				colSymbol = "カラム名 " + name;
+			} else {
+				colId = Expression.Constant(index);
+				colSymbol = "カラムインデックス " + index;
+			}
+
+			var mt = MemberValueType(mi);
+			if (mt.IsGenericType && mt.GetGenericTypeDefinition() == typeof(Col<>)) {
+				// メンバが Col<> 型の場合
+
+				// Col<> に指定されたジェネリック型の取得
+				var ct = mt.GetGenericArguments()[0];
+
+				// DataReader から指定型の値を取得するデリゲートの取得
+				MethodInfo getter;
+				try {
+					getter = SingleColumnAccessor.GetMethodByType(ct, index < 0);
+				} catch (Exception ex) {
+					throw new ApplicationException("DataReader の" + colSymbol + " から型 " + mt + " の値への変換メソッドが存在しません。", ex);
+				}
+
+				// Col<> のコンストラクタ取得、ベースとなる Col<> と値を指定して初期化するコンストラクタを取得する
+				var pctor = mt.GetConstructor(new Type[] { mt, ct });
+				if (pctor == null) {
+					throw new ApplicationException("内部エラー、Col<T>(" + mt.Name + ", " + ct.Name + ") コンストラクタが存在しません。");
+				}
+
+				// ベースとなる Col<>
+				var col = MemberExpression(baseValue, mi);
+
+				// DataReader から取得した値を基に Col<> を new する処理
+				if (0 <= index) {
+					index++;
+				}
+				return Expression.New(pctor, col, Expression.Call(null, getter, dataReader, colId));
+			} else {
+				// DataReader から指定型の値を取得するデリゲートの取得
+				MethodInfo getter;
+				try {
+					getter = SingleColumnAccessor.GetMethodByType(mt, 0 < index, false);
+					if (getter == null) {
+						// 列に直接マッピングできないならクラスを想定
+						return ReadClass(mt, dataReader, ref index, MemberExpression(baseValue, mi));
+					}
+				} catch (Exception ex) {
+					throw new ApplicationException("DataReader の" + colSymbol + " から型 " + mt + " の値への変換メソッドが存在しません。", ex);
+				}
+
+				// DataReader から値取得する処理
+				if (0 <= index) {
+					index++;
+				}
+				return Expression.Call(null, getter, dataReader, colId);
+			}
+		}
+
+		static Expression MemberExpression(Expression instance, MemberInfo mi) {
+			switch (mi.MemberType) {
+			case MemberTypes.Field:
+				return Expression.Field(instance, mi as FieldInfo);
+			case MemberTypes.Property:
+				return Expression.Property(instance, mi as PropertyInfo);
+			default:
+				throw new ApplicationException("内部エラー");
+			}
+		}
+
+		static Type MemberValueType(MemberInfo mi) {
+			switch (mi.MemberType) {
+			case MemberTypes.Field:
+				return (mi as FieldInfo).FieldType;
+			case MemberTypes.Property:
+				return (mi as PropertyInfo).PropertyType;
+			default:
+				throw new ApplicationException("内部エラー");
+			}
 		}
 	}
 
@@ -2263,118 +2416,135 @@ namespace Db {
 		static Func<MySqlDataReader, T, T> Generate(bool byName) {
 			var type = typeof(T);
 
-			// プロパティとフィールド一覧取得、両方存在する場合は順序が定かではなくなるため対応できない
-			var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-			var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
-			if (properties.Length != 0 && fields.Length != 0) {
-				throw new ApplicationException(type + " プロパティとフィールド両方を使用するクラスには対応していません。");
-			}
-
-			// メンバー型、名前一覧作成
-			Type[] memberTypes;
-			string[] memberNames;
-			if (properties.Length != 0) {
-				memberTypes = properties.Select(p => p.PropertyType).ToArray();
-				memberNames = properties.Select(p => p.Name).ToArray();
-			} else {
-				memberTypes = fields.Select(f => f.FieldType).ToArray();
-				memberNames = fields.Select(f => f.Name).ToArray();
-			}
-
-			// 指定インデックスメンバーを表す式の取得
-			Func<Expression, int, Expression> member = (obj, i) => {
-				return properties.Length != 0 ? Expression.Property(obj, properties[i]) : Expression.Field(obj, fields[i]);
-			};
-
 			// 作成するデリゲートの入力引数となる式
-			var inputDr = Expression.Parameter(typeof(MySqlDataReader));
-			var inputBaseCols = Expression.Parameter(type);
+			var dataReader = Expression.Parameter(typeof(MySqlDataReader));
+			var baseValue = Expression.Parameter(type);
 
-			// メンバーの基となる値一覧作成
-			var memberSourceExprs = new Expression[memberTypes.Length];
-			for (int i = 0; i < memberTypes.Length; i++) {
-				var name = memberNames[i];
-				var mt = memberTypes[i];
+			// アクセス先の列インデックス
+			int index = byName ? -1 : 0;
 
-				// カラム指定
-				var colId = byName ? Expression.Constant(name) : Expression.Constant(i);
+			// DataReader から値を読み込み T 型のオブジェクトを生成する式を生成
+			var expression = DataReaderExpression.ReadClass(type, dataReader, ref index, baseValue);
 
-				if (mt.IsGenericType && mt.GetGenericTypeDefinition() == typeof(Col<>)) {
-					// メンバが Col<> 型の場合
+			return Expression.Lambda<Func<MySqlDataReader, T, T>>(
+				expression,
+				dataReader,
+				baseValue
+			).Compile();
 
-					// Col<> に指定されたジェネリック型の取得
-					var ct = mt.GetGenericArguments()[0];
 
-					// DataReader から指定型の値を取得するデリゲートの取得
-					MethodInfo getter;
-					try {
-						getter = DataReaderAccessor.GetMethodByType(ct, byName);
-					} catch (Exception ex) {
-						throw new ApplicationException("DataReader から " + type + "." + name + " の値への変換メソッドが存在しません。", ex);
-					}
+			//// プロパティとフィールド一覧取得、両方存在する場合は順序が定かではなくなるため対応できない
+			//var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+			//var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
+			//if (properties.Length != 0 && fields.Length != 0) {
+			//	throw new ApplicationException(type + " 型はフィールドとプロパティ両方を使用しており、マッピングする列順を判定できないため使用できません。");
+			//}
 
-					// Col<> のコンストラクタ取得、ベースとなる Col<> と値を指定して初期化するコンストラクタを取得する
-					var pctor = mt.GetConstructor(new Type[] { mt, ct });
-					if (pctor == null) {
-						throw new ApplicationException("内部エラー、Col<T>(" + mt.Name + ", " + ct.Name + ") コンストラクタが存在しません。");
-					}
+			//// メンバー型、名前一覧作成
+			//Type[] memberTypes;
+			//string[] memberNames;
+			//if (properties.Length != 0) {
+			//	memberTypes = properties.Select(p => p.PropertyType).ToArray();
+			//	memberNames = properties.Select(p => p.Name).ToArray();
+			//} else {
+			//	memberTypes = fields.Select(f => f.FieldType).ToArray();
+			//	memberNames = fields.Select(f => f.Name).ToArray();
+			//}
 
-					// ベースとなる Col<>
-					var col = member(inputBaseCols, i);
+			//// 指定インデックスメンバーを表す式の取得
+			//Func<Expression, int, Expression> member = (obj, i) => {
+			//	return properties.Length != 0 ? Expression.Property(obj, properties[i]) : Expression.Field(obj, fields[i]);
+			//};
 
-					// DataReader から取得した値を基に Col<> を new する処理
-					memberSourceExprs[i] = Expression.New(pctor, col, Expression.Call(null, getter, inputDr, colId));
-				} else {
-					// DataReader から指定型の値を取得するデリゲートの取得
-					MethodInfo getter;
-					try {
-						getter = DataReaderAccessor.GetMethodByType(mt, byName);
-					} catch (Exception ex) {
-						throw new ApplicationException("DataReader から " + type + "." + name + " の値への変換メソッドが存在しません。", ex);
-					}
+			//// 作成するデリゲートの入力引数となる式
+			//var inputDr = Expression.Parameter(typeof(MySqlDataReader));
+			//var inputBaseCols = Expression.Parameter(type);
 
-					// DataReader から値取得する処理
-					memberSourceExprs[i] = Expression.Call(null, getter, inputDr, colId);
-				}
-			}
+			//// メンバーの基となる値一覧作成
+			//var memberSourceExprs = new Expression[memberTypes.Length];
+			//for (int i = 0; i < memberTypes.Length; i++) {
+			//	var name = memberNames[i];
+			//	var mt = memberTypes[i];
 
-			var ctor = type.GetConstructor(memberTypes);
-			if (ctor != null) {
-				// コンストラクタが使えるなら new でコンストラクタ呼び出し
-				return Expression.Lambda<Func<MySqlDataReader, T, T>>(
-					Expression.New(ctor, memberSourceExprs),
-					inputDr,
-					inputBaseCols
-				).Compile();
-			} else {
-				// コンストラクタ使えないならデフォルトコンストラクタで生成してメンバー毎に設定していく処理を生成
+			//	// カラム指定
+			//	var colId = byName ? Expression.Constant(name) : Expression.Constant(i);
 
-				// デフォルトコンストラクタ取得
-				ctor = type.GetConstructor(new Type[0]);
-				if (ctor == null) {
-					throw new ApplicationException(type + " にデフォルトコンストラクタが存在しません。");
-				}
+			//	if (mt.IsGenericType && mt.GetGenericTypeDefinition() == typeof(Col<>)) {
+			//		// メンバが Col<> 型の場合
 
-				var result = Expression.Parameter(type);
-				var expressions = new List<Expression>();
+			//		// Col<> に指定されたジェネリック型の取得
+			//		var ct = mt.GetGenericArguments()[0];
 
-				// type 型の一時変数作成
-				expressions.Add(Expression.Assign(result, Expression.New(ctor)));
+			//		// DataReader から指定型の値を取得するデリゲートの取得
+			//		MethodInfo getter;
+			//		try {
+			//			getter = SingleColumnAccessor.GetMethodByType(ct, byName);
+			//		} catch (Exception ex) {
+			//			throw new ApplicationException("DataReader から " + type + "." + name + " の値への変換メソッドが存在しません。", ex);
+			//		}
 
-				// 一時変数のメンバに値を取得していく
-				for (int i = 0; i < memberSourceExprs.Length; i++) {
-					expressions.Add(Expression.Assign(member(result, i), memberSourceExprs[i]));
-				}
+			//		// Col<> のコンストラクタ取得、ベースとなる Col<> と値を指定して初期化するコンストラクタを取得する
+			//		var pctor = mt.GetConstructor(new Type[] { mt, ct });
+			//		if (pctor == null) {
+			//			throw new ApplicationException("内部エラー、Col<T>(" + mt.Name + ", " + ct.Name + ") コンストラクタが存在しません。");
+			//		}
 
-				// 一時変数を戻り値とする
-				expressions.Add(result);
+			//		// ベースとなる Col<>
+			//		var col = member(inputBaseCols, i);
 
-				return Expression.Lambda<Func<MySqlDataReader, T, T>>(
-					Expression.Block(new ParameterExpression[] { result }, expressions),
-					inputDr,
-					inputBaseCols
-				).Compile();
-			}
+			//		// DataReader から取得した値を基に Col<> を new する処理
+			//		memberSourceExprs[i] = Expression.New(pctor, col, Expression.Call(null, getter, inputDr, colId));
+			//	} else {
+			//		// DataReader から指定型の値を取得するデリゲートの取得
+			//		MethodInfo getter;
+			//		try {
+			//			getter = SingleColumnAccessor.GetMethodByType(mt, byName);
+			//		} catch (Exception ex) {
+			//			throw new ApplicationException("DataReader から " + type + "." + name + " の値への変換メソッドが存在しません。", ex);
+			//		}
+
+			//		// DataReader から値取得する処理
+			//		memberSourceExprs[i] = Expression.Call(null, getter, inputDr, colId);
+			//	}
+			//}
+
+			//var ctor = type.GetConstructor(memberTypes);
+			//if (ctor != null) {
+			//	// コンストラクタが使えるなら new でコンストラクタ呼び出し
+			//	return Expression.Lambda<Func<MySqlDataReader, T, T>>(
+			//		Expression.New(ctor, memberSourceExprs),
+			//		inputDr,
+			//		inputBaseCols
+			//	).Compile();
+			//} else {
+			//	// コンストラクタ使えないならデフォルトコンストラクタで生成してメンバー毎に設定していく処理を生成
+
+			//	// デフォルトコンストラクタ取得
+			//	ctor = type.GetConstructor(new Type[0]);
+			//	if (ctor == null) {
+			//		throw new ApplicationException(type + " にデフォルトコンストラクタが存在しません。");
+			//	}
+
+			//	var result = Expression.Parameter(type);
+			//	var expressions = new List<Expression>();
+
+			//	// type 型の一時変数作成
+			//	expressions.Add(Expression.Assign(result, Expression.New(ctor)));
+
+			//	// 一時変数のメンバに値を取得していく
+			//	for (int i = 0; i < memberSourceExprs.Length; i++) {
+			//		expressions.Add(Expression.Assign(member(result, i), memberSourceExprs[i]));
+			//	}
+
+			//	// 一時変数を戻り値とする
+			//	expressions.Add(result);
+
+			//	return Expression.Lambda<Func<MySqlDataReader, T, T>>(
+			//		Expression.Block(new ParameterExpression[] { result }, expressions),
+			//		inputDr,
+			//		inputBaseCols
+			//	).Compile();
+			//}
 		}
 	}
 }

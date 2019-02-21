@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using MySql.Data.MySqlClient;
 
 namespace Db {
@@ -130,14 +131,14 @@ namespace Db {
 				using (var cmd = con.CreateCommand()) {
 					cmd.CommandTimeout = 0;
 
-					var t1 = Tbls.test1.Alias("t1");
-					var t2 = Tbls.test2.Alias("t2");
-					var t3 = Tbls.test3.Alias("t3");
-					var t4 = Tbls.test4.Alias("t4");
-					var t5 = Tbls.test5.Alias("t5");
-					var t6 = Tbls.test6.Alias("t6");
-					var t7 = Tbls.test7.Alias("t7");
-					var t8 = Tbls.test8.Alias("t8");
+					var t1 = Tbls.test1.As("t1");
+					var t2 = Tbls.test2.As("t2");
+					var t3 = Tbls.test3.As("t3");
+					var t4 = Tbls.test4.As("t4");
+					var t5 = Tbls.test5.As("t5");
+					var t6 = Tbls.test6.As("t6");
+					var t7 = Tbls.test7.As("t7");
+					var t8 = Tbls.test8.As("t8");
 
 					//Db.DropTableIfExists(cmd, Tbls.test1);
 					//Db.DropTableIfExists(cmd, Tbls.test2);
@@ -235,20 +236,29 @@ namespace Db {
 					var sw = new System.Diagnostics.Stopwatch();
 					sw.Start();
 
-					using (var records = Db.Enumerate(selectTest1(cmd), t1.Cols)) {
-						var count = 0;
-						foreach (var r in records) {
-							count++;
-							//Console.WriteLine(r.id1.Value + ", " + r.id2.Value);
-						}
-						//Console.WriteLine(count);
-					}
+					//using (var records = Db.Enumerate(selectTest1(cmd), t1.Cols)) {
+					//	var count = 0;
+					//	foreach (var r in records) {
+					//		count++;
+					//		//Console.WriteLine(r.id1.Value + ", " + r.id2.Value);
+					//	}
+					//	//Console.WriteLine(count);
+					//}
 
-					//using (var records = Db.Enumerate(select(cmd), new { i1 = 0, i2 = 0, i3 = 0, i4 = 0 })) {
+					//using (var dr = select(cmd).ExecuteReader()) {
+					//	while (dr.Read()) {
+					//	}
+					//}
+					//using (var records = Db.Enumerate<int>(select(cmd), 0)) {
 					//	foreach (var r in records) {
 					//		//Console.WriteLine(r.i1 + " " + r.i2);
 					//	}
 					//}
+					using (var records = Db.Enumerate(select(cmd), new { t1 = t1.Cols, t2 = t2.Cols, t3 = t3.Cols, t4 = t4.Cols, t5 = t5.Cols, t6 = t6.Cols, t7 = t7.Cols, t8 = t8.Cols })) {
+						foreach (var r in records) {
+							//Console.WriteLine(r.t8.int_data.Value);
+						}
+					}
 
 					Console.WriteLine(sw.ElapsedMilliseconds);
 
