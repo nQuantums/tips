@@ -274,11 +274,9 @@ namespace Db {
 		/// コンストラクタ、列名と型を指定して初期化する
 		/// </summary>
 		/// <param name="name">列名</param>
-		/// <param name="codeType">ソースコード上での型</param>
 		/// <param name="dbType">DB上での型</param>
-		public Col(string name, Type codeType, DbType dbType) {
+		public Col(string name, DbType dbType) {
 			this.Name = name;
-			this.CodeType = codeType;
 			this.DbType = dbType;
 		}
 
@@ -382,7 +380,7 @@ namespace Db {
 		/// コンストラクタ、列名を指定して初期化する、型は<see cref="DbType.Map(Type)"/>により自動的に判断される
 		/// </summary>
 		/// <param name="name">列名</param>
-		public Col(string name) : base(name, typeof(T), DbType.Map(typeof(T))) {
+		public Col(string name) : base(name, DbType.Map(typeof(T))) {
 		}
 
 		/// <summary>
@@ -390,7 +388,7 @@ namespace Db {
 		/// </summary>
 		/// <param name="name">列名</param>
 		/// <param name="dbType">DB内での型</param>
-		public Col(string name, DbType dbType) : base(name, typeof(T), dbType) {
+		public Col(string name, DbType dbType) : base(name, dbType) {
 		}
 
 		/// <summary>
@@ -398,7 +396,7 @@ namespace Db {
 		/// </summary>
 		/// <param name="alias">エイリアス名</param>
 		/// <param name="baseCol">ベースとなる列</param>
-		public Col(string alias, Col<T> baseCol) : base(baseCol.Name, baseCol.CodeType, baseCol.DbType) {
+		public Col(string alias, Col<T> baseCol) : base(baseCol.Name, baseCol.DbType) {
 			this.Alias = alias;
 			this.BaseCol = baseCol;
 		}
@@ -408,7 +406,7 @@ namespace Db {
 		/// </summary>
 		/// <param name="baseCol">ベースとなる列</param>
 		/// <param name="value">値</param>
-		public Col(Col<T> baseCol, T value) : base(baseCol.Name, baseCol.CodeType, baseCol.DbType) {
+		public Col(Col<T> baseCol, T value) : base(baseCol.Name, baseCol.DbType) {
 			this.BaseCol = baseCol;
 			this.Value = value;
 		}
