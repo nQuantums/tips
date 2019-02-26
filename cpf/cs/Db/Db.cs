@@ -261,11 +261,6 @@ namespace Db {
 		}
 
 		/// <summary>
-		/// ソースコード上での型
-		/// </summary>
-		public readonly Type CodeType;
-
-		/// <summary>
 		/// DB上での型
 		/// </summary>
 		public readonly DbType DbType;
@@ -841,6 +836,37 @@ namespace Db {
 		}
 	}
 
+	public class SqlUpdate : ISqlElement {
+		public object Tbl;
+		public List<Tuple<object, object>> ColAndValues = new List<Tuple<object, object>>();
+
+		public SqlUpdate(object tbl) {
+			this.Tbl = tbl;
+		}
+
+		public SqlUpdate Set(object col, object value) {
+			this.ColAndValues.Add(new Tuple<object, object>(col, value));
+			return this;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			sb.Append("UPDATE ");
+			sb.Append(sqlBuffer.ToString(this.Tbl));
+			sb.Append(" SET ");
+			for (int i = 0; i < this.ColAndValues.Count; i++) {
+				var cav = this.ColAndValues[i];
+				if (i != 0) {
+					sb.Append(", ");
+				}
+				sb.Append(sqlBuffer.ToString(cav.Item1));
+				sb.Append("=");
+				sb.Append(sqlBuffer.ToString(cav.Item2));
+			}
+			return sb.ToString();
+		}
+	}
+
 	public class SqlInsertInto : ISqlElement {
 		public object Tbl;
 		public object[] Cols;
@@ -1337,6 +1363,15 @@ namespace Db {
 		/// <returns><see cref="SqlExpr"/></returns>
 		public static SqlExpr Expr(object expression, params object[] expressions) {
 			return new SqlExpr(expression, expressions);
+		}
+
+		/// <summary>
+		/// 指定テーブルへの UPDATE を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="tbl">対象テーブル</param>
+		/// <returns><see cref="SqlUpdate"/></returns>
+		public static SqlUpdate Update(object tbl) {
+			return new SqlUpdate(tbl);
 		}
 
 		/// <summary>
@@ -2243,6 +2278,22 @@ namespace Db {
 			var type = typeof(T);
 			var getter = SingleColumnAccessor.GetMethodByType(type, false);
 			InvokeByIndex = (Func<MySqlDataReader, int, T>)getter.CreateDelegate(typeof(Func<MySqlDataReader, int, T>));
+		}
+	}
+
+	public static class ColExpression {
+		public static bool GetValue(Type type, Expression col, out Type valueType, out Expression value) {
+			if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Col<>)) {
+				// Col<> に指定されたジェネリック型の取得
+				valueType = type.GetGenericArguments()[0];
+				// Value 値の式取得
+				value = Expression.Field(col, type.GetField("Value"));
+				return true;
+			} else {
+				valueType = null;
+				value = null;
+				return false;
+			}
 		}
 	}
 
