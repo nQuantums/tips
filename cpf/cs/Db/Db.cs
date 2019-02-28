@@ -406,7 +406,6 @@ namespace Db {
 			this.Value = value;
 		}
 
-
 		public static implicit operator string(Col<T> value) {
 			return value.NameQuotedWithAlias;
 		}
@@ -2281,24 +2280,45 @@ namespace Db {
 		}
 	}
 
-	public static class ColExpression {
-		public static bool GetValue(Type type, Expression col, out Type valueType, out Expression value) {
-			if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Col<>)) {
-				// Col<> に指定されたジェネリック型の取得
-				valueType = type.GetGenericArguments()[0];
-				// Value 値の式取得
-				value = Expression.Field(col, type.GetField("Value"));
-				return true;
-			} else {
-				valueType = null;
-				value = null;
+	public static class EqualTester {
+		static readonly MD5CryptoServiceProvider CryptoServiceProvider = new MD5CryptoServiceProvider();
+
+
+		public static int GetHashCode(byte[] value) {
+			return BitConverter.ToInt32(CryptoServiceProvider.ComputeHash(value), 0);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static int CombineHashCode(int h1, int h2) {
+			// RyuJIT optimizes this to use the ROL instruction
+			// Related GitHub pull request: dotnet/coreclr#1830
+			uint rol5 = ((uint)h1 << 5) | ((uint)h1 >> 27);
+			return ((int)rol5 + h1) ^ h2;
+		}
+
+		public static bool Equals(byte[] l, byte[] r) {
+			if ((l == null) != (r == null)) {
 				return false;
 			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
 		}
+
+
 	}
 
-	public static class DataReaderExpression {
-		public static Expression ReadClass(Type type, Expression dataReader, ref int index, Expression baseValue) {
+	public static class ExpressionHelper {
+		public static Tuple<MemberInfo[], Type[]> GetMembersAndTypes(Type type) {
 			// プロパティとフィールド一覧取得、両方存在する場合は順序が定かではなくなるため対応できない
 			var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
 			var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
@@ -2318,6 +2338,177 @@ namespace Db {
 				members = properties;
 				memberTypes = properties.Select(p => p.PropertyType).ToArray();
 			}
+
+			return new Tuple<MemberInfo[], Type[]>(members, memberTypes);
+		}
+
+		/// <summary>
+		/// 指定インスタンスの指定メンバ値を指す式を生成
+		/// </summary>
+		/// <param name="instance">インスタンス式</param>
+		/// <param name="mi">メンバー情報</param>
+		/// <returns>メンバ値式</returns>
+		public static Expression MemberExpression(Expression instance, MemberInfo mi) {
+			switch (mi.MemberType) {
+			case MemberTypes.Field:
+				return Expression.Field(instance, mi as FieldInfo);
+			case MemberTypes.Property:
+				return Expression.Property(instance, mi as PropertyInfo);
+			default:
+				throw new ApplicationException("内部エラー");
+			}
+		}
+
+		/// <summary>
+		/// 指定メンバの型の取得
+		/// </summary>
+		/// <param name="mi">メンバ情報</param>
+		/// <returns>型</returns>
+		public static Type MemberValueType(MemberInfo mi) {
+			switch (mi.MemberType) {
+			case MemberTypes.Field:
+				return (mi as FieldInfo).FieldType;
+			case MemberTypes.Property:
+				return (mi as PropertyInfo).PropertyType;
+			default:
+				throw new ApplicationException("内部エラー");
+			}
+		}
+	}
+
+	//public static class EqualTester<T> {
+	//	public static readonly Func<T, int> GetHashCode;
+	//	public static readonly Func<T, T, bool> Equals;
+
+	//	static EqualTester() {
+	//		// メンバー情報一覧取得
+	//		var mat = ExpressionHelper.GetMembersAndTypes(typeof(T));
+	//		var members = mat.Item1;
+	//		var memberTypes = mat.Item2;
+
+	//		GetHashCode = GenerateGetHashCode(members, memberTypes);
+	//	}
+
+	//	static Func<T, int> GenerateGetHashCode(MemberInfo[] members, Type[] memberTypes) {
+	//		var type = typeof(T);
+
+	//		var expressions = new List<Expression>();
+	//		var paramInstance = Expression.Parameter(type);
+	//		var paramHashCode = Expression.Parameter(typeof(int));
+	//		var zeroExpr = Expression.Constant((int)0);
+	//		var nullExpr = Expression.Constant(null);
+	//		var hashCombine = typeof(EqualTester).GetMethod("CombineHashCode", new Type[] { typeof(int), typeof(int) });
+
+	//		Func<MemberInfo, Type, Expression> getHashExpr = (memberInfo, memberType) => {
+	//			var memberExpr = ExpressionHelper.MemberExpression(paramInstance, memberInfo);
+	//			var memberIsNullExpr = memberType.IsClass ? Expression.Equal(memberExpr, nullExpr) : null;
+
+	//			Expression hashExpr;
+	//			if (memberType.IsClass) {
+	//				// メンバがクラスなら null チェック後に GetHashCode() 呼び出し
+	//				var getHashCode = memberType.GetMethod("GetHashCode");
+	//				if (getHashCode == null) {
+	//					throw new ApplicationException("内部エラー、型 " + memberType + " に GetHashCode メソッドが存在しません。");
+	//				}
+	//				var memberIsNullExpr = Expression.Equal(memberExpr, nullExpr);
+	//				hashExpr = Expression.Condition(memberIsNullExpr, zeroExpr, Expression.Call(memberExpr, getHashCode));
+	//			} else {
+	//				// メンバが値型なら普通に GetHashCode() 呼び出し
+	//				var getHashCode = memberType.GetMethod("GetHashCode");
+	//				if (getHashCode == null) {
+	//					throw new ApplicationException("内部エラー、型 " + memberType + " に GetHashCode メソッドが存在しません。");
+	//				}
+	//				hashExpr = Expression.Call(memberExpr, getHashCode);
+	//			}
+	//		};
+
+
+
+	//		for (int i = 0; i < members.Length; i++) {
+	//			var mi = members[i];
+	//			var mt = memberTypes[i];
+	//			var memberExpr = ExpressionHelper.MemberExpression(paramInstance, mi);
+	//			var memberIsNullExpr = mt.IsClass ? Expression.Equal(memberExpr, nullExpr) : null;
+
+	//			// ハッシュ値取得式構築
+	//			Expression hashExpr;
+	//			if (memberIsNullExpr == null) {
+	//				// メンバが値型なら普通に GetHashCode() 呼び出し
+	//				var getHashCode = mt.GetMethod("GetHashCode");
+	//				if (getHashCode == null) {
+	//					throw new ApplicationException("内部エラー、型 " + mt + " に GetHashCode メソッドが存在しません。");
+	//				}
+	//				hashExpr = Expression.Call(memberExpr, getHashCode);
+	//			} else {
+	//				if (mt.IsGenericType && mt.GetGenericTypeDefinition() == typeof(Col<>)) {
+	//					// メンバが Col<> 型なら Col<>.Value に対して GetHashCode() 呼び出し、クラスだったら呼び出し前に null チェックを行う
+
+	//					// Col<> に指定されたジェネリック型の取得
+	//					var ct = mt.GetGenericArguments()[0];
+
+	//					var getHashCode = ct.GetMethod("GetHashCode");
+	//					if (getHashCode == null) {
+	//						throw new ApplicationException("内部エラー、型 " + ct + " に GetHashCode メソッドが存在しません。");
+	//					}
+
+	//					var colValueExpr = Expression.Field(memberExpr, mt.GetField("Value"));
+	//					if (ct.IsClass) {
+	//						// Col<>.Value がクラスなら null チェック後に GetHashCode() 呼び出し
+	//						var colIsNullExpr = Expression.Equal(memberExpr, Expression.Constant(null));
+	//						hashExpr = Expression.Condition(colIsNullExpr, zeroExpr, Expression.Call(colValueExpr, getHashCode));
+	//					} else {
+	//						// Col<>.Value が値型なら普通に GetHashCode() 呼び出し
+	//						hashExpr = Expression.Call(colValueExpr, getHashCode);
+	//					}
+	//				} else {
+	//					// メンバがクラスなら null チェック後に GetHashCode() 呼び出し
+	//					var getHashCode = mt.GetMethod("GetHashCode");
+	//					if (getHashCode == null) {
+	//						throw new ApplicationException("内部エラー、型 " + mt + " に GetHashCode メソッドが存在しません。");
+	//					}
+	//					hashExpr = Expression.Condition(memberIsNullExpr, zeroExpr, Expression.Call(memberExpr, getHashCode));
+	//				}
+	//			}
+
+	//			// ハッシュ値を連結する式構築
+	//			if (i == 0) {
+	//				expressions.Add(Expression.Assign(paramHashCode, hashExpr));
+	//			} else {
+	//				expressions.Add(Expression.Assign(paramHashCode, Expression.Call(null, hashCombine, paramHashCode, hashExpr)));
+	//			}
+	//		}
+
+	//		expressions.Add(paramHashCode);
+
+	//		return Expression.Lambda<Func<T, int>>(
+	//			Expression.Block(new ParameterExpression[] { paramHashCode }, expressions),
+	//			paramInstance
+	//		).Compile();
+	//	}
+	//}
+
+	public static class ColExpression {
+		public static bool GetValue(Type type, Expression col, out Type valueType, out Expression value) {
+			if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Col<>)) {
+				// Col<> に指定されたジェネリック型の取得
+				valueType = type.GetGenericArguments()[0];
+				// Value 値の式取得
+				value = Expression.Field(col, type.GetField("Value"));
+				return true;
+			} else {
+				valueType = null;
+				value = null;
+				return false;
+			}
+		}
+	}
+
+	public static class DataReaderExpression {
+		public static Expression ReadClass(Type type, Expression dataReader, ref int index, Expression baseValue) {
+			// メンバー情報一覧取得
+			var mat = ExpressionHelper.GetMembersAndTypes(type);
+			var members = mat.Item1;
+			var memberTypes = mat.Item2;
 
 			// 各メンバーに設定する値を生成する式一覧生成
 			var memberSourceExprs = new Expression[members.Length];
@@ -2346,7 +2537,7 @@ namespace Db {
 
 				// 一時変数のメンバに値を取得していく
 				for (int i = 0; i < memberSourceExprs.Length; i++) {
-					expressions.Add(Expression.Assign(MemberExpression(result, members[i]), memberSourceExprs[i]));
+					expressions.Add(Expression.Assign(ExpressionHelper.MemberExpression(result, members[i]), memberSourceExprs[i]));
 				}
 
 				// 一時変数を戻り値とする
@@ -2371,7 +2562,7 @@ namespace Db {
 				colSymbol = "カラムインデックス " + index;
 			}
 
-			var mt = MemberValueType(mi);
+			var mt = ExpressionHelper.MemberValueType(mi);
 			if (mt.IsGenericType && mt.GetGenericTypeDefinition() == typeof(Col<>)) {
 				// メンバが Col<> 型の場合
 
@@ -2393,7 +2584,7 @@ namespace Db {
 				}
 
 				// ベースとなる Col<>
-				var col = MemberExpression(baseValue, mi);
+				var col = ExpressionHelper.MemberExpression(baseValue, mi);
 
 				// DataReader から取得した値を基に Col<> を new する処理
 				if (0 <= index) {
@@ -2407,7 +2598,7 @@ namespace Db {
 					getter = SingleColumnAccessor.GetMethodByType(mt, 0 < index, false);
 					if (getter == null) {
 						// 列に直接マッピングできないならクラスを想定
-						return ReadClass(mt, dataReader, ref index, MemberExpression(baseValue, mi));
+						return ReadClass(mt, dataReader, ref index, ExpressionHelper.MemberExpression(baseValue, mi));
 					}
 				} catch (Exception ex) {
 					throw new ApplicationException("DataReader の" + colSymbol + " から型 " + mt + " の値への変換メソッドが存在しません。", ex);
@@ -2418,28 +2609,6 @@ namespace Db {
 					index++;
 				}
 				return Expression.Call(null, getter, dataReader, colId);
-			}
-		}
-
-		static Expression MemberExpression(Expression instance, MemberInfo mi) {
-			switch (mi.MemberType) {
-			case MemberTypes.Field:
-				return Expression.Field(instance, mi as FieldInfo);
-			case MemberTypes.Property:
-				return Expression.Property(instance, mi as PropertyInfo);
-			default:
-				throw new ApplicationException("内部エラー");
-			}
-		}
-
-		static Type MemberValueType(MemberInfo mi) {
-			switch (mi.MemberType) {
-			case MemberTypes.Field:
-				return (mi as FieldInfo).FieldType;
-			case MemberTypes.Property:
-				return (mi as PropertyInfo).PropertyType;
-			default:
-				throw new ApplicationException("内部エラー");
 			}
 		}
 	}
