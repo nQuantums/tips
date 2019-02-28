@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
 using MySql.Data.MySqlClient;
 
 namespace Db {
@@ -122,7 +124,33 @@ namespace Db {
 			);
 		}
 
+		public struct Struct1 {
+			public string A;
+			public int B;
+
+			public static bool operator ==(Struct1 l, Struct1 r) {
+				if (l.A != r.A) {
+					return false;
+				}
+				if (l.B != r.B) {
+					return false;
+				}
+				return true;
+			}
+			public static bool operator !=(Struct1 l, Struct1 r) {
+				return !(l == r);
+			}
+		}
+
 		static void Main(string[] args) {
+			Tbls.Test v = new Tbls.Test {
+				binary_id = Cols.binary_id.ValueAs(new byte[] { 1, 2, 3 }),
+				int_data = Cols.int_data.ValueAs(13),
+			};
+			Console.WriteLine(EqualTester<Tbls.Test>.GetHashCode(v));
+			return;
+
+
 			var rnd = new Random();
 
 			using (var con = new MySqlConnection("server=127.0.0.1;uid=root;pwd=Passw0rd!;database=test1")) {
@@ -130,6 +158,7 @@ namespace Db {
 
 				using (var cmd = con.CreateCommand()) {
 					cmd.CommandTimeout = 0;
+
 
 					var t1 = Tbls.test1.As("t1");
 					var t2 = Tbls.test2.As("t2");

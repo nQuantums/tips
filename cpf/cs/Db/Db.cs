@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using System.Reflection;
 using MySql.Data.MySqlClient;
 using System.Collections;
+using System.Security.Cryptography;
+using System.Runtime.CompilerServices;
 
 namespace Db {
 	/// <summary>
@@ -404,6 +406,11 @@ namespace Db {
 		public Col(Col<T> baseCol, T value) : base(baseCol.Name, baseCol.DbType) {
 			this.BaseCol = baseCol;
 			this.Value = value;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public Col<T> ValueAs(T value) {
+			return new Col<T>(this, value);
 		}
 
 		public static implicit operator string(Col<T> value) {
@@ -2284,8 +2291,72 @@ namespace Db {
 		static readonly MD5CryptoServiceProvider CryptoServiceProvider = new MD5CryptoServiceProvider();
 
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int GetHashCode(byte[] value) {
 			return BitConverter.ToInt32(CryptoServiceProvider.ComputeHash(value), 0);
+		}
+
+		public static int GetHashCode(sbyte[] value) {
+			if (value == null) {
+				return 0;
+			}
+			var bytes = new byte[value.Length];
+			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
+			return GetHashCode(bytes);
+		}
+
+		public static int GetHashCode(short[] value) {
+			if (value == null) {
+				return 0;
+			}
+			var bytes = new byte[value.Length * 2];
+			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
+			return GetHashCode(bytes);
+		}
+
+		public static int GetHashCode(ushort[] value) {
+			if (value == null) {
+				return 0;
+			}
+			var bytes = new byte[value.Length * 2];
+			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
+			return GetHashCode(bytes);
+		}
+
+		public static int GetHashCode(int[] value) {
+			if (value == null) {
+				return 0;
+			}
+			var bytes = new byte[value.Length * 4];
+			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
+			return GetHashCode(bytes);
+		}
+
+		public static int GetHashCode(uint[] value) {
+			if (value == null) {
+				return 0;
+			}
+			var bytes = new byte[value.Length * 4];
+			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
+			return GetHashCode(bytes);
+		}
+
+		public static int GetHashCode(long[] value) {
+			if (value == null) {
+				return 0;
+			}
+			var bytes = new byte[value.Length * 8];
+			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
+			return GetHashCode(bytes);
+		}
+
+		public static int GetHashCode(ulong[] value) {
+			if (value == null) {
+				return 0;
+			}
+			var bytes = new byte[value.Length * 8];
+			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
+			return GetHashCode(bytes);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2296,7 +2367,133 @@ namespace Db {
 			return ((int)rol5 + h1) ^ h2;
 		}
 
+		public static bool Equals(sbyte[] l, sbyte[] r) {
+			if ((l == null) != (r == null)) {
+				return false;
+			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
 		public static bool Equals(byte[] l, byte[] r) {
+			if ((l == null) != (r == null)) {
+				return false;
+			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		public static bool Equals(short[] l, short[] r) {
+			if ((l == null) != (r == null)) {
+				return false;
+			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		public static bool Equals(ushort[] l, ushort[] r) {
+			if ((l == null) != (r == null)) {
+				return false;
+			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		public static bool Equals(int[] l, int[] r) {
+			if ((l == null) != (r == null)) {
+				return false;
+			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		public static bool Equals(uint[] l, uint[] r) {
+			if ((l == null) != (r == null)) {
+				return false;
+			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		public static bool Equals(long[] l, long[] r) {
+			if ((l == null) != (r == null)) {
+				return false;
+			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		public static bool Equals(ulong[] l, ulong[] r) {
 			if ((l == null) != (r == null)) {
 				return false;
 			}
@@ -2318,6 +2515,48 @@ namespace Db {
 	}
 
 	public static class ExpressionHelper {
+		/// <summary>
+		/// 指定値の<see cref="object.GetHashCode"/>を呼び出す式を生成する
+		/// </summary>
+		/// <param name="valueExpr">値の式</param>
+		/// <param name="valueType">値の型</param>
+		/// <returns>式</returns>
+		public static Expression GetHashCodeFromValueExpr(Expression valueExpr, Type valueType) {
+			var getHashCode = valueType.GetMethod("GetHashCode");
+			if (getHashCode == null) {
+				throw new ApplicationException("内部エラー、型 " + valueType + " に GetHashCode メソッドが存在しません。");
+			}
+
+			if (valueType.IsClass) {
+				var customGetHashCode = typeof(EqualTester).GetMethod("GetHashCode", new Type[] { valueType });
+				if (customGetHashCode != null) {
+					// 配列など特殊処理が必要なものならそれ用の処理を呼び出す
+					return Expression.Call(null, customGetHashCode, valueExpr);
+				} else {
+					// メンバがクラスなら null チェック後に GetHashCode() 呼び出し
+					return Expression.Condition(Expression.Equal(valueExpr, Expression.Constant(null)), Expression.Constant((int)0), Expression.Call(valueExpr, getHashCode));
+				}
+			} else {
+				// メンバが値型なら普通に GetHashCode() 呼び出し
+				return Expression.Call(valueExpr, getHashCode);
+			}
+		}
+
+		/// <summary>
+		/// 指定インスタンスの<see cref="object.GetHashCode"/>を呼び出す式を生成する
+		/// </summary>
+		/// <param name="instanceExpr">インスタンスの式</param>
+		/// <param name="memberInfo">メンバー情報</param>
+		/// <param name="memberType">メンバーの型</param>
+		/// <returns>式</returns>
+		public static Expression GetHashCodeFromMemberExpr(Expression instanceExpr, MemberInfo memberInfo, Type memberType) {
+			var getHashCode = memberType.GetMethod("GetHashCode");
+			if (getHashCode == null) {
+				throw new ApplicationException("内部エラー、型 " + memberType + " に GetHashCode メソッドが存在しません。");
+			}
+			return GetHashCodeFromValueExpr(ExpressionHelper.MemberExpression(instanceExpr, memberInfo), memberType);
+		}
+
 		public static Tuple<MemberInfo[], Type[]> GetMembersAndTypes(Type type) {
 			// プロパティとフィールド一覧取得、両方存在する場合は順序が定かではなくなるため対応できない
 			var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
@@ -2376,116 +2615,65 @@ namespace Db {
 		}
 	}
 
-	//public static class EqualTester<T> {
-	//	public static readonly Func<T, int> GetHashCode;
-	//	public static readonly Func<T, T, bool> Equals;
+	public static class EqualTester<T> {
+		public static readonly Func<T, int> GetHashCode;
+		public static readonly Func<T, T, bool> Equals;
 
-	//	static EqualTester() {
-	//		// メンバー情報一覧取得
-	//		var mat = ExpressionHelper.GetMembersAndTypes(typeof(T));
-	//		var members = mat.Item1;
-	//		var memberTypes = mat.Item2;
+		static EqualTester() {
+			// メンバー情報一覧取得
+			var mat = ExpressionHelper.GetMembersAndTypes(typeof(T));
+			var members = mat.Item1;
+			var memberTypes = mat.Item2;
 
-	//		GetHashCode = GenerateGetHashCode(members, memberTypes);
-	//	}
+			GetHashCode = GenerateGetHashCode(members, memberTypes);
+		}
 
-	//	static Func<T, int> GenerateGetHashCode(MemberInfo[] members, Type[] memberTypes) {
-	//		var type = typeof(T);
+		static Func<T, int> GenerateGetHashCode(MemberInfo[] members, Type[] memberTypes) {
+			var type = typeof(T);
 
-	//		var expressions = new List<Expression>();
-	//		var paramInstance = Expression.Parameter(type);
-	//		var paramHashCode = Expression.Parameter(typeof(int));
-	//		var zeroExpr = Expression.Constant((int)0);
-	//		var nullExpr = Expression.Constant(null);
-	//		var hashCombine = typeof(EqualTester).GetMethod("CombineHashCode", new Type[] { typeof(int), typeof(int) });
+			var expressions = new List<Expression>();
+			var paramInstance = Expression.Parameter(type);
+			var paramHashCode = Expression.Parameter(typeof(int));
+			var zeroExpr = Expression.Constant((int)0);
+			var nullExpr = Expression.Constant(null);
+			var hashCombine = typeof(EqualTester).GetMethod("CombineHashCode", new Type[] { typeof(int), typeof(int) });
 
-	//		Func<MemberInfo, Type, Expression> getHashExpr = (memberInfo, memberType) => {
-	//			var memberExpr = ExpressionHelper.MemberExpression(paramInstance, memberInfo);
-	//			var memberIsNullExpr = memberType.IsClass ? Expression.Equal(memberExpr, nullExpr) : null;
+			for (int i = 0; i < members.Length; i++) {
+				var mi = members[i];
+				var mt = memberTypes[i];
+				var memberValueExpr = ExpressionHelper.MemberExpression(paramInstance, mi);
 
-	//			Expression hashExpr;
-	//			if (memberType.IsClass) {
-	//				// メンバがクラスなら null チェック後に GetHashCode() 呼び出し
-	//				var getHashCode = memberType.GetMethod("GetHashCode");
-	//				if (getHashCode == null) {
-	//					throw new ApplicationException("内部エラー、型 " + memberType + " に GetHashCode メソッドが存在しません。");
-	//				}
-	//				var memberIsNullExpr = Expression.Equal(memberExpr, nullExpr);
-	//				hashExpr = Expression.Condition(memberIsNullExpr, zeroExpr, Expression.Call(memberExpr, getHashCode));
-	//			} else {
-	//				// メンバが値型なら普通に GetHashCode() 呼び出し
-	//				var getHashCode = memberType.GetMethod("GetHashCode");
-	//				if (getHashCode == null) {
-	//					throw new ApplicationException("内部エラー、型 " + memberType + " に GetHashCode メソッドが存在しません。");
-	//				}
-	//				hashExpr = Expression.Call(memberExpr, getHashCode);
-	//			}
-	//		};
+				// ハッシュ値取得式構築
+				Expression hashExpr;
+				if (mt.IsGenericType && mt.GetGenericTypeDefinition() == typeof(Col<>)) {
+					// メンバが Col<> 型なら Col<>.Value に対して GetHashCode() 呼び出し、クラスだったら呼び出し前に null チェックを行う
 
+					// Col<> に指定されたジェネリック型の取得
+					var ct = mt.GetGenericArguments()[0];
+					var retHashCodeFromMemberExpr = ExpressionHelper.GetHashCodeFromMemberExpr(memberValueExpr, mt.GetField("Value"), ct);
 
+					hashExpr = Expression.Condition(Expression.Equal(memberValueExpr, nullExpr), zeroExpr, retHashCodeFromMemberExpr);
+				} else {
+					hashExpr = ExpressionHelper.GetHashCodeFromValueExpr(memberValueExpr, mt);
+				}
 
-	//		for (int i = 0; i < members.Length; i++) {
-	//			var mi = members[i];
-	//			var mt = memberTypes[i];
-	//			var memberExpr = ExpressionHelper.MemberExpression(paramInstance, mi);
-	//			var memberIsNullExpr = mt.IsClass ? Expression.Equal(memberExpr, nullExpr) : null;
+				// ハッシュ値を連結する式構築
+				if (i == 0) {
+					expressions.Add(Expression.Assign(paramHashCode, hashExpr));
+				} else {
+					expressions.Add(Expression.Assign(paramHashCode, Expression.Call(null, hashCombine, paramHashCode, hashExpr)));
+				}
+			}
 
-	//			// ハッシュ値取得式構築
-	//			Expression hashExpr;
-	//			if (memberIsNullExpr == null) {
-	//				// メンバが値型なら普通に GetHashCode() 呼び出し
-	//				var getHashCode = mt.GetMethod("GetHashCode");
-	//				if (getHashCode == null) {
-	//					throw new ApplicationException("内部エラー、型 " + mt + " に GetHashCode メソッドが存在しません。");
-	//				}
-	//				hashExpr = Expression.Call(memberExpr, getHashCode);
-	//			} else {
-	//				if (mt.IsGenericType && mt.GetGenericTypeDefinition() == typeof(Col<>)) {
-	//					// メンバが Col<> 型なら Col<>.Value に対して GetHashCode() 呼び出し、クラスだったら呼び出し前に null チェックを行う
+			// ハッシュコードを戻り値とする
+			expressions.Add(paramHashCode);
 
-	//					// Col<> に指定されたジェネリック型の取得
-	//					var ct = mt.GetGenericArguments()[0];
-
-	//					var getHashCode = ct.GetMethod("GetHashCode");
-	//					if (getHashCode == null) {
-	//						throw new ApplicationException("内部エラー、型 " + ct + " に GetHashCode メソッドが存在しません。");
-	//					}
-
-	//					var colValueExpr = Expression.Field(memberExpr, mt.GetField("Value"));
-	//					if (ct.IsClass) {
-	//						// Col<>.Value がクラスなら null チェック後に GetHashCode() 呼び出し
-	//						var colIsNullExpr = Expression.Equal(memberExpr, Expression.Constant(null));
-	//						hashExpr = Expression.Condition(colIsNullExpr, zeroExpr, Expression.Call(colValueExpr, getHashCode));
-	//					} else {
-	//						// Col<>.Value が値型なら普通に GetHashCode() 呼び出し
-	//						hashExpr = Expression.Call(colValueExpr, getHashCode);
-	//					}
-	//				} else {
-	//					// メンバがクラスなら null チェック後に GetHashCode() 呼び出し
-	//					var getHashCode = mt.GetMethod("GetHashCode");
-	//					if (getHashCode == null) {
-	//						throw new ApplicationException("内部エラー、型 " + mt + " に GetHashCode メソッドが存在しません。");
-	//					}
-	//					hashExpr = Expression.Condition(memberIsNullExpr, zeroExpr, Expression.Call(memberExpr, getHashCode));
-	//				}
-	//			}
-
-	//			// ハッシュ値を連結する式構築
-	//			if (i == 0) {
-	//				expressions.Add(Expression.Assign(paramHashCode, hashExpr));
-	//			} else {
-	//				expressions.Add(Expression.Assign(paramHashCode, Expression.Call(null, hashCombine, paramHashCode, hashExpr)));
-	//			}
-	//		}
-
-	//		expressions.Add(paramHashCode);
-
-	//		return Expression.Lambda<Func<T, int>>(
-	//			Expression.Block(new ParameterExpression[] { paramHashCode }, expressions),
-	//			paramInstance
-	//		).Compile();
-	//	}
-	//}
+			return Expression.Lambda<Func<T, int>>(
+				Expression.Block(new ParameterExpression[] { paramHashCode }, expressions),
+				paramInstance
+			).Compile();
+		}
+	}
 
 	public static class ColExpression {
 		public static bool GetValue(Type type, Expression col, out Type valueType, out Expression value) {
