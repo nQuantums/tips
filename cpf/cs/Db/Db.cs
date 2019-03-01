@@ -2521,7 +2521,7 @@ namespace Db {
 		/// <param name="valueExpr">値の式</param>
 		/// <param name="valueType">値の型</param>
 		/// <returns>式</returns>
-		public static Expression GetHashCodeFromValueExpr(Expression valueExpr, Type valueType) {
+		public static Expression GetHashCodeFromValue(Expression valueExpr, Type valueType) {
 			var getHashCode = valueType.GetMethod("GetHashCode");
 			if (getHashCode == null) {
 				throw new ApplicationException("内部エラー、型 " + valueType + " に GetHashCode メソッドが存在しません。");
@@ -2549,12 +2549,30 @@ namespace Db {
 		/// <param name="memberInfo">メンバー情報</param>
 		/// <param name="memberType">メンバーの型</param>
 		/// <returns>式</returns>
-		public static Expression GetHashCodeFromMemberExpr(Expression instanceExpr, MemberInfo memberInfo, Type memberType) {
+		public static Expression GetHashCodeFromMember(Expression instanceExpr, MemberInfo memberInfo, Type memberType) {
 			var getHashCode = memberType.GetMethod("GetHashCode");
 			if (getHashCode == null) {
 				throw new ApplicationException("内部エラー、型 " + memberType + " に GetHashCode メソッドが存在しません。");
 			}
-			return GetHashCodeFromValueExpr(ExpressionHelper.MemberExpression(instanceExpr, memberInfo), memberType);
+			return GetHashCodeFromValue(ExpressionHelper.MemberExpression(instanceExpr, memberInfo), memberType);
+		}
+
+		public static Expression GetDeepEqual(Type type, Expression left, Expression right) {
+			if (type.IsPrimitive || type == typeof(string)) {
+				return Expression.Equal(left, right);
+			}
+			if (type.IsValueType) {
+				try {
+					return Expression.Equal(left, right);
+				} catch (System.InvalidOperationException) {
+					var mat = GetMembersAndTypes(type);
+					var members = mat.Item1;
+					var memberTypes = mat.Item2;
+					var expressions = new List<Expression>();
+					for (int i = 0; i < members.Length; i++) {
+					}
+				}
+			}
 		}
 
 		public static Tuple<MemberInfo[], Type[]> GetMembersAndTypes(Type type) {
@@ -2594,7 +2612,7 @@ namespace Db {
 			case MemberTypes.Property:
 				return Expression.Property(instance, mi as PropertyInfo);
 			default:
-				throw new ApplicationException("内部エラー");
+				throw new ApplicationException("内部エラー、メンバータイプ " + mi.MemberType + " は対象外です。");
 			}
 		}
 
@@ -2610,7 +2628,7 @@ namespace Db {
 			case MemberTypes.Property:
 				return (mi as PropertyInfo).PropertyType;
 			default:
-				throw new ApplicationException("内部エラー");
+				throw new ApplicationException("内部エラー、メンバータイプ " + mi.MemberType + " は対象外です。");
 			}
 		}
 	}
@@ -2650,11 +2668,11 @@ namespace Db {
 
 					// Col<> に指定されたジェネリック型の取得
 					var ct = mt.GetGenericArguments()[0];
-					var retHashCodeFromMemberExpr = ExpressionHelper.GetHashCodeFromMemberExpr(memberValueExpr, mt.GetField("Value"), ct);
+					var retHashCodeFromMemberExpr = ExpressionHelper.GetHashCodeFromMember(memberValueExpr, mt.GetField("Value"), ct);
 
 					hashExpr = Expression.Condition(Expression.Equal(memberValueExpr, nullExpr), zeroExpr, retHashCodeFromMemberExpr);
 				} else {
-					hashExpr = ExpressionHelper.GetHashCodeFromValueExpr(memberValueExpr, mt);
+					hashExpr = ExpressionHelper.GetHashCodeFromValue(memberValueExpr, mt);
 				}
 
 				// ハッシュ値を連結する式構築
