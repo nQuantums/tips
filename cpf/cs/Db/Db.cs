@@ -323,6 +323,10 @@ namespace Db {
 		/// </summary>
 		public static Col[] GetMemberValues(object cols) {
 			var type = cols.GetType();
+			if (type.IsSubclassOf(typeof(Col))) {
+				// Col クラスはこれ以上分解できない列なので対象外
+				return new Col[0];
+			}
 			if (type.IsValueType) {
 				// 値型は処理対象外
 				return new Col[0];
@@ -972,6 +976,24 @@ namespace Db {
 		}
 	}
 
+	public class NotSqlLike : ISqlElement {
+		public object Expression;
+		public object Pattern;
+
+		public NotSqlLike(object expression, object pattern) {
+			this.Expression = expression;
+			this.Pattern = pattern;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			sb.Append(sqlBuffer.ToString(this.Expression, flags | ToStringFlags.AsStringLiteral | ToStringFlags.WithAlias));
+			sb.Append(" NOT LIKE ");
+			sb.Append(sqlBuffer.ToString(this.Pattern, flags | ToStringFlags.AsStringLiteral | ToStringFlags.WithAlias));
+			return sb.ToString();
+		}
+	}
+
 	public class SqlDeleteFrom : ISqlElement {
 		public object Tbl;
 
@@ -1133,6 +1155,42 @@ namespace Db {
 				}
 				sb.Append("(" + sqlBuffer.ToString(this.Expressions[i], flags) + ")");
 			}
+			return sb.ToString();
+		}
+	}
+
+	public class SqlEq : ISqlElement {
+		public object Left;
+		public object Right;
+
+		public SqlEq(object left, object right) {
+			this.Left = left;
+			this.Right = right;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			sb.Append(sqlBuffer.ToString(this.Left, ToStringFlags.WithAlias));
+			sb.Append("=");
+			sb.Append(sqlBuffer.ToString(this.Right, ToStringFlags.WithAlias));
+			return sb.ToString();
+		}
+	}
+
+	public class SqlNeq : ISqlElement {
+		public object Left;
+		public object Right;
+
+		public SqlNeq(object left, object right) {
+			this.Left = left;
+			this.Right = right;
+		}
+
+		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+			var sb = new StringBuilder();
+			sb.Append(sqlBuffer.ToString(this.Left, ToStringFlags.WithAlias));
+			sb.Append("<>");
+			sb.Append(sqlBuffer.ToString(this.Right, ToStringFlags.WithAlias));
 			return sb.ToString();
 		}
 	}
@@ -1419,6 +1477,16 @@ namespace Db {
 		}
 
 		/// <summary>
+		/// NOT LIKE を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="expression">NOT LIKE の左側の式</param>
+		/// <param name="pattern">NOT LIKE のパターン文字列</param>
+		/// <returns><see cref="NotSqlLike"/></returns>
+		public static NotSqlLike NotLike(object expression, object pattern) {
+			return new NotSqlLike(expression, pattern);
+		}
+
+		/// <summary>
 		/// DELETE FROM を表すSQL要素を生成する
 		/// </summary>
 		/// <param name="tbl">削除元テーブル</param>
@@ -1488,6 +1556,26 @@ namespace Db {
 		/// <returns><see cref="SqlOr"/></returns>
 		public static SqlOr Or(params object[] expressions) {
 			return new SqlOr(expressions);
+		}
+
+		/// <summary>
+		/// = を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="left">左辺値</param>
+		/// <param name="right">右辺値</param>
+		/// <returns><see cref="SqlEq"/></returns>
+		public static SqlEq Eq(object left, object right) {
+			return new SqlEq(left, right);
+		}
+
+		/// <summary>
+		/// <> を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="left">左辺値</param>
+		/// <param name="right">右辺値</param>
+		/// <returns><see cref="SqlNeq"/></returns>
+		public static SqlNeq Neq(object left, object right) {
+			return new SqlNeq(left, right);
 		}
 
 		/// <summary>
@@ -2557,23 +2645,23 @@ namespace Db {
 			return GetHashCodeFromValue(ExpressionHelper.MemberExpression(instanceExpr, memberInfo), memberType);
 		}
 
-		public static Expression GetDeepEqual(Type type, Expression left, Expression right) {
-			if (type.IsPrimitive || type == typeof(string)) {
-				return Expression.Equal(left, right);
-			}
-			if (type.IsValueType) {
-				try {
-					return Expression.Equal(left, right);
-				} catch (System.InvalidOperationException) {
-					var mat = GetMembersAndTypes(type);
-					var members = mat.Item1;
-					var memberTypes = mat.Item2;
-					var expressions = new List<Expression>();
-					for (int i = 0; i < members.Length; i++) {
-					}
-				}
-			}
-		}
+		//public static Expression GetDeepEqual(Type type, Expression left, Expression right) {
+		//	if (type.IsPrimitive || type == typeof(string)) {
+		//		return Expression.Equal(left, right);
+		//	}
+		//	if (type.IsValueType) {
+		//		try {
+		//			return Expression.Equal(left, right);
+		//		} catch (System.InvalidOperationException) {
+		//			var mat = GetMembersAndTypes(type);
+		//			var members = mat.Item1;
+		//			var memberTypes = mat.Item2;
+		//			var expressions = new List<Expression>();
+		//			for (int i = 0; i < members.Length; i++) {
+		//			}
+		//		}
+		//	}
+		//}
 
 		public static Tuple<MemberInfo[], Type[]> GetMembersAndTypes(Type type) {
 			// プロパティとフィールド一覧取得、両方存在する場合は順序が定かではなくなるため対応できない
@@ -2801,7 +2889,7 @@ namespace Db {
 				// DataReader から指定型の値を取得するデリゲートの取得
 				MethodInfo getter;
 				try {
-					getter = SingleColumnAccessor.GetMethodByType(mt, 0 < index, false);
+					getter = SingleColumnAccessor.GetMethodByType(mt, index < 0, false);
 					if (getter == null) {
 						// 列に直接マッピングできないならクラスを想定
 						return ReadClass(mt, dataReader, ref index, ExpressionHelper.MemberExpression(baseValue, mi));
