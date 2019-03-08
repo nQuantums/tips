@@ -155,7 +155,7 @@ namespace Db {
 	/// <summary>
 	/// 制約
 	/// </summary>
-	public class Cr {
+	public class Constraint {
 		/// <summary>
 		/// 制約タイプ
 		/// </summary>
@@ -171,7 +171,7 @@ namespace Db {
 		/// </summary>
 		/// <param name="type">制約タイプ</param>
 		/// <param name="cols">対象列一覧</param>
-		public Cr(CrType type, params Col[] cols) {
+		public Constraint(CrType type, params Col[] cols) {
 			this.Type = type;
 			this.Cols = cols;
 		}
@@ -180,7 +180,7 @@ namespace Db {
 	/// <summary>
 	/// プライマリキー制約
 	/// </summary>
-	public class PrimaryKey : Cr {
+	public class PrimaryKey : Constraint {
 		public PrimaryKey(params Col[] cols) : base(CrType.PrimaryKey, cols) {
 		}
 	}
@@ -188,7 +188,7 @@ namespace Db {
 	/// <summary>
 	/// インデックス制約
 	/// </summary>
-	public class Index : Cr {
+	public class Index : Constraint {
 		public Index(params Col[] cols) : base(CrType.Index, cols) {
 		}
 	}
@@ -196,7 +196,7 @@ namespace Db {
 	/// <summary>
 	/// ユニークキー制約
 	/// </summary>
-	public class Unique : Cr {
+	public class Unique : Constraint {
 		public Unique(params Col[] cols) : base(CrType.Unique, cols) {
 		}
 	}
@@ -204,7 +204,7 @@ namespace Db {
 	/// <summary>
 	/// 自動採番制約
 	/// </summary>
-	public class AutoIncrement : Cr {
+	public class AutoIncrement : Constraint {
 		public AutoIncrement(params Col[] cols) : base(CrType.AutoIncrement, cols) {
 		}
 	}
@@ -499,7 +499,7 @@ namespace Db {
 		/// <summary>
 		/// 制約一覧
 		/// </summary>
-		public Cr[] Constraints { get; protected set; }
+		public Constraint[] Constraints { get; protected set; }
 
 		/// <summary>
 		/// コンストラクタ、テーブル名（またはエイリアス）と列一覧を指定して初期化する
@@ -509,7 +509,7 @@ namespace Db {
 		public Tbl(string name, params Col[] cols) {
 			this.Name = name;
 			this.ColsArray = cols;
-			this.Constraints = new Cr[0];
+			this.Constraints = new Constraint[0];
 		}
 
 		/// <summary>
@@ -522,7 +522,7 @@ namespace Db {
 			this.Schema = schema;
 			this.Name = name;
 			this.ColsArray = cols;
-			this.Constraints = new Cr[0];
+			this.Constraints = new Constraint[0];
 		}
 
 		/// <summary>
@@ -566,11 +566,11 @@ namespace Db {
 		}
 
 		public override string ToString() {
-			return this.Name;
+			return this.FullNameQuoted;
 		}
 
 		public static implicit operator string(Tbl value) {
-			return value.Name;
+			return value.FullNameQuoted;
 		}
 	}
 
@@ -597,7 +597,7 @@ namespace Db {
 		/// </summary>
 		/// <param name="name">テーブル名またはエイリアス</param>
 		/// <param name="constraintCreators">制約作成デリゲート一覧</param>
-		public Tbl(string name, params Func<T, Cr>[] constraintCreators) : base(name, new T()) {
+		public Tbl(string name, params Func<T, Constraint>[] constraintCreators) : base(name, new T()) {
 			this.Constraints = constraintCreators.Select(c => c(this.Cols)).ToArray();
 		}
 
@@ -607,7 +607,7 @@ namespace Db {
 		/// <param name="schema">スキーマ名</param>
 		/// <param name="name">テーブル名またはエイリアス</param>
 		/// <param name="constraintCreators">制約作成デリゲート一覧</param>
-		public Tbl(string schema, string name, params Func<T, Cr>[] constraintCreators) : base(schema, name, new T()) {
+		public Tbl(string schema, string name, params Func<T, Constraint>[] constraintCreators) : base(schema, name, new T()) {
 			this.Constraints = constraintCreators.Select(c => c(this.Cols)).ToArray();
 		}
 
@@ -630,10 +630,6 @@ namespace Db {
 			this.Cols = (T)cols;
 			this.ColsArray = ColsGetter<T>.Invoke(this.Cols);
 		}
-
-		public static implicit operator string(Tbl<T> value) {
-			return value.Name;
-		}
 	}
 
 	public class Param {
@@ -653,6 +649,8 @@ namespace Db {
 
 	public class SqlBuffer {
 		public readonly Dictionary<Param, string> Params = new Dictionary<Param, string>();
+		public ToStringFlags AddFlags = 0;
+		public ToStringFlags RemoveFlags = 0;
 
 		public string GetPrmName(Param prm) {
 			string paramName;
@@ -663,6 +661,9 @@ namespace Db {
 		}
 
 		public string ToString(object element, ToStringFlags flags = 0) {
+			flags |= this.AddFlags;
+			flags &= ~this.RemoveFlags;
+
 			ISqlElement sm;
 			Param p;
 			Col c;
@@ -735,6 +736,8 @@ namespace Db {
 					sb.Append(sqlBuffer.ToString(this.Cols[i], flags | ToStringFlags.WithAlias));
 				}
 			}
+
+			sqlBuffer.RemoveFlags |= ToStringFlags.Underlying;
 
 			return sb.ToString();
 		}
@@ -862,7 +865,7 @@ namespace Db {
 		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
 			var sb = new StringBuilder();
 			sb.Append("UPDATE ");
-			sb.Append(sqlBuffer.ToString(this.Tbl));
+			sb.Append(sqlBuffer.ToString(this.Tbl, ToStringFlags.WithAlias));
 			sb.Append(" SET ");
 			for (int i = 0; i < this.ColAndValues.Count; i++) {
 				var cav = this.ColAndValues[i];
@@ -1005,6 +1008,7 @@ namespace Db {
 			var sb = new StringBuilder();
 			sb.Append("DELETE FROM ");
 			sb.Append(sqlBuffer.ToString(this.Tbl, flags | ToStringFlags.Underlying));
+			sqlBuffer.AddFlags |= ToStringFlags.Underlying;
 			return sb.ToString();
 		}
 	}
@@ -1731,47 +1735,6 @@ namespace Db {
 		}
 
 		/// <summary>
-		/// 指定の型にマッピングしつつデータ読み込む
-		/// <para>レコードは<see cref="List{T}"/>に読み込まれる</para>
-		/// </summary>
-		/// <param name="cmd">実行するコマンド</param>
-		/// <param name="byName">列名とプロパティ名をマッチングさせて取得するなら true 、列順とプロパティ順を使うなら false</param>
-		/// <param name="columns">マッピングする<see cref="Col{T}"/>を指定する new { Cols.title, Cols.date } の様な匿名クラス</param>
-		/// <returns>レコードコレクション</returns>
-		public static List<T> Read<T>(MySqlCommand cmd, bool byName, T columns) {
-			var result = new List<T>();
-			var dr2cols = byName ? DataReaderToCols<T>.InvokeByName : DataReaderToCols<T>.InvokeByIndex;
-			using (var dr = cmd.ExecuteReader()) {
-				while (dr.Read()) {
-					result.Add(dr2cols(dr, columns));
-				}
-				return result;
-			}
-		}
-
-		/// <summary>
-		/// 指定のコマンドをログ残しつつ実行する
-		/// <para>レコードは<see cref="List{T}"/>に読み込まれる、その際列順とプロパティ順をマッチングさせて取得する</para>
-		/// </summary>
-		/// <param name="cmd">実行するコマンド</param>
-		/// <param name="columns">マッピングする<see cref="Col{T}"/>を指定する new { Cols.title, Cols.date } の様な匿名クラス</param>
-		/// <returns>レコードコレクション</returns>
-		public static List<T> ReadByIndex<T>(MySqlCommand cmd, T columns) {
-			return Read<T>(cmd, false, columns);
-		}
-
-		/// <summary>
-		/// 指定のコマンドをログ残しつつ実行する
-		/// <para>レコードは<see cref="List{T}"/>に読み込まれる、その際列名とプロパティ名をマッチングさせて取得する</para>
-		/// </summary>
-		/// <param name="cmd">実行するコマンド</param>
-		/// <param name="columns">マッピングする<see cref="Col{T}"/>を指定する new { Cols.title, Cols.date } の様な匿名クラス</param>
-		/// <returns>レコードコレクション</returns>
-		public static List<T> ReadByName<T>(MySqlCommand cmd, T columns) {
-			return Read<T>(cmd, true, columns);
-		}
-
-		/// <summary>
 		/// 指定カラムの値を<typeparamref name="T"/>型の値として取得する
 		/// </summary>
 		/// <typeparam name="T">取得値型</typeparam>
@@ -1787,6 +1750,25 @@ namespace Db {
 				}
 			}
 			return value;
+		}
+
+		/// <summary>
+		/// 指定の型にマッピングしつつデータ読み込む
+		/// <para>レコードは<see cref="List{T}"/>に読み込まれる</para>
+		/// </summary>
+		/// <param name="cmd">実行するコマンド</param>
+		/// <param name="byName">列名とプロパティ名をマッチングさせて取得するなら true 、列順とプロパティ順を使うなら false</param>
+		/// <param name="columns">マッピングする<see cref="Col{T}"/>を指定する new { Cols.title, Cols.date } の様な匿名クラス</param>
+		/// <returns>レコードコレクション</returns>
+		public static List<T> ReadList<T>(MySqlCommand cmd, T columns, bool byName) {
+			var result = new List<T>();
+			var dr2cols = byName ? DataReaderToCols<T>.InvokeByName : DataReaderToCols<T>.InvokeByIndex;
+			using (var dr = cmd.ExecuteReader()) {
+				while (dr.Read()) {
+					result.Add(dr2cols(dr, columns));
+				}
+				return result;
+			}
 		}
 
 		/// <summary>
@@ -2722,8 +2704,8 @@ namespace Db {
 	}
 
 	public static class EqualTester<T> {
-		public static readonly Func<T, int> GetHashCode;
-		public static readonly Func<T, T, bool> Equals;
+		public new static readonly Func<T, int> GetHashCode;
+		public new static readonly Func<T, T, bool> Equals;
 
 		static EqualTester() {
 			// メンバー情報一覧取得
