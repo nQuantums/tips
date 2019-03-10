@@ -2363,11 +2363,14 @@ namespace Db {
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int GetHashCode(byte[] value) {
+			if (value == null || value.Length == 0) {
+				return 0;
+			}
 			return BitConverter.ToInt32(CryptoServiceProvider.ComputeHash(value), 0);
 		}
 
 		public static int GetHashCode(sbyte[] value) {
-			if (value == null) {
+			if (value == null || value.Length == 0) {
 				return 0;
 			}
 			var bytes = new byte[value.Length];
@@ -2376,7 +2379,7 @@ namespace Db {
 		}
 
 		public static int GetHashCode(short[] value) {
-			if (value == null) {
+			if (value == null || value.Length == 0) {
 				return 0;
 			}
 			var bytes = new byte[value.Length * 2];
@@ -2385,7 +2388,7 @@ namespace Db {
 		}
 
 		public static int GetHashCode(ushort[] value) {
-			if (value == null) {
+			if (value == null || value.Length == 0) {
 				return 0;
 			}
 			var bytes = new byte[value.Length * 2];
@@ -2394,7 +2397,7 @@ namespace Db {
 		}
 
 		public static int GetHashCode(int[] value) {
-			if (value == null) {
+			if (value == null || value.Length == 0) {
 				return 0;
 			}
 			var bytes = new byte[value.Length * 4];
@@ -2403,7 +2406,7 @@ namespace Db {
 		}
 
 		public static int GetHashCode(uint[] value) {
-			if (value == null) {
+			if (value == null || value.Length == 0) {
 				return 0;
 			}
 			var bytes = new byte[value.Length * 4];
@@ -2412,7 +2415,7 @@ namespace Db {
 		}
 
 		public static int GetHashCode(long[] value) {
-			if (value == null) {
+			if (value == null || value.Length == 0) {
 				return 0;
 			}
 			var bytes = new byte[value.Length * 8];
@@ -2421,12 +2424,45 @@ namespace Db {
 		}
 
 		public static int GetHashCode(ulong[] value) {
-			if (value == null) {
+			if (value == null || value.Length == 0) {
 				return 0;
 			}
 			var bytes = new byte[value.Length * 8];
 			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
 			return GetHashCode(bytes);
+		}
+
+		public static int GetHashCode(decimal[] value) {
+			if (value == null || value.Length == 0) {
+				return 0;
+			}
+			var hashCode = value[0].GetHashCode();
+			for (int i = 1; i < value.Length; i++) {
+				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
+		}
+
+		public static int GetHashCode(Guid[] value) {
+			if (value == null || value.Length == 0) {
+				return 0;
+			}
+			var hashCode = value[0].GetHashCode();
+			for (int i = 1; i < value.Length; i++) {
+				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
+		}
+
+		public static int GetHashCode(DateTime[] value) {
+			if (value == null || value.Length == 0) {
+				return 0;
+			}
+			var hashCode = value[0].GetHashCode();
+			for (int i = 1; i < value.Length; i++) {
+				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2581,7 +2617,59 @@ namespace Db {
 			return true;
 		}
 
+		public static bool Equals(decimal[] l, decimal[] r) {
+			if ((l == null) != (r == null)) {
+				return false;
+			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
 
+		public static bool Equals(Guid[] l, Guid[] r) {
+			if ((l == null) != (r == null)) {
+				return false;
+			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		public static bool Equals(DateTime[] l, DateTime[] r) {
+			if ((l == null) != (r == null)) {
+				return false;
+			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
 	}
 
 	public static class ExpressionHelper {
@@ -2624,26 +2712,175 @@ namespace Db {
 			if (getHashCode == null) {
 				throw new ApplicationException("内部エラー、型 " + memberType + " に GetHashCode メソッドが存在しません。");
 			}
-			return GetHashCodeFromValue(ExpressionHelper.MemberExpression(instanceExpr, memberInfo), memberType);
+			return GetHashCodeFromValue(Expression.MakeMemberAccess(instanceExpr, memberInfo), memberType);
 		}
 
-		//public static Expression GetDeepEqual(Type type, Expression left, Expression right) {
-		//	if (type.IsPrimitive || type == typeof(string)) {
-		//		return Expression.Equal(left, right);
-		//	}
-		//	if (type.IsValueType) {
-		//		try {
-		//			return Expression.Equal(left, right);
-		//		} catch (System.InvalidOperationException) {
-		//			var mat = GetMembersAndTypes(type);
-		//			var members = mat.Item1;
-		//			var memberTypes = mat.Item2;
-		//			var expressions = new List<Expression>();
-		//			for (int i = 0; i < members.Length; i++) {
-		//			}
-		//		}
-		//	}
-		//}
+		public static Expression GetNullTest(Expression value, Expression valueIfNotNull, Expression valueIfNull) {
+			var nullExpr = Expression.Constant(null);
+			var isNull = Expression.Equal(value, nullExpr);
+			return Expression.Condition(isNull, valueIfNull, valueIfNotNull);
+		}
+
+		public static Expression GetExpressionWithNullTest(Expression left, Expression right, Expression valueIfNotNull, Expression valueIfNull, Expression valueIfNullDifferent) {
+			var nullExpr = Expression.Constant(null);
+			var leftIsNull = Expression.Equal(left, nullExpr);
+			var rightIsNull = Expression.Equal(right, nullExpr);
+			var valueEqualsIfLeftNotNull = Expression.Condition(leftIsNull, valueIfNull, valueIfNotNull);
+			return Expression.Condition(Expression.Equal(leftIsNull, rightIsNull), valueEqualsIfLeftNotNull, valueIfNullDifferent);
+		}
+
+		/// <summary>
+		/// 指定の値をメンバーレベルまで再帰的に辿りハッシュ値を計算する
+		/// </summary>
+		/// <param name="recursiveTest">同じ型に対して再帰的に呼び出されたか判定用</param>
+		/// <param name="rootType">判定処理の根っこの型</param>
+		/// <param name="type">値の型</param>
+		/// <param name="value">値の式</param>
+		/// <returns>比較結果の式</returns>
+		public static Expression GetDeepHashCode(HashSet<Type> recursiveTest, Type rootType, Type type, Expression value) {
+			if (recursiveTest.Contains(type)) {
+				// 再帰的に同じ型に戻ってきてしまうならエラー
+				throw new ApplicationException("型 " + rootType + " から辿れるメンバに型 " + type + " が再帰的に出現しました。無限ループとなるため GetDeepHashCode のサポート対象外です。");
+			}
+
+			var getHashCode = type.GetMethod("GetHashCode", new Type[0]);
+			if (getHashCode == null) {
+				throw new ApplicationException("内部エラー、型 " + type + " に GetHashCode メソッドが存在しません。");
+			}
+
+			if (type.IsPrimitive) {
+				// 基本型なら普通に GetHashCode 呼び出し
+				return Expression.Call(value, getHashCode);
+			}
+
+			var zero = Expression.Constant((int)0);
+			
+			if (type == typeof(string)) {
+				// 文字列なら null チェック後に GetHashCode 呼び出し
+				return GetNullTest(value, Expression.Call(value, getHashCode), zero);
+			}
+
+			if (getHashCode.DeclaringType == type) {
+				// type 型にて GetHashCode をオーバーライドしているなら呼び出す
+				if (type.IsValueType) {
+					return Expression.Call(value, getHashCode);
+				} else {
+					return GetNullTest(value, Expression.Call(value, getHashCode), zero);
+				}
+			}
+
+			if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Col<>)) {
+				// Col<> 型なら Col<>.Value に対して GetHashCode 呼び出す
+				var ct = type.GetGenericArguments()[0];
+				var valueField = type.GetField("Value");
+				recursiveTest.Add(type);
+				var hashCodeExpr = GetDeepHashCode(recursiveTest, rootType, ct, Expression.MakeMemberAccess(value, valueField));
+				recursiveTest.Remove(type);
+				return GetNullTest(value, hashCodeExpr, zero);
+			} else {
+				var customGetHashCode = typeof(EqualTester).GetMethod("GetHashCode", new Type[] { type });
+				if (customGetHashCode != null) {
+					// 配列など特別なハッシュコード計算メソッドがあるならそれを使う
+					return Expression.Call(null, customGetHashCode, value);
+				} else {
+					// 上記以外は各メンバに対してハッシュコードを計算して連結していく
+					var mat = GetMembersAndTypes(type);
+					var members = mat.Item1;
+					var memberTypes = mat.Item2;
+					var variableHashCode = Expression.Parameter(typeof(int));
+					var expressions = new List<Expression>();
+					var hashCombine = typeof(EqualTester).GetMethod("CombineHashCode", new Type[] { typeof(int), typeof(int) });
+
+					for (int i = 0; i < members.Length; i++) {
+						var m = members[i];
+						var mt = memberTypes[i];
+						recursiveTest.Add(type);
+						var hashCodeExpr = GetDeepHashCode(recursiveTest, rootType, mt, Expression.MakeMemberAccess(value, m));
+						recursiveTest.Remove(type);
+						if (i == 0) {
+							expressions.Add(Expression.Assign(variableHashCode, hashCodeExpr));
+						} else {
+							expressions.Add(Expression.Assign(variableHashCode, Expression.Call(null, hashCombine, variableHashCode, hashCodeExpr)));
+						}
+					}
+
+					// 連結したハッシュコードを戻り値とする
+					expressions.Add(variableHashCode);
+
+					return Expression.Block(new ParameterExpression[] { variableHashCode }, expressions);
+				}
+			}
+		}
+
+		/// <summary>
+		/// 指定の２値をメンバーレベルまで再帰的に一致比較する
+		/// <para>== 演算子がオーバーロードされていたらそれを使用する</para>
+		/// </summary>
+		/// <param name="recursiveTest">同じ型に対して再帰的に呼び出されたか判定用</param>
+		/// <param name="rootType">判定処理の根っこの型</param>
+		/// <param name="type">値の型</param>
+		/// <param name="left">右辺値の式</param>
+		/// <param name="right">左辺値の式</param>
+		/// <returns>比較結果の式</returns>
+		public static Expression GetDeepEqual(HashSet<Type> recursiveTest, Type rootType, Type type, Expression left, Expression right) {
+			if (recursiveTest.Contains(type)) {
+				// 再帰的に同じ型に戻ってきてしまうならエラー
+				throw new ApplicationException("型 " + rootType + " から辿れるメンバに型 " + type + " が再帰的に出現しました。無限ループとなるため GetDeepEqual のサポート対象外です。");
+			}
+
+			if (type.IsPrimitive || type == typeof(string)) {
+				// 基本型なら普通に == 呼び出し
+				return Expression.Equal(left, right);
+			}
+
+			var op_Equality = type.GetMethod("op_Equality", BindingFlags.Static | BindingFlags.Public, null, new Type[] { type, type }, new ParameterModifier[0]);
+			if (op_Equality != null) {
+				// == 演算子オーバーロードされているならそれを使う
+				return Expression.Call(null, op_Equality, left, right);
+			} else {
+				if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Col<>)) {
+					// Col<> 型なら Col<>.Value に対して一致判定を行う
+					var ct = type.GetGenericArguments()[0];
+					var valueField = type.GetField("Value");
+					recursiveTest.Add(type);
+					var valueEquals = GetDeepEqual(recursiveTest, rootType, ct, Expression.MakeMemberAccess(left, valueField), Expression.MakeMemberAccess(right, valueField));
+					recursiveTest.Remove(type);
+					return GetExpressionWithNullTest(left, right, valueEquals, Expression.Constant(true), Expression.Constant(false));
+				} else {
+					var customEquals = typeof(EqualTester).GetMethod("Equals", new Type[] { type, type });
+					if (customEquals != null) {
+						// 配列など特別一致判定があるならそれを使う
+						return Expression.Call(null, customEquals, left, right);
+					} else {
+						// 上記以外は各メンバに対して一致判定を行っていく
+						var mat = GetMembersAndTypes(type);
+						var members = mat.Item1;
+						var memberTypes = mat.Item2;
+						var falseExpr = Expression.Constant(false);
+						var expressions = new List<Expression>();
+						var returnLabel = Expression.Label(typeof(bool));
+						for (int i = 0; i < members.Length; i++) {
+							var m = members[i];
+							var mt = memberTypes[i];
+							recursiveTest.Add(type);
+							var eq = GetDeepEqual(recursiveTest, rootType, mt, Expression.MakeMemberAccess(left, m), Expression.MakeMemberAccess(right, m));
+							recursiveTest.Remove(type);
+							expressions.Add(Expression.IfThen(Expression.Not(eq), Expression.Return(returnLabel, falseExpr)));
+						}
+						expressions.Add(Expression.Label(returnLabel, Expression.Constant(true)));
+
+						var valueEquals = Expression.Block(expressions) as Expression;
+						if (type.IsValueType) {
+							// 構造体なら null はあり得ないのでそのまま比較する
+							return valueEquals;
+						}
+
+						// クラスなら null チェックを追加する
+						return GetExpressionWithNullTest(left, right, valueEquals, Expression.Constant(true), Expression.Constant(false));
+					}
+				}
+			}
+		}
 
 		public static Tuple<MemberInfo[], Type[]> GetMembersAndTypes(Type type) {
 			// プロパティとフィールド一覧取得、両方存在する場合は順序が定かではなくなるため対応できない
@@ -2670,23 +2907,6 @@ namespace Db {
 		}
 
 		/// <summary>
-		/// 指定インスタンスの指定メンバ値を指す式を生成
-		/// </summary>
-		/// <param name="instance">インスタンス式</param>
-		/// <param name="mi">メンバー情報</param>
-		/// <returns>メンバ値式</returns>
-		public static Expression MemberExpression(Expression instance, MemberInfo mi) {
-			switch (mi.MemberType) {
-			case MemberTypes.Field:
-				return Expression.Field(instance, mi as FieldInfo);
-			case MemberTypes.Property:
-				return Expression.Property(instance, mi as PropertyInfo);
-			default:
-				throw new ApplicationException("内部エラー、メンバータイプ " + mi.MemberType + " は対象外です。");
-			}
-		}
-
-		/// <summary>
 		/// 指定メンバの型の取得
 		/// </summary>
 		/// <param name="mi">メンバ情報</param>
@@ -2708,57 +2928,35 @@ namespace Db {
 		public new static readonly Func<T, T, bool> Equals;
 
 		static EqualTester() {
-			// メンバー情報一覧取得
 			var mat = ExpressionHelper.GetMembersAndTypes(typeof(T));
 			var members = mat.Item1;
 			var memberTypes = mat.Item2;
 
 			GetHashCode = GenerateGetHashCode(members, memberTypes);
+			Equals = GenerateEquals(members, memberTypes);
 		}
 
 		static Func<T, int> GenerateGetHashCode(MemberInfo[] members, Type[] memberTypes) {
 			var type = typeof(T);
-
-			var expressions = new List<Expression>();
 			var paramInstance = Expression.Parameter(type);
-			var paramHashCode = Expression.Parameter(typeof(int));
-			var zeroExpr = Expression.Constant((int)0);
-			var nullExpr = Expression.Constant(null);
-			var hashCombine = typeof(EqualTester).GetMethod("CombineHashCode", new Type[] { typeof(int), typeof(int) });
-
-			for (int i = 0; i < members.Length; i++) {
-				var mi = members[i];
-				var mt = memberTypes[i];
-				var memberValueExpr = ExpressionHelper.MemberExpression(paramInstance, mi);
-
-				// ハッシュ値取得式構築
-				Expression hashExpr;
-				if (mt.IsGenericType && mt.GetGenericTypeDefinition() == typeof(Col<>)) {
-					// メンバが Col<> 型なら Col<>.Value に対して GetHashCode() 呼び出し、クラスだったら呼び出し前に null チェックを行う
-
-					// Col<> に指定されたジェネリック型の取得
-					var ct = mt.GetGenericArguments()[0];
-					var retHashCodeFromMemberExpr = ExpressionHelper.GetHashCodeFromMember(memberValueExpr, mt.GetField("Value"), ct);
-
-					hashExpr = Expression.Condition(Expression.Equal(memberValueExpr, nullExpr), zeroExpr, retHashCodeFromMemberExpr);
-				} else {
-					hashExpr = ExpressionHelper.GetHashCodeFromValue(memberValueExpr, mt);
-				}
-
-				// ハッシュ値を連結する式構築
-				if (i == 0) {
-					expressions.Add(Expression.Assign(paramHashCode, hashExpr));
-				} else {
-					expressions.Add(Expression.Assign(paramHashCode, Expression.Call(null, hashCombine, paramHashCode, hashExpr)));
-				}
-			}
-
-			// ハッシュコードを戻り値とする
-			expressions.Add(paramHashCode);
+			var recursiveTest = new HashSet<Type>();
 
 			return Expression.Lambda<Func<T, int>>(
-				Expression.Block(new ParameterExpression[] { paramHashCode }, expressions),
+				ExpressionHelper.GetDeepHashCode(recursiveTest, type, type, paramInstance),
 				paramInstance
+			).Compile();
+		}
+
+		static Func<T, T, bool> GenerateEquals(MemberInfo[] members, Type[] memberTypes) {
+			var type = typeof(T);
+			var paramLeft = Expression.Parameter(type);
+			var paramRight = Expression.Parameter(type);
+			var recursiveTest = new HashSet<Type>();
+
+			return Expression.Lambda<Func<T, T, bool>>(
+				ExpressionHelper.GetDeepEqual(recursiveTest, type, type, paramLeft, paramRight),
+				paramLeft,
+				paramRight
 			).Compile();
 		}
 	}
@@ -2813,7 +3011,7 @@ namespace Db {
 
 				// 一時変数のメンバに値を取得していく
 				for (int i = 0; i < memberSourceExprs.Length; i++) {
-					expressions.Add(Expression.Assign(ExpressionHelper.MemberExpression(result, members[i]), memberSourceExprs[i]));
+					expressions.Add(Expression.Assign(Expression.MakeMemberAccess(result, members[i]), memberSourceExprs[i]));
 				}
 
 				// 一時変数を戻り値とする
@@ -2860,7 +3058,7 @@ namespace Db {
 				}
 
 				// ベースとなる Col<>
-				var col = ExpressionHelper.MemberExpression(baseValue, mi);
+				var col = Expression.MakeMemberAccess(baseValue, mi);
 
 				// DataReader から取得した値を基に Col<> を new する処理
 				if (0 <= index) {
@@ -2874,7 +3072,7 @@ namespace Db {
 					getter = SingleColumnAccessor.GetMethodByType(mt, index < 0, false);
 					if (getter == null) {
 						// 列に直接マッピングできないならクラスを想定
-						return ReadClass(mt, dataReader, ref index, ExpressionHelper.MemberExpression(baseValue, mi));
+						return ReadClass(mt, dataReader, ref index, Expression.MakeMemberAccess(baseValue, mi));
 					}
 				} catch (Exception ex) {
 					throw new ApplicationException("DataReader の" + colSymbol + " から型 " + mt + " の値への変換メソッドが存在しません。", ex);

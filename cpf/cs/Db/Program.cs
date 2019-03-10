@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using MySql.Data.MySqlClient;
 
 namespace Db {
@@ -142,12 +144,102 @@ namespace Db {
 			}
 		}
 
+		public class ClassA {
+			public DateTime D;
+			//public Guid G;
+			//public string S;
+			//public ClassB B;
+			//public Col<byte[]> ColBytes;
+			//public Col<int> ColInt;
+		}
+
+		public class ClassB {
+			public int A;
+			public int B;
+
+			//public static bool operator ==(ClassB l, ClassB r) {
+			//	return true;
+			//}
+			//public static bool operator !=(ClassB l, ClassB r) {
+			//	return !(l == r);
+			//}
+		}
+
 		static void Main(string[] args) {
-			Tbls.Test v = new Tbls.Test {
-				binary_id = Cols.binary_id.ValueAs(new byte[] { 1, 2, 3 }),
-				int_data = Cols.int_data.ValueAs(13),
-			};
-			Console.WriteLine(EqualTester<Tbls.Test>.GetHashCode(v));
+			//var bytes = new byte[0];
+			//Console.WriteLine(EqualTester.GetHashCode(bytes));
+
+			//var decimals = new decimal[] {
+			//	1,
+			//	2,
+			//	3
+			//};
+			//Console.WriteLine(EqualTester.GetHashCode(decimals));
+
+			//var guilds = new Guid[] {
+			//	new Guid("{9679B92F-4DE9-43F0-B9FF-C5BE88B8E906}"),
+			//	new Guid("{9679B92F-4DE9-43F0-B9FF-C5BE88B8E906}"),
+			//	new Guid("{9679B92F-4DE9-43F0-B9FF-C5BE88B8E906}"),
+			//};
+			//Console.WriteLine(EqualTester.GetHashCode(guilds));
+
+			var a = new ClassA { D = DateTime.Now };
+			var b = new ClassA { D = DateTime.Now };
+
+			//var a = new ClassA { S = "afe", B = new ClassB { A = 1, B = 2 }, ColBytes = Cols.binary_id.ValueAs(new byte[] { 1, 2, 3 }), ColInt = Cols.id1.ValueAs(1) };
+			//var b = new ClassA { S = "afe", B = new ClassB { A = 1, B = 2 }, ColBytes = Cols.binary_id.ValueAs(new byte[] { 1, 2, 3 }), ColInt = Cols.id1.ValueAs(2) };
+
+			Console.WriteLine(EqualTester<ClassA>.GetHashCode(a));
+			Console.WriteLine(EqualTester<ClassA>.GetHashCode(b));
+			Console.WriteLine(EqualTester<ClassA>.Equals(a, b));
+
+			//var type = typeof(ClassA);
+			//var methods = type.GetMethods(BindingFlags.Static | BindingFlags.Public);
+			//var op_Equality = type.GetMethod("op_Equality", BindingFlags.Static | BindingFlags.Public, null, new Type[] { type, type }, new ParameterModifier[0]);
+
+			//var paramL = Expression.Parameter(type);
+			//var paramR = Expression.Parameter(type);
+			//var recursiveTest = new HashSet<Type>();
+			//var deepEqual = ExpressionHelper.GetDeepEqual(recursiveTest, type, type, paramL, paramR);
+
+			//var equal = Expression.Lambda<Func<ClassA, ClassA, bool>>(
+			//	deepEqual,
+			//	paramL,
+			//	paramR
+			//).Compile();
+
+
+
+			//var a = new ClassA { B = new ClassB { A = 1, B = 2 } };
+			//var b = new ClassA { B = new ClassB { A = 1, B = 2 } };
+
+			//Console.WriteLine(equal(a, b));
+
+
+
+
+
+
+
+			//var expressions = new List<Expression>();
+			//var returnLabel = Expression.Label(typeof(bool));
+			//expressions.Add(Expression.Return(returnLabel, Expression.Constant(false)));
+			//expressions.Add(Expression.Label(returnLabel, Expression.Constant(true)));
+			//var f = Expression.Lambda<Func<bool>>(
+			//	Expression.Block(expressions)
+			//).Compile();
+
+			//Console.WriteLine(f());
+
+
+			return;
+
+
+			//Tbls.Test v = new Tbls.Test {
+			//	binary_id = Cols.binary_id.ValueAs(new byte[] { 1, 2, 3 }),
+			//	int_data = Cols.int_data.ValueAs(13),
+			//};
+			//Console.WriteLine(EqualTester<Tbls.Test>.GetHashCode(v));
 			return;
 
 
