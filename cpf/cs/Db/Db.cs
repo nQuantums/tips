@@ -2736,8 +2736,9 @@ namespace Db {
 		/// <param name="rootType">判定処理の根っこの型</param>
 		/// <param name="type">値の型</param>
 		/// <param name="value">値の式</param>
+		/// <param name="forImplement"><see cref="object.GetHashCode"/>実装用なら true</param>
 		/// <returns>比較結果の式</returns>
-		public static Expression GetDeepHashCode(HashSet<Type> recursiveTest, Type rootType, Type type, Expression value) {
+		public static Expression GetDeepHashCode(HashSet<Type> recursiveTest, Type rootType, Type type, Expression value, bool forImplement) {
 			if (recursiveTest.Contains(type)) {
 				// 再帰的に同じ型に戻ってきてしまうならエラー
 				throw new ApplicationException("型 " + rootType + " から辿れるメンバに型 " + type + " が再帰的に出現しました。無限ループとなるため GetDeepHashCode のサポート対象外です。");
@@ -2760,7 +2761,7 @@ namespace Db {
 				return GetNullTest(value, Expression.Call(value, getHashCode), zero);
 			}
 
-			if (getHashCode.DeclaringType == type) {
+			if (!forImplement && getHashCode.DeclaringType == type) {
 				// type 型にて GetHashCode をオーバーライドしているなら呼び出す
 				if (type.IsValueType) {
 					return Expression.Call(value, getHashCode);
@@ -2774,7 +2775,7 @@ namespace Db {
 				var ct = type.GetGenericArguments()[0];
 				var valueField = type.GetField("Value");
 				recursiveTest.Add(type);
-				var hashCodeExpr = GetDeepHashCode(recursiveTest, rootType, ct, Expression.MakeMemberAccess(value, valueField));
+				var hashCodeExpr = GetDeepHashCode(recursiveTest, rootType, ct, Expression.MakeMemberAccess(value, valueField), forImplement);
 				recursiveTest.Remove(type);
 				return GetNullTest(value, hashCodeExpr, zero);
 			} else {
@@ -2795,7 +2796,7 @@ namespace Db {
 						var m = members[i];
 						var mt = memberTypes[i];
 						recursiveTest.Add(type);
-						var hashCodeExpr = GetDeepHashCode(recursiveTest, rootType, mt, Expression.MakeMemberAccess(value, m));
+						var hashCodeExpr = GetDeepHashCode(recursiveTest, rootType, mt, Expression.MakeMemberAccess(value, m), forImplement);
 						recursiveTest.Remove(type);
 						if (i == 0) {
 							expressions.Add(Expression.Assign(variableHashCode, hashCodeExpr));
@@ -2821,8 +2822,9 @@ namespace Db {
 		/// <param name="type">値の型</param>
 		/// <param name="left">右辺値の式</param>
 		/// <param name="right">左辺値の式</param>
+		/// <param name="forImplement"><see cref="object.Equals(object)"/>、 operator == 実装用なら true</param>
 		/// <returns>比較結果の式</returns>
-		public static Expression GetDeepEqual(HashSet<Type> recursiveTest, Type rootType, Type type, Expression left, Expression right) {
+		public static Expression GetDeepEqual(HashSet<Type> recursiveTest, Type rootType, Type type, Expression left, Expression right, bool forImplement) {
 			if (recursiveTest.Contains(type)) {
 				// 再帰的に同じ型に戻ってきてしまうならエラー
 				throw new ApplicationException("型 " + rootType + " から辿れるメンバに型 " + type + " が再帰的に出現しました。無限ループとなるため GetDeepEqual のサポート対象外です。");
@@ -2833,7 +2835,7 @@ namespace Db {
 				return Expression.Equal(left, right);
 			}
 
-			var op_Equality = type.GetMethod("op_Equality", BindingFlags.Static | BindingFlags.Public, null, new Type[] { type, type }, new ParameterModifier[0]);
+			var op_Equality = forImplement ? null : type.GetMethod("op_Equality", BindingFlags.Static | BindingFlags.Public, null, new Type[] { type, type }, new ParameterModifier[0]);
 			if (op_Equality != null) {
 				// == 演算子オーバーロードされているならそれを使う
 				return Expression.Call(null, op_Equality, left, right);
@@ -2843,7 +2845,7 @@ namespace Db {
 					var ct = type.GetGenericArguments()[0];
 					var valueField = type.GetField("Value");
 					recursiveTest.Add(type);
-					var valueEquals = GetDeepEqual(recursiveTest, rootType, ct, Expression.MakeMemberAccess(left, valueField), Expression.MakeMemberAccess(right, valueField));
+					var valueEquals = GetDeepEqual(recursiveTest, rootType, ct, Expression.MakeMemberAccess(left, valueField), Expression.MakeMemberAccess(right, valueField), forImplement);
 					recursiveTest.Remove(type);
 					return GetExpressionWithNullTest(left, right, valueEquals, Expression.Constant(true), Expression.Constant(false));
 				} else {
@@ -2863,7 +2865,7 @@ namespace Db {
 							var m = members[i];
 							var mt = memberTypes[i];
 							recursiveTest.Add(type);
-							var eq = GetDeepEqual(recursiveTest, rootType, mt, Expression.MakeMemberAccess(left, m), Expression.MakeMemberAccess(right, m));
+							var eq = GetDeepEqual(recursiveTest, rootType, mt, Expression.MakeMemberAccess(left, m), Expression.MakeMemberAccess(right, m), forImplement);
 							recursiveTest.Remove(type);
 							expressions.Add(Expression.IfThen(Expression.Not(eq), Expression.Return(returnLabel, falseExpr)));
 						}
@@ -2925,36 +2927,40 @@ namespace Db {
 
 	public static class EqualTester<T> {
 		public new static readonly Func<T, int> GetHashCode;
+		public new static readonly Func<T, int> GetHashCodeForImplement;
 		public new static readonly Func<T, T, bool> Equals;
+		public new static readonly Func<T, T, bool> EqualsForImplement;
 
 		static EqualTester() {
 			var mat = ExpressionHelper.GetMembersAndTypes(typeof(T));
 			var members = mat.Item1;
 			var memberTypes = mat.Item2;
 
-			GetHashCode = GenerateGetHashCode(members, memberTypes);
-			Equals = GenerateEquals(members, memberTypes);
+			GetHashCode = GenerateGetHashCode(members, memberTypes, false);
+			GetHashCodeForImplement = GenerateGetHashCode(members, memberTypes, true);
+			Equals = GenerateEquals(members, memberTypes, false);
+			EqualsForImplement = GenerateEquals(members, memberTypes, true);
 		}
 
-		static Func<T, int> GenerateGetHashCode(MemberInfo[] members, Type[] memberTypes) {
+		static Func<T, int> GenerateGetHashCode(MemberInfo[] members, Type[] memberTypes, bool forImplement) {
 			var type = typeof(T);
 			var paramInstance = Expression.Parameter(type);
 			var recursiveTest = new HashSet<Type>();
 
 			return Expression.Lambda<Func<T, int>>(
-				ExpressionHelper.GetDeepHashCode(recursiveTest, type, type, paramInstance),
+				ExpressionHelper.GetDeepHashCode(recursiveTest, type, type, paramInstance, forImplement),
 				paramInstance
 			).Compile();
 		}
 
-		static Func<T, T, bool> GenerateEquals(MemberInfo[] members, Type[] memberTypes) {
+		static Func<T, T, bool> GenerateEquals(MemberInfo[] members, Type[] memberTypes, bool forImplement) {
 			var type = typeof(T);
 			var paramLeft = Expression.Parameter(type);
 			var paramRight = Expression.Parameter(type);
 			var recursiveTest = new HashSet<Type>();
 
 			return Expression.Lambda<Func<T, T, bool>>(
-				ExpressionHelper.GetDeepEqual(recursiveTest, type, type, paramLeft, paramRight),
+				ExpressionHelper.GetDeepEqual(recursiveTest, type, type, paramLeft, paramRight, forImplement),
 				paramLeft,
 				paramRight
 			).Compile();
