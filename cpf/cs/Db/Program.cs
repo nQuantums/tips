@@ -153,40 +153,24 @@ namespace Db {
 			//public Col<int> ColInt;
 		}
 
-		public class EquatableImplement<T> : IEquatable<T> where T : class {
-			public override int GetHashCode() {
-				return base.GetHashCode();
-			}
-			public override bool Equals(object obj) {
-				return base.Equals(obj);
-			}
-			public bool Equals(T other) {
-				return EqualTester<T>.EqualsForImplement(this as T, other as T);
-			}
-			public static bool operator ==(EquatableImplement<T> l, EquatableImplement<T> r) {
-				return EqualTester<T>.EqualsForImplement(l as T, r as T);
-			}
-			public static bool operator !=(EquatableImplement<T> l, EquatableImplement<T> r) {
-				return !EqualTester<T>.EqualsForImplement(l as T, r as T);
-			}
-		}
-
 		public class ClassB : EquatableImplement<ClassB> {
-			public int A;
-			public int B;
-
-			//public static bool operator ==(ClassB l, ClassB r) {
-			//	return true;
-			//}
-			//public static bool operator !=(ClassB l, ClassB r) {
-			//	return !(l == r);
-			//}
+			public decimal D;
+			//public int? A;
+			//public int B;
+			//public string[] Strs;
+			//public byte[] Bytes;
+			//public int[] Ints;
 		}
 
 		static void Main(string[] args) {
-			var a = new ClassB { A = 1, B = 2 };
-			var b = new ClassB { A = 1, B = 3 };
-			Console.WriteLine(a.Equals(b));
+			var a = new ClassB { D = 1 };
+			var b = new ClassB { D = 1};
+			//var a = new ClassB { A = 1, B = 2, Strs = new[] { "a", "b" }, Bytes = new byte[] { 1, 2, 3 }, Ints = new[] { 1, 2, 3 } };
+			//var b = new ClassB { A = null, B = 2, Strs = new[] { "a", "b" }, Bytes = new byte[] { 1, 2, 3 }, Ints = new[] { 1, 2, 3 } };
+			var s = new HashSet<ClassB>();
+			Console.WriteLine(a == b);
+			s.Add(a);
+			s.Add(b);
 			return;
 
 

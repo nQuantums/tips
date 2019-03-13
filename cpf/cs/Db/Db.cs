@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using System.Reflection;
 using MySql.Data.MySqlClient;
 using System.Collections;
-using System.Security.Cryptography;
 using System.Runtime.CompilerServices;
 
 namespace Db {
@@ -2358,78 +2357,92 @@ namespace Db {
 	}
 
 	public static class EqualTester {
-		static readonly MD5CryptoServiceProvider CryptoServiceProvider = new MD5CryptoServiceProvider();
-
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int GetHashCode(byte[] value) {
 			if (value == null || value.Length == 0) {
 				return 0;
 			}
-			return BitConverter.ToInt32(CryptoServiceProvider.ComputeHash(value), 0);
+			var hashCode = value[0].GetHashCode();
+			for (int i = 1; i < value.Length; i++) {
+				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
 		}
 
 		public static int GetHashCode(sbyte[] value) {
 			if (value == null || value.Length == 0) {
 				return 0;
 			}
-			var bytes = new byte[value.Length];
-			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
-			return GetHashCode(bytes);
+			var hashCode = value[0].GetHashCode();
+			for (int i = 1; i < value.Length; i++) {
+				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
 		}
 
 		public static int GetHashCode(short[] value) {
 			if (value == null || value.Length == 0) {
 				return 0;
 			}
-			var bytes = new byte[value.Length * 2];
-			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
-			return GetHashCode(bytes);
+			var hashCode = value[0].GetHashCode();
+			for (int i = 1; i < value.Length; i++) {
+				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
 		}
 
 		public static int GetHashCode(ushort[] value) {
 			if (value == null || value.Length == 0) {
 				return 0;
 			}
-			var bytes = new byte[value.Length * 2];
-			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
-			return GetHashCode(bytes);
+			var hashCode = value[0].GetHashCode();
+			for (int i = 1; i < value.Length; i++) {
+				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
 		}
 
 		public static int GetHashCode(int[] value) {
 			if (value == null || value.Length == 0) {
 				return 0;
 			}
-			var bytes = new byte[value.Length * 4];
-			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
-			return GetHashCode(bytes);
+			var hashCode = value[0].GetHashCode();
+			for (int i = 1; i < value.Length; i++) {
+				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
 		}
 
 		public static int GetHashCode(uint[] value) {
 			if (value == null || value.Length == 0) {
 				return 0;
 			}
-			var bytes = new byte[value.Length * 4];
-			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
-			return GetHashCode(bytes);
+			var hashCode = value[0].GetHashCode();
+			for (int i = 1; i < value.Length; i++) {
+				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
 		}
 
 		public static int GetHashCode(long[] value) {
 			if (value == null || value.Length == 0) {
 				return 0;
 			}
-			var bytes = new byte[value.Length * 8];
-			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
-			return GetHashCode(bytes);
+			var hashCode = value[0].GetHashCode();
+			for (int i = 1; i < value.Length; i++) {
+				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
 		}
 
 		public static int GetHashCode(ulong[] value) {
 			if (value == null || value.Length == 0) {
 				return 0;
 			}
-			var bytes = new byte[value.Length * 8];
-			Buffer.BlockCopy(value, 0, bytes, 0, bytes.Length);
-			return GetHashCode(bytes);
+			var hashCode = value[0].GetHashCode();
+			for (int i = 1; i < value.Length; i++) {
+				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
 		}
 
 		public static int GetHashCode(decimal[] value) {
@@ -2461,6 +2474,19 @@ namespace Db {
 			var hashCode = value[0].GetHashCode();
 			for (int i = 1; i < value.Length; i++) {
 				hashCode = CombineHashCode(hashCode, value[i].GetHashCode());
+			}
+			return hashCode;
+		}
+
+		public static int GetHashCode(string[] value) {
+			if (value == null || value.Length == 0) {
+				return 0;
+			}
+			var s = value[0];
+			var hashCode = s != null ? s.GetHashCode() : 0;
+			for (int i = 1; i < value.Length; i++) {
+				s = value[i];
+				hashCode = CombineHashCode(hashCode, s != null ? s.GetHashCode() : 0);
 			}
 			return hashCode;
 		}
@@ -2670,9 +2696,36 @@ namespace Db {
 			}
 			return true;
 		}
+
+		public static bool Equals(string[] l, string[] r) {
+			if ((l == null) != (r == null)) {
+				return false;
+			}
+			if (l == null) {
+				return true;
+			}
+			if (l.Length != r.Length) {
+				return false;
+			}
+			for (int i = 0; i < l.Length; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
 	}
 
 	public static class ExpressionHelper {
+		/// <summary>
+		/// 準Primitive型一覧（標準で用意されており良く使う値型で）
+		/// </summary>
+		static readonly Type[] SecondPrimitiveTypes = new Type[] {
+			typeof(decimal),
+			typeof(DateTime),
+			typeof(Guid),
+		};
+
 		/// <summary>
 		/// 指定値の<see cref="object.GetHashCode"/>を呼び出す式を生成する
 		/// </summary>
@@ -2721,12 +2774,25 @@ namespace Db {
 			return Expression.Condition(isNull, valueIfNull, valueIfNotNull);
 		}
 
+		public static Expression GetHasValueTest(Type type, Expression value, Expression valueIfNotNull, Expression valueIfNull) {
+			var hasValue = type.GetProperty("HasValue");
+			return Expression.Condition(Expression.MakeMemberAccess(value, hasValue), valueIfNotNull, valueIfNull);
+		}
+
 		public static Expression GetExpressionWithNullTest(Expression left, Expression right, Expression valueIfNotNull, Expression valueIfNull, Expression valueIfNullDifferent) {
 			var nullExpr = Expression.Constant(null);
 			var leftIsNull = Expression.Equal(left, nullExpr);
 			var rightIsNull = Expression.Equal(right, nullExpr);
 			var valueEqualsIfLeftNotNull = Expression.Condition(leftIsNull, valueIfNull, valueIfNotNull);
 			return Expression.Condition(Expression.Equal(leftIsNull, rightIsNull), valueEqualsIfLeftNotNull, valueIfNullDifferent);
+		}
+
+		public static Expression GetExpressionWithHasValue(Type type, Expression left, Expression right, Expression valueIfNotNull, Expression valueIfNull, Expression valueIfNullDifferent) {
+			var hasValue = type.GetProperty("HasValue");
+			var leftHasValue = Expression.MakeMemberAccess(left, hasValue);
+			var rightHasValue = Expression.MakeMemberAccess(right, hasValue);
+			var valueEqualsIfLeftHasValue = Expression.Condition(leftHasValue, valueIfNotNull, valueIfNull);
+			return Expression.Condition(Expression.Equal(leftHasValue, rightHasValue), valueEqualsIfLeftHasValue, valueIfNullDifferent);
 		}
 
 		/// <summary>
@@ -2749,7 +2815,7 @@ namespace Db {
 				throw new ApplicationException("内部エラー、型 " + type + " に GetHashCode メソッドが存在しません。");
 			}
 
-			if (type.IsPrimitive) {
+			if (type.IsPrimitive || SecondPrimitiveTypes.Contains(type)) {
 				// 基本型なら普通に GetHashCode 呼び出し
 				return Expression.Call(value, getHashCode);
 			}
@@ -2770,7 +2836,15 @@ namespace Db {
 				}
 			}
 
-			if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Col<>)) {
+			if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>)) {
+				// Nullable<> 型なら Nullable<>.Value に対して GetHashCode 呼び出す
+				var ct = type.GetGenericArguments()[0];
+				var valueProperty = type.GetProperty("Value");
+				recursiveTest.Add(type);
+				var hashCodeExpr = GetDeepHashCode(recursiveTest, rootType, ct, Expression.MakeMemberAccess(value, valueProperty), forImplement);
+				recursiveTest.Remove(type);
+				return GetHasValueTest(type, value, hashCodeExpr, zero);
+			} else if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Col<>)) {
 				// Col<> 型なら Col<>.Value に対して GetHashCode 呼び出す
 				var ct = type.GetGenericArguments()[0];
 				var valueField = type.GetField("Value");
@@ -2830,7 +2904,7 @@ namespace Db {
 				throw new ApplicationException("型 " + rootType + " から辿れるメンバに型 " + type + " が再帰的に出現しました。無限ループとなるため GetDeepEqual のサポート対象外です。");
 			}
 
-			if (type.IsPrimitive || type == typeof(string)) {
+			if (type.IsPrimitive || type == typeof(string) || SecondPrimitiveTypes.Contains(type)) {
 				// 基本型なら普通に == 呼び出し
 				return Expression.Equal(left, right);
 			}
@@ -2840,7 +2914,15 @@ namespace Db {
 				// == 演算子オーバーロードされているならそれを使う
 				return Expression.Call(null, op_Equality, left, right);
 			} else {
-				if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Col<>)) {
+				if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>)) {
+					// Nullable<> 型なら Nullable<>.Value に対して一致判定を行う
+					var vt = type.GetGenericArguments()[0];
+					var valueProperty = type.GetProperty("Value");
+					recursiveTest.Add(type);
+					var valueEquals = GetDeepEqual(recursiveTest, rootType, vt, Expression.MakeMemberAccess(left, valueProperty), Expression.MakeMemberAccess(right, valueProperty), forImplement);
+					recursiveTest.Remove(type);
+					return GetExpressionWithHasValue(type, left, right, valueEquals, Expression.Constant(true), Expression.Constant(false));
+				} else if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Col<>)) {
 					// Col<> 型なら Col<>.Value に対して一致判定を行う
 					var ct = type.GetGenericArguments()[0];
 					var valueField = type.GetField("Value");
@@ -2964,6 +3046,33 @@ namespace Db {
 				paramLeft,
 				paramRight
 			).Compile();
+		}
+	}
+
+	/// <summary>
+	/// ジェネリックパラメータで指定されたクラスのオブジェクト一致判定メソッドを実装する、基本的にジェネリックパラメータには派生先クラスを指定する必要がある
+	/// <para><see cref="IEquatable{T}.Equals(T)"/>を実装する</para>
+	/// <para><see cref="object.GetHashCode()"/>をオーバーライドする</para>
+	/// <para><see cref="object.Equals(object)"/>をオーバーライドする</para>
+	/// <para>== 演算子オーバーロードを実装する</para>
+	/// <para>!= 演算子オーバーロードを実装する</para>
+	/// </summary>
+	/// <typeparam name="T">基本的に派生先クラスを指定する</typeparam>
+	public class EquatableImplement<T> : IEquatable<T> where T : class {
+		public override int GetHashCode() {
+			return EqualTester<T>.GetHashCodeForImplement(this as T);
+		}
+		public override bool Equals(object obj) {
+			return EqualTester<T>.EqualsForImplement(this as T, obj as T);
+		}
+		public bool Equals(T other) {
+			return EqualTester<T>.EqualsForImplement(this as T, other as T);
+		}
+		public static bool operator ==(EquatableImplement<T> l, EquatableImplement<T> r) {
+			return EqualTester<T>.EqualsForImplement(l as T, r as T);
+		}
+		public static bool operator !=(EquatableImplement<T> l, EquatableImplement<T> r) {
+			return !EqualTester<T>.EqualsForImplement(l as T, r as T);
 		}
 	}
 
