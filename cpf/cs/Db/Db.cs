@@ -62,6 +62,8 @@ namespace Db {
 				return int8;
 			} else if (type == typeof(DateTime?)) {
 				return timestamp;
+			} else if (type == typeof(byte[])) {
+				return varbinary;
 			} else {
 				throw new ApplicationException("型 " + type + " に対応するDB上の型がありません。");
 			}
