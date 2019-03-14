@@ -2859,30 +2859,27 @@ namespace Db {
 					return Expression.Call(null, customGetHashCode, value);
 				} else {
 					// 上記以外は各メンバに対してハッシュコードを計算して連結していく
+					Expression hashCodeExpr = null;
 					var mat = GetMembersAndTypes(type);
 					var members = mat.Item1;
 					var memberTypes = mat.Item2;
-					var variableHashCode = Expression.Parameter(typeof(int));
-					var expressions = new List<Expression>();
 					var hashCombine = typeof(EqualTester).GetMethod("CombineHashCode", new Type[] { typeof(int), typeof(int) });
 
 					for (int i = 0; i < members.Length; i++) {
 						var m = members[i];
 						var mt = memberTypes[i];
 						recursiveTest.Add(type);
-						var hashCodeExpr = GetDeepHashCode(recursiveTest, rootType, mt, Expression.MakeMemberAccess(value, m), forImplement);
+						var expr = GetDeepHashCode(recursiveTest, rootType, mt, Expression.MakeMemberAccess(value, m), forImplement);
 						recursiveTest.Remove(type);
-						if (i == 0) {
-							expressions.Add(Expression.Assign(variableHashCode, hashCodeExpr));
+
+						if (hashCodeExpr == null) {
+							hashCodeExpr = expr;
 						} else {
-							expressions.Add(Expression.Assign(variableHashCode, Expression.Call(null, hashCombine, variableHashCode, hashCodeExpr)));
+							hashCodeExpr = Expression.Call(null, hashCombine, hashCodeExpr, expr);
 						}
 					}
 
-					// 連結したハッシュコードを戻り値とする
-					expressions.Add(variableHashCode);
-
-					return Expression.Block(new ParameterExpression[] { variableHashCode }, expressions);
+					return hashCodeExpr;
 				}
 			}
 		}
@@ -2936,24 +2933,27 @@ namespace Db {
 						// 配列など特別一致判定があるならそれを使う
 						return Expression.Call(null, customEquals, left, right);
 					} else {
-						// 上記以外は各メンバに対して一致判定を行っていく
+						// 上記以外はメンバの一致判定を三項演算子で結合していく
+						// if、return は遅くなるので使わない
+						Expression valueEquals = null;
 						var mat = GetMembersAndTypes(type);
 						var members = mat.Item1;
 						var memberTypes = mat.Item2;
 						var falseExpr = Expression.Constant(false);
-						var expressions = new List<Expression>();
-						var returnLabel = Expression.Label(typeof(bool));
-						for (int i = 0; i < members.Length; i++) {
+
+						for (int i = members.Length - 1; i != -1; i--) {
 							var m = members[i];
 							var mt = memberTypes[i];
 							recursiveTest.Add(type);
 							var eq = GetDeepEqual(recursiveTest, rootType, mt, Expression.MakeMemberAccess(left, m), Expression.MakeMemberAccess(right, m), forImplement);
 							recursiveTest.Remove(type);
-							expressions.Add(Expression.IfThen(Expression.Not(eq), Expression.Return(returnLabel, falseExpr)));
+							if (valueEquals == null) {
+								valueEquals = eq;
+							} else {
+								valueEquals = Expression.Condition(eq, valueEquals, falseExpr);
+							}
 						}
-						expressions.Add(Expression.Label(returnLabel, Expression.Constant(true)));
 
-						var valueEquals = Expression.Block(expressions) as Expression;
 						if (type.IsValueType) {
 							// 構造体なら null はあり得ないのでそのまま比較する
 							return valueEquals;
@@ -3007,11 +3007,20 @@ namespace Db {
 		}
 	}
 
+	/// <summary>
+	/// <typeparamref name="T"/>型に対してのメンバレベルで一致判定、ハッシュコード生成コードを動的に生成する
+	/// </summary>
+	/// <typeparam name="T">処理生成対象の型</typeparam>
 	public static class EqualTester<T> {
+		/// <summary>
+		/// <see cref="T"/>型の値からハッシュコードを生成する処理
+		/// </summary>
 		public new static readonly Func<T, int> GetHashCode;
-		public new static readonly Func<T, int> GetHashCodeForImplement;
+
+		/// <summary>
+		/// <see cref="T"/>型の値の一致判定を行う処理
+		/// </summary>
 		public new static readonly Func<T, T, bool> Equals;
-		public new static readonly Func<T, T, bool> EqualsForImplement;
 
 		static EqualTester() {
 			var mat = ExpressionHelper.GetMembersAndTypes(typeof(T));
@@ -3019,20 +3028,15 @@ namespace Db {
 			var memberTypes = mat.Item2;
 
 			GetHashCode = GenerateGetHashCode(members, memberTypes, false);
-			GetHashCodeForImplement = GenerateGetHashCode(members, memberTypes, true);
 			Equals = GenerateEquals(members, memberTypes, false);
-			EqualsForImplement = GenerateEquals(members, memberTypes, true);
 		}
 
 		static Func<T, int> GenerateGetHashCode(MemberInfo[] members, Type[] memberTypes, bool forImplement) {
 			var type = typeof(T);
 			var paramInstance = Expression.Parameter(type);
 			var recursiveTest = new HashSet<Type>();
-
-			return Expression.Lambda<Func<T, int>>(
-				ExpressionHelper.GetDeepHashCode(recursiveTest, type, type, paramInstance, forImplement),
-				paramInstance
-			).Compile();
+			var tree = ExpressionHelper.GetDeepHashCode(recursiveTest, type, type, paramInstance, forImplement);
+			return Expression.Lambda<Func<T, int>>(tree, paramInstance).Compile();
 		}
 
 		static Func<T, T, bool> GenerateEquals(MemberInfo[] members, Type[] memberTypes, bool forImplement) {
@@ -3040,39 +3044,54 @@ namespace Db {
 			var paramLeft = Expression.Parameter(type);
 			var paramRight = Expression.Parameter(type);
 			var recursiveTest = new HashSet<Type>();
-
-			return Expression.Lambda<Func<T, T, bool>>(
-				ExpressionHelper.GetDeepEqual(recursiveTest, type, type, paramLeft, paramRight, forImplement),
-				paramLeft,
-				paramRight
-			).Compile();
+			var tree = ExpressionHelper.GetDeepEqual(recursiveTest, type, type, paramLeft, paramRight, forImplement);
+			return Expression.Lambda<Func<T, T, bool>>(tree, paramLeft, paramRight).Compile();
 		}
 	}
 
 	/// <summary>
-	/// ジェネリックパラメータで指定されたクラスのオブジェクト一致判定メソッドを実装する、基本的にジェネリックパラメータには派生先クラスを指定する必要がある
-	/// <para><see cref="IEquatable{T}.Equals(T)"/>を実装する</para>
-	/// <para><see cref="object.GetHashCode()"/>をオーバーライドする</para>
-	/// <para><see cref="object.Equals(object)"/>をオーバーライドする</para>
-	/// <para>== 演算子オーバーロードを実装する</para>
-	/// <para>!= 演算子オーバーロードを実装する</para>
+	/// <typeparamref name="T"/>型の値を保持し、<see cref="Dictionary{TKey, TValue}"/>等のキーとして扱える様に一致判定、ハッシュコード生成機能を提供する
+	/// <para>一致判定処理、ハッシュコード生成処理は動的コード生成により作成される</para>
 	/// </summary>
-	/// <typeparam name="T">基本的に派生先クラスを指定する</typeparam>
-	public class EquatableImplement<T> : IEquatable<T> where T : class {
+	/// <typeparam name="T">保持する値の型</typeparam>
+	public class KeyOf<T> : IEquatable<KeyOf<T>> {
+		static readonly Func<T, int> _GetHashCode = EqualTester<T>.GetHashCode;
+		static readonly Func<T, T, bool> _Equals = EqualTester<T>.Equals;
+
+		/// <summary>
+		/// 値
+		/// </summary>
+		public T Value;
+
+		public KeyOf() {
+		}
+
+		public KeyOf(T value) {
+			this.Value = value;
+		}
+
 		public override int GetHashCode() {
-			return EqualTester<T>.GetHashCodeForImplement(this as T);
+			return _GetHashCode(this.Value);
 		}
+
 		public override bool Equals(object obj) {
-			return EqualTester<T>.EqualsForImplement(this as T, obj as T);
+			var c = obj as KeyOf<T>;
+			return object.ReferenceEquals(c, null) ? false : _Equals(this.Value, c.Value);
 		}
-		public bool Equals(T other) {
-			return EqualTester<T>.EqualsForImplement(this as T, other as T);
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool Equals(KeyOf<T> other) {
+			return _Equals(this.Value, other.Value);
 		}
-		public static bool operator ==(EquatableImplement<T> l, EquatableImplement<T> r) {
-			return EqualTester<T>.EqualsForImplement(l as T, r as T);
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool operator ==(KeyOf<T> l, KeyOf<T> r) {
+			return _Equals(l.Value, r.Value);
 		}
-		public static bool operator !=(EquatableImplement<T> l, EquatableImplement<T> r) {
-			return !EqualTester<T>.EqualsForImplement(l as T, r as T);
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool operator !=(KeyOf<T> l, KeyOf<T> r) {
+			return !_Equals(l.Value, r.Value);
 		}
 	}
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using MySql.Data.MySqlClient;
 
@@ -126,24 +127,6 @@ namespace Db {
 			);
 		}
 
-		public struct Struct1 {
-			public string A;
-			public int B;
-
-			public static bool operator ==(Struct1 l, Struct1 r) {
-				if (l.A != r.A) {
-					return false;
-				}
-				if (l.B != r.B) {
-					return false;
-				}
-				return true;
-			}
-			public static bool operator !=(Struct1 l, Struct1 r) {
-				return !(l == r);
-			}
-		}
-
 		public class ClassA {
 			public DateTime D;
 			//public Guid G;
@@ -153,8 +136,10 @@ namespace Db {
 			//public Col<int> ColInt;
 		}
 
-		public class ClassB : EquatableImplement<ClassB> {
-			public decimal D;
+		public class ClassB {
+			public int I1;
+			//public int I2;
+			//public int I3;
 			//public int? A;
 			//public int B;
 			//public string[] Strs;
@@ -162,15 +147,26 @@ namespace Db {
 			//public int[] Ints;
 		}
 
+		static bool r;
+
 		static void Main(string[] args) {
-			var a = new ClassB { D = 1 };
-			var b = new ClassB { D = 1};
-			//var a = new ClassB { A = 1, B = 2, Strs = new[] { "a", "b" }, Bytes = new byte[] { 1, 2, 3 }, Ints = new[] { 1, 2, 3 } };
-			//var b = new ClassB { A = null, B = 2, Strs = new[] { "a", "b" }, Bytes = new byte[] { 1, 2, 3 }, Ints = new[] { 1, 2, 3 } };
-			var s = new HashSet<ClassB>();
-			Console.WriteLine(a == b);
+			var a = new KeyOf<ClassB>(new ClassB { I1 = 1 });
+			var b = new KeyOf<ClassB>(new ClassB { I1 = 1 });
+			//var a = new KeyOf<ClassB>(new ClassB { A = 1, B = 2, Strs = new[] { "a", "b" }, Bytes = new byte[] { 1, 2, 3 }, Ints = new[] { 1, 2, 3 } });
+			//var b = new KeyOf<ClassB>(new ClassB { A = 1, B = 2, Strs = new[] { "a", "b" }, Bytes = new byte[] { 1, 2, 3 }, Ints = new[] { 1, 2, 3 } });
+			var s = new HashSet<KeyOf<ClassB>>();
 			s.Add(a);
 			s.Add(b);
+			Console.WriteLine(s.Count);
+			var sw1 = new System.Diagnostics.Stopwatch();
+			for (int loop = 0; loop < 10; loop++) {
+				sw1.Reset();
+				sw1.Start();
+				for (int i = 0; i < 100000000; i++) {
+					r = a == b;
+				}
+				Console.WriteLine(sw1.ElapsedMilliseconds);
+			}
 			return;
 
 
