@@ -8,6 +8,7 @@ using System.Reflection;
 using MySql.Data.MySqlClient;
 using System.Collections;
 using System.Runtime.CompilerServices;
+using System.Data.Common;
 
 namespace Db {
 	/// <summary>
@@ -273,13 +274,14 @@ namespace Db {
 		/// </summary>
 		/// <param name="name">列名</param>
 		/// <param name="dbType">DB上での型</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public Col(string name, DbType dbType) {
 			this.Name = name;
 			this.DbType = dbType;
 		}
 
 		public SqlAs As(string alias) {
-			return new SqlAs(alias, this);
+			return new SqlAs(null, alias, this);
 		}
 
 		public static implicit operator string(Col value) {
@@ -290,32 +292,50 @@ namespace Db {
 			return this.NameQuotedWithAlias;
 		}
 
-		/// <summary>
-		/// 指定型の<see cref="Col{T}"/>フィールド一覧の取得
-		/// </summary>
-		public static FieldInfo[] GetFields(Type type) {
-			var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
-			return fields.Where(f => f.FieldType.IsGenericType && f.FieldType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
+		public static Tuple<List<FieldInfo>, List<FieldInfo>> Distribute(FieldInfo[] source) {
+			var colmembers = new List<FieldInfo>();
+			var noncolmembers = new List<FieldInfo>();
+			for(int i = 0; i < source.Length; i++) {
+				var m = source[i];
+				var t = m.FieldType;
+				if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Col<>)) {
+					colmembers.Add(m);
+				} else {
+					noncolmembers.Add(m);
+				}
+			}
+			return new Tuple<List<FieldInfo>, List<FieldInfo>>(colmembers, noncolmembers);
 		}
 
-		/// <summary>
-		/// 指定型の<see cref="Col{T}"/>プロパティ一覧の取得
-		/// </summary>
-		public static PropertyInfo[] GetProperties(Type type) {
-			var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-			return properties.Where(p => p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Col<>)).ToArray();
+		public static Tuple<List<PropertyInfo>, List<PropertyInfo>> Distribute(PropertyInfo[] source) {
+			var colmembers = new List<PropertyInfo>();
+			var noncolmembers = new List<PropertyInfo>();
+			for (int i = 0; i < source.Length; i++) {
+				var m = source[i];
+				var t = m.PropertyType;
+				if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Col<>)) {
+					colmembers.Add(m);
+				} else {
+					noncolmembers.Add(m);
+				}
+			}
+			return new Tuple<List<PropertyInfo>, List<PropertyInfo>>(colmembers, noncolmembers);
 		}
 
 		/// <summary>
 		/// 指定型内での列にマッピング可能なフィールド又は列一覧の取得
 		/// </summary>
-		public static Tuple<FieldInfo[], PropertyInfo[]> GetFieldsAndProperties(Type type) {
-			var fields = GetFields(type);
-			var properties = GetProperties(type);
-			if (fields.Length != 0 && properties.Length != 0) {
+		public static Tuple<FieldInfo[], PropertyInfo[], FieldInfo[], PropertyInfo[]> GetFieldsAndProperties(Type type) {
+			var fields = Distribute(type.GetFields(BindingFlags.Public | BindingFlags.Instance));
+			var properties = Distribute(type.GetProperties(BindingFlags.Public | BindingFlags.Instance));
+			var colFields = fields.Item1;
+			var colProperties = properties.Item1;
+			if (colFields.Count != 0 && colProperties.Count != 0) {
 				throw new ApplicationException("型 " + type + " はフィールドとプロパティ両方に Col<T> メンバを持っています。このパターンは順序が判断できないためメンバを列にマッピングできません。");
 			}
-			return new Tuple<FieldInfo[], PropertyInfo[]>(fields, properties);
+			var noncolFields = fields.Item2;
+			var noncolProperties = properties.Item2;
+			return new Tuple<FieldInfo[], PropertyInfo[], FieldInfo[], PropertyInfo[]>(colFields.ToArray(), colProperties.ToArray(), noncolFields.ToArray(), noncolProperties.ToArray());
 		}
 
 		/// <summary>
@@ -323,35 +343,54 @@ namespace Db {
 		/// <para>cols が値型の場合には処理対象外とされ、長さ０の配列が返る</para>
 		/// </summary>
 		public static Col[] GetMemberValues(object cols) {
+			var list = new List<Col>();
+			GetMemberValues(cols, list);
+			return list.ToArray();
+		}
+
+		/// <summary>
+		/// 指定されたオブジェクトのメンバから再帰的に<see cref="Col{T}"/>型のメンバの値を取得していく
+		/// </summary>
+		/// <param name="cols">取得元オブジェクト</param>
+		/// <param name="childCols">取得先リスト</param>
+		public static void GetMemberValues(object cols, List<Col> childCols) {
+			if (cols == null) {
+				return;
+			}
+
 			var type = cols.GetType();
 			if (type.IsSubclassOf(typeof(Col))) {
 				// Col クラスはこれ以上分解できない列なので対象外
-				return new Col[0];
+				return;
 			}
-			if (type.IsValueType) {
-				// 値型は処理対象外
-				return new Col[0];
+			if (type.IsValueType || type == typeof(string)) {
+				// 値型や文字列は処理対象外
+				return;
 			}
 
 			var members = GetFieldsAndProperties(type);
-			var fields = members.Item1;
-			var properties = members.Item2;
+			var colFields = members.Item1;
+			var colProperties = members.Item2;
+			var noncolFields = members.Item3;
+			var noncolProperties = members.Item4;
 
-			Col[] result;
-
-			if (fields.Length != 0) {
-				result = new Col[fields.Length];
-				for (int i = 0; i < result.Length; i++) {
-					result[i] = fields[i].GetValue(cols) as Col;
+			if (colFields.Length != 0) {
+				for (int i = 0; i < colFields.Length; i++) {
+					childCols.Add(colFields[i].GetValue(cols) as Col);
 				}
-			} else {
-				result = new Col[properties.Length];
-				for (int i = 0; i < result.Length; i++) {
-					result[i] = properties[i].GetValue(cols) as Col;
+			} else if (colProperties.Length != 0) {
+				for (int i = 0; i < colProperties.Length; i++) {
+					childCols.Add(colProperties[i].GetValue(cols) as Col);
+				}
+			} else if (noncolFields.Length != 0) {
+				for (int i = 0; i < noncolFields.Length; i++) {
+					GetMemberValues(noncolFields[i].GetValue(cols), childCols);
+				}
+			} else if (noncolProperties.Length != 0) {
+				for (int i = 0; i < noncolProperties.Length; i++) {
+					GetMemberValues(noncolProperties[i].GetValue(cols), childCols);
 				}
 			}
-
-			return result;
 		}
 	}
 
@@ -382,6 +421,7 @@ namespace Db {
 		/// コンストラクタ、列名を指定して初期化する、型は<see cref="DbType.Map(Type)"/>により自動的に判断される
 		/// </summary>
 		/// <param name="name">列名</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public Col(string name) : base(name, DbType.Map(typeof(T))) {
 		}
 
@@ -390,6 +430,7 @@ namespace Db {
 		/// </summary>
 		/// <param name="name">列名</param>
 		/// <param name="dbType">DB内での型</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public Col(string name, DbType dbType) : base(name, dbType) {
 		}
 
@@ -398,6 +439,7 @@ namespace Db {
 		/// </summary>
 		/// <param name="alias">エイリアス名</param>
 		/// <param name="baseCol">ベースとなる列</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public Col(string alias, Col<T> baseCol) : base(baseCol.Name, baseCol.DbType) {
 			this.Alias = alias;
 			this.BaseCol = baseCol;
@@ -408,6 +450,7 @@ namespace Db {
 		/// </summary>
 		/// <param name="baseCol">ベースとなる列</param>
 		/// <param name="value">値</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public Col(Col<T> baseCol, T value) : base(baseCol.Name, baseCol.DbType) {
 			this.BaseCol = baseCol;
 			this.Value = value;
@@ -633,7 +676,13 @@ namespace Db {
 		}
 	}
 
+	/// <summary>
+	/// SQL文生成時にパラメータとしてマーキングするためのクラス
+	/// </summary>
 	public class Param {
+		/// <summary>
+		/// 値
+		/// </summary>
 		public object Value;
 
 		public Param(object value) {
@@ -641,19 +690,35 @@ namespace Db {
 		}
 	}
 
+	/// <summary>
+	/// <see cref="SqlBuildContext.Append(StringBuilder, object, SqlBuildContextAppendFlags)"/>に渡す文字列化のオプションフラグ
+	/// </summary>
 	[Flags]
-	public enum ToStringFlags {
+	public enum SqlBuildContextAppendFlags {
 		AsStringLiteral = 1 << 0,
 		WithAlias = 1 << 1,
 		Underlying = 1 << 2,
 	}
 
-	public class SqlBuffer {
+	/// <summary>
+	/// SQL文生成時の状態などを保持する
+	/// </summary>
+	public class SqlBuildContext {
+		/// <summary>
+		/// パラメータ一覧
+		/// </summary>
 		public readonly Dictionary<Param, string> Params = new Dictionary<Param, string>();
-		public ToStringFlags AddFlags = 0;
-		public ToStringFlags RemoveFlags = 0;
 
-		public string GetPrmName(Param prm) {
+		public SqlBuildContextAppendFlags AddFlags = 0;
+
+		public SqlBuildContextAppendFlags RemoveFlags = 0;
+
+		/// <summary>
+		/// 指定のパラメータ名を取得する、未登録なら自動でパラメータ名生成＆登録して取得する
+		/// </summary>
+		/// <param name="prm">パラメータ</param>
+		/// <returns>パラメータ名</returns>
+		public string GetParamName(Param prm) {
 			string paramName;
 			if (!this.Params.TryGetValue(prm, out paramName)) {
 				this.Params[prm] = paramName = "@v" + this.Params.Count;
@@ -661,55 +726,112 @@ namespace Db {
 			return paramName;
 		}
 
-		public string ToString(object element, ToStringFlags flags = 0) {
+		/// <summary>
+		/// 現在の設定で指定の要素を文字列化し<see cref="StringBuilder"/>に追加する
+		/// </summary>
+		/// <param name="sb">文字列追加先</param>
+		/// <param name="element">追加する要素</param>
+		/// <param name="flags">文字列化オプションフラグ</param>
+		public void Append(StringBuilder sb, object element, SqlBuildContextAppendFlags flags = 0) {
 			flags |= this.AddFlags;
 			flags &= ~this.RemoveFlags;
 
-			ISqlElement sm;
+			SqlElement se;
 			Param p;
-			Col c;
-			Tbl t;
+			Col col;
+			Tbl tbl;
 			if (element == null) {
-				return QuoteIfNeeded("NULL", (flags & ToStringFlags.AsStringLiteral) != 0);
-			} else if ((sm = element as ISqlElement) != null) {
-				return QuoteIfNeeded(sm.Build(this, flags), (flags & ToStringFlags.AsStringLiteral) != 0);
-			} else if ((c = element as Col) != null) {
-				if ((flags & ToStringFlags.Underlying) != 0) {
-					c = c.Underlying;
-				}
-				if ((flags & ToStringFlags.WithAlias) != 0) {
-					return c.NameQuotedWithAlias;
+				// null なら NULL に置き換え
+				QuoteIfNeeded(sb, sb2 => sb2.Append("NULL"), (flags & SqlBuildContextAppendFlags.AsStringLiteral) != 0);
+			} else if ((se = element as SqlElement) != null) {
+				// SQL要素を処理
+				if (se.Prev == null) {
+					// リンク無しの要素なら普通に文字列化
+					QuoteIfNeeded(sb, sb2 => se.Build(this, flags, sb2), (flags & SqlBuildContextAppendFlags.AsStringLiteral) != 0);
 				} else {
-					return c.NameQuoted;
+					// リンク有りの要素 Prev の方から文字列化
+					var ses = new List<SqlElement>();
+					ses.Add(se);
+					for (var prev = se.Prev; prev != null; prev = prev.Prev) {
+						ses.Add(prev);
+					}
+					for (int i = ses.Count - 1; i != -1; i--) {
+						ses[i].Build(this, flags, sb);
+						if (i != 0) {
+							sb.AppendLine();
+						}
+					}
 				}
-			} else if ((t = element as Tbl) != null) {
-				if ((flags & ToStringFlags.WithAlias) != 0 && t.FullNameQuoted != t.Underlying.FullNameQuoted) {
-					return t.Underlying.FullNameQuoted + " " + t.FullNameQuoted;
+			} else if ((col = element as Col) != null) {
+				// カラムを処理
+				if ((flags & SqlBuildContextAppendFlags.Underlying) != 0) {
+					col = col.Underlying;
 				}
-				if ((flags & ToStringFlags.Underlying) != 0) {
-					t = t.Underlying;
+				if ((flags & SqlBuildContextAppendFlags.WithAlias) != 0) {
+					sb.Append(col.NameQuotedWithAlias);
+				} else {
+					sb.Append(col.NameQuoted);
 				}
-				return t.FullNameQuoted;
+			} else if ((tbl = element as Tbl) != null) {
+				// テーブルを処理
+				if ((flags & SqlBuildContextAppendFlags.WithAlias) != 0 && tbl.FullNameQuoted != tbl.Underlying.FullNameQuoted) {
+					sb.Append(tbl.Underlying.FullNameQuoted);
+					sb.Append(' ');
+					sb.Append(tbl.FullNameQuoted);
+					return;
+				}
+				if ((flags & SqlBuildContextAppendFlags.Underlying) != 0) {
+					tbl = tbl.Underlying;
+				}
+				sb.Append(tbl.FullNameQuoted);
 			} else if ((p = element as Param) != null) {
-				return GetPrmName(p);
+				// パラメータを処理
+				sb.Append(GetParamName(p));
 			} else {
-				return QuoteIfNeeded(element.ToString(), (flags & ToStringFlags.AsStringLiteral) != 0);
+				// その他は普通に文字列化
+				QuoteIfNeeded(sb, sb2 => sb2.Append(element.ToString()), (flags & SqlBuildContextAppendFlags.AsStringLiteral) != 0);
 			}
 		}
 
-		static string QuoteIfNeeded(string value, bool needQuote = false) {
-			return needQuote ? "'" + value + "'" : value;
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		static void QuoteIfNeeded(StringBuilder sb, Action<StringBuilder> generateContent, bool needQuote = false) {
+			if (needQuote) {
+				sb.Append('\'');
+				generateContent(sb);
+				sb.Append('\'');
+			} else {
+				generateContent(sb);
+			}
 		}
 	}
 
-	public interface ISqlElement {
-		string Build(SqlBuffer sqlBuffer, ToStringFlags flags);
+	/// <summary>
+	/// SQL文を構成する要素基本クラス
+	/// </summary>
+	public abstract class SqlElement {
+		/// <summary>
+		/// 直前の要素があるなら null 以外を指定する、文字列化時にこちらが先に文字列化される
+		/// </summary>
+		public readonly SqlElement Prev;
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public SqlElement(SqlElement prev) {
+			this.Prev = prev;
+		}
+
+		/// <summary>
+		/// 要素を文字列化して指定の<see cref="StringBuilder"/>に追加する
+		/// </summary>
+		/// <param name="context">文字列化時の状態などを保持する</param>
+		/// <param name="flags">文字列化オプションフラグ</param>
+		/// <param name="sb">文字列追加先</param>
+		public abstract void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb);
 	}
 
-	public class SqlSelect : ISqlElement {
+	public class SqlSelect : SqlElement {
 		public object[] Cols;
 
-		public SqlSelect(params object[] cols) {
+		public SqlSelect(SqlElement prev, params object[] cols) : base(prev) {
 			var list = new List<object>();
 			foreach (var c in cols) {
 				var colMemberValues = Col.GetMemberValues(c);
@@ -722,9 +844,7 @@ namespace Db {
 			this.Cols = list.ToArray();
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
-
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			sb.Append("SELECT ");
 
 			if (this.Cols.Length == 0) {
@@ -734,27 +854,23 @@ namespace Db {
 					if (i != 0) {
 						sb.Append(", ");
 					}
-					sb.Append(sqlBuffer.ToString(this.Cols[i], flags | ToStringFlags.WithAlias));
+					context.Append(sb, this.Cols[i], flags | SqlBuildContextAppendFlags.WithAlias);
 				}
 			}
 
-			sqlBuffer.RemoveFlags |= ToStringFlags.Underlying;
-
-			return sb.ToString();
+			context.RemoveFlags |= SqlBuildContextAppendFlags.Underlying;
 		}
 	}
 
-	public class SqlFrom : ISqlElement {
+	public class SqlFrom : SqlElement {
 		public object Tbl;
 
-		public SqlFrom(object tbl) {
+		public SqlFrom(SqlElement prev, object tbl) : base(prev) {
 			this.Tbl = tbl;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			Tbl tbl;
-			var sb = new StringBuilder();
-
 			sb.Append("FROM ");
 
 			if ((tbl = this.Tbl as Tbl) != null) {
@@ -767,17 +883,15 @@ namespace Db {
 					sb.Append(tbl.FullNameQuoted);
 				}
 			} else {
-				sb.Append(sqlBuffer.ToString(this.Tbl, flags));
+				context.Append(sb, this.Tbl, flags);
 			}
-
-			return sb.ToString();
 		}
 	}
 
-	public class SqlWhere : ISqlElement {
+	public class SqlWhere : SqlElement {
 		public object[] Expressions;
 
-		public SqlWhere(object expression, params object[] expressions) {
+		public SqlWhere(SqlElement prev, object expression, params object[] expressions) : base(prev) {
 			var exprs = new object[expressions.Length + 1];
 			exprs[0] = expression;
 			if (expressions.Length != 0) {
@@ -786,21 +900,19 @@ namespace Db {
 			this.Expressions = exprs;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			sb.Append("WHERE");
 			foreach (var e in this.Expressions) {
 				sb.Append(" ");
-				sb.Append(sqlBuffer.ToString(e, flags | ToStringFlags.WithAlias));
+				context.Append(sb, e, flags | SqlBuildContextAppendFlags.WithAlias);
 			}
-			return sb.ToString();
 		}
 	}
 
-	public class SqlExpr : ISqlElement {
+	public class SqlExpr : SqlElement {
 		public object[] Expressions;
 
-		public SqlExpr(object expression, params object[] expressions) {
+		public SqlExpr(SqlElement prev, object expression, params object[] expressions) : base(prev) {
 			var exprs = new object[expressions.Length + 1];
 			exprs[0] = expression;
 			if (expressions.Length != 0) {
@@ -809,23 +921,21 @@ namespace Db {
 			this.Expressions = exprs;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			for (int i = 0; i < this.Expressions.Length; i++) {
 				if (i != 0) {
 					sb.Append(" ");
 				}
-				sb.Append(sqlBuffer.ToString(this.Expressions[i], flags | ToStringFlags.WithAlias));
+				context.Append(sb, this.Expressions[i], flags | SqlBuildContextAppendFlags.WithAlias);
 			}
-			return sb.ToString();
 		}
 	}
 
-	public class SqlAs : ISqlElement {
+	public class SqlAs : SqlElement {
 		public string Alias;
 		public object[] Expressions;
 
-		public SqlAs(string alias, object expression, params object[] expressions) {
+		public SqlAs(SqlElement prev, string alias, object expression, params object[] expressions) : base(prev) {
 			this.Alias = alias;
 
 			var exprs = new object[expressions.Length + 1];
@@ -836,56 +946,68 @@ namespace Db {
 			this.Expressions = exprs;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			for (int i = 0; i < this.Expressions.Length; i++) {
 				if (i != 0) {
 					sb.Append(" ");
 				}
-				sb.Append(sqlBuffer.ToString(this.Expressions[i], flags));
+				context.Append(sb, this.Expressions[i], flags);
 			}
 			sb.Append(" AS ");
 			sb.Append(this.Alias);
-			return sb.ToString();
 		}
 	}
 
-	public class SqlUpdate : ISqlElement {
+	public class SqlUpdate : SqlElement {
 		public object Tbl;
-		public List<Tuple<object, object>> ColAndValues = new List<Tuple<object, object>>();
 
-		public SqlUpdate(object tbl) {
+		public SqlUpdate(SqlElement prev, object tbl) : base(prev) {
 			this.Tbl = tbl;
 		}
 
-		public SqlUpdate Set(object col, object value) {
-			this.ColAndValues.Add(new Tuple<object, object>(col, value));
-			return this;
-		}
-
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			sb.Append("UPDATE ");
-			sb.Append(sqlBuffer.ToString(this.Tbl, ToStringFlags.WithAlias));
-			sb.Append(" SET ");
-			for (int i = 0; i < this.ColAndValues.Count; i++) {
-				var cav = this.ColAndValues[i];
-				if (i != 0) {
-					sb.Append(", ");
-				}
-				sb.Append(sqlBuffer.ToString(cav.Item1));
-				sb.Append("=");
-				sb.Append(sqlBuffer.ToString(cav.Item2));
-			}
-			return sb.ToString();
+			context.Append(sb, this.Tbl, SqlBuildContextAppendFlags.WithAlias);
 		}
 	}
 
-	public class SqlInsertInto : ISqlElement {
+	public class SqlSet : SqlElement {
+		public SqlAssign[] Assigns;
+
+		public SqlSet(SqlElement prev, params SqlAssign[] assigns) : base(prev) {
+			this.Assigns = assigns;
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append("SET ");
+			var assigns = this.Assigns;
+			for (int i = 0; i < assigns.Length; i++) {
+				if (i != 0) {
+					sb.Append(", ");
+				}
+				var a = assigns[i];
+				context.Append(sb, a.Col, SqlBuildContextAppendFlags.WithAlias);
+				sb.Append("=");
+				context.Append(sb, a.Value);
+			}
+		}
+	}
+
+	public struct SqlAssign {
+		public object Col;
+		public object Value;
+
+		public SqlAssign(object col, object value) {
+			this.Col = col;
+			this.Value = value;
+		}
+	}
+
+	public class SqlInsertInto : SqlElement {
 		public object Tbl;
 		public object[] Cols;
 
-		public SqlInsertInto(object tbl, params object[] cols) {
+		public SqlInsertInto(SqlElement prev, object tbl, params object[] cols) : base(prev) {
 			this.Tbl = tbl;
 			var list = new List<object>();
 			foreach (var c in cols) {
@@ -899,10 +1021,9 @@ namespace Db {
 			this.Cols = list.ToArray();
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			sb.Append("INSERT INTO ");
-			sb.Append(sqlBuffer.ToString(this.Tbl, ToStringFlags.Underlying));
+			context.Append(sb, this.Tbl, SqlBuildContextAppendFlags.Underlying);
 			sb.Append("(");
 			for (int i = 0; i < this.Cols.Length; i++) {
 				if (i != 0) {
@@ -917,14 +1038,13 @@ namespace Db {
 				}
 			}
 			sb.Append(")");
-			return sb.ToString();
 		}
 	}
 
-	public class SqlValues : ISqlElement {
+	public class SqlValues : SqlElement {
 		public object[,] Values;
 
-		public SqlValues(params object[] value) {
+		public SqlValues(SqlElement prev, params object[] value) : base(prev) {
 			this.Values = new object[1, value.Length];
 			var values = this.Values;
 			for (int i = 0; i < value.Length; i++) {
@@ -932,12 +1052,11 @@ namespace Db {
 			}
 		}
 
-		public SqlValues(object[,] values) {
+		public SqlValues(SqlElement prev, object[,] values) : base(prev) {
 			this.Values = values;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			var values = this.Values;
 			var rowsCount = values.GetLength(0);
 			var colsCount = values.GetLength(1);
@@ -954,63 +1073,56 @@ namespace Db {
 					if (j != 0) {
 						sb.Append(", ");
 					}
-					sb.Append(sqlBuffer.ToString(values[i, j], flags));
+					context.Append(sb, values[i, j], flags);
 				}
 				sb.AppendLine(")");
 			}
-			return sb.ToString();
 		}
 	}
 
-	public class SqlLike : ISqlElement {
+	public class SqlLike : SqlElement {
 		public object Expression;
 		public object Pattern;
 
-		public SqlLike(object expression, object pattern) {
+		public SqlLike(SqlElement prev, object expression, object pattern) : base(prev) {
 			this.Expression = expression;
 			this.Pattern = pattern;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
-			sb.Append(sqlBuffer.ToString(this.Expression, flags | ToStringFlags.AsStringLiteral | ToStringFlags.WithAlias));
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			context.Append(sb, this.Expression, flags | SqlBuildContextAppendFlags.AsStringLiteral | SqlBuildContextAppendFlags.WithAlias);
 			sb.Append(" LIKE ");
-			sb.Append(sqlBuffer.ToString(this.Pattern, flags | ToStringFlags.AsStringLiteral | ToStringFlags.WithAlias));
-			return sb.ToString();
+			context.Append(sb, this.Pattern, flags | SqlBuildContextAppendFlags.AsStringLiteral | SqlBuildContextAppendFlags.WithAlias);
 		}
 	}
 
-	public class NotSqlLike : ISqlElement {
+	public class NotSqlLike : SqlElement {
 		public object Expression;
 		public object Pattern;
 
-		public NotSqlLike(object expression, object pattern) {
+		public NotSqlLike(SqlElement prev, object expression, object pattern) : base(prev) {
 			this.Expression = expression;
 			this.Pattern = pattern;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
-			sb.Append(sqlBuffer.ToString(this.Expression, flags | ToStringFlags.AsStringLiteral | ToStringFlags.WithAlias));
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			context.Append(sb, this.Expression, flags | SqlBuildContextAppendFlags.AsStringLiteral | SqlBuildContextAppendFlags.WithAlias);
 			sb.Append(" NOT LIKE ");
-			sb.Append(sqlBuffer.ToString(this.Pattern, flags | ToStringFlags.AsStringLiteral | ToStringFlags.WithAlias));
-			return sb.ToString();
+			context.Append(sb, this.Pattern, flags | SqlBuildContextAppendFlags.AsStringLiteral | SqlBuildContextAppendFlags.WithAlias);
 		}
 	}
 
-	public class SqlDeleteFrom : ISqlElement {
+	public class SqlDeleteFrom : SqlElement {
 		public object Tbl;
 
-		public SqlDeleteFrom(object tbl) {
+		public SqlDeleteFrom(SqlElement prev, object tbl) : base(prev) {
 			this.Tbl = tbl;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			sb.Append("DELETE FROM ");
-			sb.Append(sqlBuffer.ToString(this.Tbl, flags | ToStringFlags.Underlying));
-			sqlBuffer.AddFlags |= ToStringFlags.Underlying;
-			return sb.ToString();
+			context.Append(sb, this.Tbl, flags | SqlBuildContextAppendFlags.Underlying);
+			context.AddFlags |= SqlBuildContextAppendFlags.Underlying;
 		}
 	}
 
@@ -1019,14 +1131,14 @@ namespace Db {
 		Left,
 	}
 
-	public class SqlJoin : ISqlElement {
+	public class SqlJoin : SqlElement {
 		public JoinType JoinType;
 		public bool IsUsing;
 		public object Tbl;
 		public object Col;
 		public object[] Expressions;
 
-		public SqlJoin(JoinType joinType, object tbl) {
+		public SqlJoin(SqlElement prev, JoinType joinType, object tbl) : base(prev) {
 			this.JoinType = joinType;
 			this.Tbl = tbl;
 		}
@@ -1043,17 +1155,16 @@ namespace Db {
 			return this;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			sb.Append(this.JoinType == JoinType.Inner ? "INNER JOIN" : "LEFT JOIN");
 			sb.Append(" ");
-			sb.Append(sqlBuffer.ToString(this.Tbl, flags | ToStringFlags.WithAlias));
+			context.Append(sb, this.Tbl, flags | SqlBuildContextAppendFlags.WithAlias);
 			if (this.IsUsing) {
 				if (this.Col == null) {
 					throw new ApplicationException("JOIN USING に対して列が指定されていません。");
 				}
 				sb.Append(" USING(");
-				sb.Append(sqlBuffer.ToString(this.Col, flags | ToStringFlags.Underlying));
+				context.Append(sb, this.Col, flags | SqlBuildContextAppendFlags.Underlying);
 				sb.Append(")");
 			} else {
 				if (this.Expressions == null) {
@@ -1064,185 +1175,196 @@ namespace Db {
 					if (i != 0) {
 						sb.Append(" ");
 					}
-					sb.Append(sqlBuffer.ToString(this.Expressions[i], flags | ToStringFlags.WithAlias));
+					context.Append(sb, this.Expressions[i], flags | SqlBuildContextAppendFlags.WithAlias);
 				}
 			}
-			return sb.ToString();
 		}
 	}
 
-	public class SqlGroupBy : ISqlElement {
+	public class SqlGroupBy : SqlElement {
 		public object[] Cols;
 
-		public SqlGroupBy(params object[] cols) {
+		public SqlGroupBy(SqlElement prev, params object[] cols) : base(prev) {
 			this.Cols = cols;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			sb.Append("GROUP BY ");
 			for (int i = 0; i < this.Cols.Length; i++) {
 				if (i != 0) {
 					sb.Append(", ");
 				}
-				sb.Append(sqlBuffer.ToString(this.Cols[i], ToStringFlags.WithAlias));
+				context.Append(sb, this.Cols[i], SqlBuildContextAppendFlags.WithAlias);
 			}
-			return sb.ToString();
 		}
 	}
 
-	public class SqlOrderBy : ISqlElement {
+	public class SqlOrderBy : SqlElement {
 		public object[] Cols;
 
-		public SqlOrderBy(params object[] cols) {
+		public SqlOrderBy(SqlElement prev, params object[] cols) : base(prev) {
 			this.Cols = cols;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			sb.Append("ORDER BY ");
 			for (int i = 0; i < this.Cols.Length; i++) {
 				if (i != 0) {
 					sb.Append(", ");
 				}
-				sb.Append(sqlBuffer.ToString(this.Cols[i], ToStringFlags.WithAlias));
+				context.Append(sb, this.Cols[i], SqlBuildContextAppendFlags.WithAlias);
 			}
-			return sb.ToString();
 		}
 	}
 
-	public class SqlDesc : ISqlElement {
+	public class SqlDesc : SqlElement {
 		public object Col;
 
-		public SqlDesc(object col) {
+		public SqlDesc(SqlElement prev, object col) : base(prev) {
 			this.Col = col;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
-			sb.Append(sqlBuffer.ToString(this.Col, ToStringFlags.WithAlias));
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			context.Append(sb, this.Col, SqlBuildContextAppendFlags.WithAlias);
 			sb.Append(" DESC");
-			return sb.ToString();
 		}
 	}
 
-	public class SqlAnd : ISqlElement {
+	public class SqlAnd : SqlElement {
 		public object[] Expressions;
 
-		public SqlAnd(params object[] expressions) {
+		public SqlAnd(SqlElement prev, params object[] expressions) : base(prev) {
 			this.Expressions = expressions;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			for (int i = 0; i < this.Expressions.Length; i++) {
 				if (i != 0) {
 					sb.Append(" AND ");
 				}
-				sb.Append("(" + sqlBuffer.ToString(this.Expressions[i], flags) + ")");
+				sb.Append('(');
+				context.Append(sb, this.Expressions[i], flags);
+				sb.Append(')');
 			}
-			return sb.ToString();
 		}
 	}
 
-	public class SqlOr : ISqlElement {
+	public class SqlOr : SqlElement {
 		public object[] Expressions;
 
-		public SqlOr(params object[] expressions) {
+		public SqlOr(SqlElement prev, params object[] expressions) : base(prev) {
 			this.Expressions = expressions;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			for (int i = 0; i < this.Expressions.Length; i++) {
 				if (i != 0) {
 					sb.Append(" OR ");
 				}
-				sb.Append("(" + sqlBuffer.ToString(this.Expressions[i], flags) + ")");
+				sb.Append('(');
+				context.Append(sb, this.Expressions[i], flags);
+				sb.Append(')');
 			}
-			return sb.ToString();
 		}
 	}
 
-	public class SqlEq : ISqlElement {
+	public class SqlEq : SqlElement {
 		public object Left;
 		public object Right;
 
-		public SqlEq(object left, object right) {
+		public SqlEq(SqlElement prev, object left, object right) : base(prev) {
 			this.Left = left;
 			this.Right = right;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
-			sb.Append(sqlBuffer.ToString(this.Left, ToStringFlags.WithAlias));
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			context.Append(sb, this.Left, SqlBuildContextAppendFlags.WithAlias);
 			sb.Append("=");
-			sb.Append(sqlBuffer.ToString(this.Right, ToStringFlags.WithAlias));
-			return sb.ToString();
+			context.Append(sb, this.Right, SqlBuildContextAppendFlags.WithAlias);
 		}
 	}
 
-	public class SqlNeq : ISqlElement {
+	public class SqlNeq : SqlElement {
 		public object Left;
 		public object Right;
 
-		public SqlNeq(object left, object right) {
+		public SqlNeq(SqlElement prev, object left, object right) : base(prev) {
 			this.Left = left;
 			this.Right = right;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
-			sb.Append(sqlBuffer.ToString(this.Left, ToStringFlags.WithAlias));
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			context.Append(sb, this.Left, SqlBuildContextAppendFlags.WithAlias);
 			sb.Append("<>");
-			sb.Append(sqlBuffer.ToString(this.Right, ToStringFlags.WithAlias));
-			return sb.ToString();
+			context.Append(sb, this.Right, SqlBuildContextAppendFlags.WithAlias);
 		}
 	}
 
-	public class SqlOnDuplicateKeyUpdate : ISqlElement {
-		public List<Tuple<object, object>> ColAndValues = new List<Tuple<object, object>>();
+	public class SqlOnDuplicateKeyUpdate : SqlElement {
+		public SqlAssign[] Assigns;
 
-		public SqlOnDuplicateKeyUpdate() {
+		public SqlOnDuplicateKeyUpdate(SqlElement prev, params SqlAssign[] assigns) : base(prev) {
+			this.Assigns = assigns;
 		}
 
-		public SqlOnDuplicateKeyUpdate Set(object col, object value) {
-			this.ColAndValues.Add(new Tuple<object, object>(col, value));
-			return this;
-		}
-
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			sb.Append("ON DUPLICATE KEY UPDATE ");
-			for (int i = 0; i < this.ColAndValues.Count; i++) {
-				var cav = this.ColAndValues[i];
+			var assigns = this.Assigns;
+			for (int i = 0; i < assigns.Length; i++) {
 				if (i != 0) {
 					sb.Append(", ");
 				}
-				sb.Append(sqlBuffer.ToString(cav.Item1));
+				var a = assigns[i];
+				context.Append(sb, a.Col, SqlBuildContextAppendFlags.Underlying);
 				sb.Append("=");
-				sb.Append(sqlBuffer.ToString(cav.Item2));
+				context.Append(sb, a.Value);
 			}
-			return sb.ToString();
 		}
 	}
 
-	public class SqlLastInsertId : ISqlElement {
+	public class SqlLastInsertId : SqlElement {
 		public object Expr;
 
-		public SqlLastInsertId(object expr = null) {
+		public SqlLastInsertId(SqlElement prev, object expr = null) : base(prev) {
 			this.Expr = expr;
 		}
 
-		public string Build(SqlBuffer sqlBuffer, ToStringFlags flags) {
-			var sb = new StringBuilder();
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
 			sb.Append("LAST_INSERT_ID(");
 			if (this.Expr != null) {
-				sb.Append(sqlBuffer.ToString(this.Expr));
+				context.Append(sb, this.Expr);
 			}
 			sb.Append(")");
-			return sb.ToString();
 		}
+	}
+
+	public static class SqlExtensionForMySql {
+		public static void CreateTableIfNotExists(this Tbl tbl, MySqlCommand cmd) { Db.CreateTableIfNotExists(cmd, tbl); }
+		public static void DropTableIfExists(this Tbl tbl, MySqlCommand cmd) { Db.DropTableIfExists(cmd, tbl); }
+		public static Func<MySqlCommand, MySqlCommand> ToFunc(this SqlElement element) { return Db.Sql(element); }
+		public static SqlSelect Select(this SqlInsertInto element, params object[] cols) { return new SqlSelect(element, cols); }
+		public static SqlFrom From(this SqlSelect element, object tbl) { return new SqlFrom(element, tbl); }
+		public static SqlJoin InnerJoin(this SqlFrom element, object tbl) { return new SqlJoin(element, JoinType.Inner, tbl); }
+		public static SqlJoin LeftJoin(this SqlFrom element, object tbl) { return new SqlJoin(element, JoinType.Left, tbl); }
+		public static SqlJoin InnerJoin(this SqlJoin element, object tbl) { return new SqlJoin(element, JoinType.Inner, tbl); }
+		public static SqlJoin LeftJoin(this SqlJoin element, object tbl) { return new SqlJoin(element, JoinType.Left, tbl); }
+		public static SqlJoin InnerJoin(this SqlUpdate element, object tbl) { return new SqlJoin(element, JoinType.Inner, tbl); }
+		public static SqlJoin LeftJoin(this SqlUpdate element, object tbl) { return new SqlJoin(element, JoinType.Left, tbl); }
+		public static SqlWhere Where(this SqlFrom element, object expression, params object[] expressions) { return new SqlWhere(element, expression, expressions); }
+		public static SqlWhere Where(this SqlJoin element, object expression, params object[] expressions) { return new SqlWhere(element, expression, expressions); }
+		public static SqlWhere Where(this SqlSet element, object expression, params object[] expressions) { return new SqlWhere(element, expression, expressions); }
+		public static SqlGroupBy GroupBy(this SqlFrom element, params object[] cols) { return new SqlGroupBy(element, cols); }
+		public static SqlGroupBy GroupBy(this SqlJoin element, params object[] cols) { return new SqlGroupBy(element, cols); }
+		public static SqlGroupBy GroupBy(this SqlWhere element, params object[] cols) { return new SqlGroupBy(element, cols); }
+		public static SqlOrderBy OrderBy(this SqlFrom element, params object[] cols) { return new SqlOrderBy(element, cols); }
+		public static SqlOrderBy OrderBy(this SqlJoin element, params object[] cols) { return new SqlOrderBy(element, cols); }
+		public static SqlOrderBy OrderBy(this SqlWhere element, params object[] cols) { return new SqlOrderBy(element, cols); }
+		public static SqlOrderBy OrderBy(this SqlGroupBy element, params object[] cols) { return new SqlOrderBy(element, cols); }
+		public static SqlOnDuplicateKeyUpdate OnDuplicateKeyUpdate(this SqlValues element, params SqlAssign[] assigns) { return new SqlOnDuplicateKeyUpdate(element, assigns); }
+		public static SqlSet Set(this SqlUpdate element, params SqlAssign[] assigns) { return new SqlSet(element, assigns); }
+		public static SqlSet Set(this SqlJoin element, params SqlAssign[] assigns) { return new SqlSet(element, assigns); }
+		public static SqlValues Values(this SqlInsertInto element, params object[] value) { return new SqlValues(element, value); }
+		public static SqlValues Values(this SqlInsertInto element, object[,] values) { return new SqlValues(element, values); }
 	}
 
 	/// <summary>
@@ -1256,15 +1378,16 @@ namespace Db {
 		/// <param name="elements">SQL文モジュール</param>
 		/// <returns><see cref="MySqlCommand"/>にSQL文を適用するデリゲート</returns>
 		public static Func<MySqlCommand, MySqlCommand> Sql(params object[] elements) {
-			var buffer = new SqlBuffer();
+			var buffer = new SqlBuildContext();
 
 			// 各モジュールを文字列に変換してSQL文を生成する
 			var sb = new StringBuilder();
 			for (int i = 0; i < elements.Length; i++) {
 				if (i < elements.Length - 1) {
-					sb.AppendLine(buffer.ToString(elements[i]));
+					buffer.Append(sb, elements[i]);
+					sb.AppendLine();
 				} else {
-					sb.Append(buffer.ToString(elements[i]));
+					buffer.Append(sb, elements[i]);
 				}
 			}
 			sb.Append(";");
@@ -1402,7 +1525,7 @@ namespace Db {
 		/// <param name="cols">列一覧</param>
 		/// <returns><see cref="SqlSelect"/></returns>
 		public static SqlSelect Select(params object[] cols) {
-			return new SqlSelect(cols);
+			return new SqlSelect(null, cols);
 		}
 
 		/// <summary>
@@ -1411,7 +1534,7 @@ namespace Db {
 		/// <param name="tbl">取得元テーブル</param>
 		/// <returns><see cref="SqlFrom"/></returns>
 		public static SqlFrom From(object tbl) {
-			return new SqlFrom(tbl);
+			return new SqlFrom(null, tbl);
 		}
 
 		/// <summary>
@@ -1421,7 +1544,7 @@ namespace Db {
 		/// <param name="expressions">さらに結合する式一覧</param>
 		/// <returns><see cref="SqlWhere "/></returns>
 		public static SqlWhere Where(object expression, params object[] expressions) {
-			return new SqlWhere(expression, expressions);
+			return new SqlWhere(null, expression, expressions);
 		}
 
 		/// <summary>
@@ -1431,7 +1554,7 @@ namespace Db {
 		/// <param name="expressions">さらに結合する式一覧</param>
 		/// <returns><see cref="SqlExpr"/></returns>
 		public static SqlExpr Expr(object expression, params object[] expressions) {
-			return new SqlExpr(expression, expressions);
+			return new SqlExpr(null, expression, expressions);
 		}
 
 		/// <summary>
@@ -1440,7 +1563,26 @@ namespace Db {
 		/// <param name="tbl">対象テーブル</param>
 		/// <returns><see cref="SqlUpdate"/></returns>
 		public static SqlUpdate Update(object tbl) {
-			return new SqlUpdate(tbl);
+			return new SqlUpdate(null, tbl);
+		}
+
+		/// <summary>
+		/// SET を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="assigns">代入式一覧</param>
+		/// <returns><see cref="SqlSet"/></returns>
+		public static SqlSet Set(params SqlAssign[] assigns) {
+			return new SqlSet(null, assigns);
+		}
+
+		/// <summary>
+		/// 代入式を表すSQL要素を生成する
+		/// </summary>
+		/// <param name="col">列</param>
+		/// <param name="value">値</param>
+		/// <returns><see cref="SqlAssign"/></returns>
+		public static SqlAssign Assign(object col, object value) {
+			return new SqlAssign(col, value);
 		}
 
 		/// <summary>
@@ -1450,7 +1592,7 @@ namespace Db {
 		/// <param name="cols">挿入値に対応する挿入先テーブルの列一覧</param>
 		/// <returns><see cref="SqlInsertInto"/></returns>
 		public static SqlInsertInto InsertInto(object tbl, params object[] cols) {
-			return new SqlInsertInto(tbl, cols);
+			return new SqlInsertInto(null, tbl, cols);
 		}
 
 		/// <summary>
@@ -1459,7 +1601,7 @@ namespace Db {
 		/// <param name="value">１レコード分の各列の値一覧</param>
 		/// <returns><see cref="SqlValues"/></returns>
 		public static SqlValues Values(params object[] value) {
-			return new SqlValues(value);
+			return new SqlValues(null, value);
 		}
 
 		/// <summary>
@@ -1468,7 +1610,7 @@ namespace Db {
 		/// <param name="values">複数レコード分の各列の値一覧</param>
 		/// <returns><see cref="SqlValues"/></returns>
 		public static SqlValues Values(object[,] values) {
-			return new SqlValues(values);
+			return new SqlValues(null, values);
 		}
 
 		/// <summary>
@@ -1478,7 +1620,7 @@ namespace Db {
 		/// <param name="pattern">LIKE のパターン文字列</param>
 		/// <returns><see cref="SqlLike"/></returns>
 		public static SqlLike Like(object expression, object pattern) {
-			return new SqlLike(expression, pattern);
+			return new SqlLike(null, expression, pattern);
 		}
 
 		/// <summary>
@@ -1488,7 +1630,7 @@ namespace Db {
 		/// <param name="pattern">NOT LIKE のパターン文字列</param>
 		/// <returns><see cref="NotSqlLike"/></returns>
 		public static NotSqlLike NotLike(object expression, object pattern) {
-			return new NotSqlLike(expression, pattern);
+			return new NotSqlLike(null, expression, pattern);
 		}
 
 		/// <summary>
@@ -1497,7 +1639,7 @@ namespace Db {
 		/// <param name="tbl">削除元テーブル</param>
 		/// <returns><see cref="SqlDeleteFrom"/></returns>
 		public static SqlDeleteFrom DeleteFrom(object tbl) {
-			return new SqlDeleteFrom(tbl);
+			return new SqlDeleteFrom(null, tbl);
 		}
 
 		/// <summary>
@@ -1506,7 +1648,7 @@ namespace Db {
 		/// <param name="tbl">結合するテーブル</param>
 		/// <returns><see cref="SqlJoin"/></returns>
 		public static SqlJoin InnerJoin(object tbl) {
-			return new SqlJoin(JoinType.Inner, tbl);
+			return new SqlJoin(null, JoinType.Inner, tbl);
 		}
 
 		/// <summary>
@@ -1515,7 +1657,7 @@ namespace Db {
 		/// <param name="tbl">結合するテーブル</param>
 		/// <returns><see cref="SqlJoin"/></returns>
 		public static SqlJoin LeftJoin(object tbl) {
-			return new SqlJoin(JoinType.Left, tbl);
+			return new SqlJoin(null, JoinType.Left, tbl);
 		}
 
 		/// <summary>
@@ -1524,7 +1666,7 @@ namespace Db {
 		/// <param name="cols">列一覧</param>
 		/// <returns><see cref="SqlGroupBy"/></returns>
 		public static SqlGroupBy GroupBy(params object[] cols) {
-			return new SqlGroupBy(cols);
+			return new SqlGroupBy(null, cols);
 		}
 
 		/// <summary>
@@ -1533,7 +1675,7 @@ namespace Db {
 		/// <param name="cols">列一覧</param>
 		/// <returns><see cref="SqlOrderBy"/></returns>
 		public static SqlOrderBy OrderBy(params object[] cols) {
-			return new SqlOrderBy(cols);
+			return new SqlOrderBy(null, cols);
 		}
 
 		/// <summary>
@@ -1542,7 +1684,7 @@ namespace Db {
 		/// <param name="col">列</param>
 		/// <returns><see cref="SqlDesc"/></returns>
 		public static SqlDesc Desc(object col) {
-			return new SqlDesc(col);
+			return new SqlDesc(null, col);
 		}
 
 		/// <summary>
@@ -1551,7 +1693,7 @@ namespace Db {
 		/// <param name="expressions">AND で結合する複数の式</param>
 		/// <returns><see cref="SqlAnd"/></returns>
 		public static SqlAnd And(params object[] expressions) {
-			return new SqlAnd(expressions);
+			return new SqlAnd(null, expressions);
 		}
 
 		/// <summary>
@@ -1560,7 +1702,7 @@ namespace Db {
 		/// <param name="expressions">OR で結合する複数の式</param>
 		/// <returns><see cref="SqlOr"/></returns>
 		public static SqlOr Or(params object[] expressions) {
-			return new SqlOr(expressions);
+			return new SqlOr(null, expressions);
 		}
 
 		/// <summary>
@@ -1570,7 +1712,7 @@ namespace Db {
 		/// <param name="right">右辺値</param>
 		/// <returns><see cref="SqlEq"/></returns>
 		public static SqlEq Eq(object left, object right) {
-			return new SqlEq(left, right);
+			return new SqlEq(null, left, right);
 		}
 
 		/// <summary>
@@ -1580,15 +1722,16 @@ namespace Db {
 		/// <param name="right">右辺値</param>
 		/// <returns><see cref="SqlNeq"/></returns>
 		public static SqlNeq Neq(object left, object right) {
-			return new SqlNeq(left, right);
+			return new SqlNeq(null, left, right);
 		}
 
 		/// <summary>
 		/// ON DUPLICATE KEY UPDATE を表すSQL要素を生成する
 		/// </summary>
+		/// <param name="assigns">代入式一覧</param>
 		/// <returns><see cref="SqlOnDuplicateKeyUpdate"/></returns>
-		public static SqlOnDuplicateKeyUpdate OnDuplicateKeyUpdate() {
-			return new SqlOnDuplicateKeyUpdate();
+		public static SqlOnDuplicateKeyUpdate OnDuplicateKeyUpdate(params SqlAssign[] assigns) {
+			return new SqlOnDuplicateKeyUpdate(null, assigns);
 		}
 
 		/// <summary>
@@ -1596,7 +1739,7 @@ namespace Db {
 		/// </summary>
 		/// <returns><see cref="SqlLastInsertId"/></returns>
 		public static SqlLastInsertId LastInsertId(object expr = null) {
-			return new SqlLastInsertId(expr);
+			return new SqlLastInsertId(null, expr);
 		}
 
 		/// <summary>
@@ -1849,55 +1992,6 @@ namespace Db {
 	}
 
 	/// <summary>
-	/// <typeparamref name="T"/>のプロパティを<see cref="MySqlParameterCollection"/>へ追加するデリゲートを作成する
-	/// </summary>
-	/// <typeparam name="T">クラス型</typeparam>
-	public static class PropertiesToParam<T> {
-		public static readonly Action<MySqlParameterCollection, StringBuilder, T> Invoke;
-
-		static PropertiesToParam() {
-			var type = typeof(T);
-			var paramsType = typeof(MySqlParameterCollection);
-			var sbType = typeof(StringBuilder);
-			var paramParams = Expression.Parameter(paramsType);
-			var paramSb = Expression.Parameter(sbType);
-			var paramValue = Expression.Parameter(type);
-			var name = Expression.Parameter(typeof(string));
-			var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-			var intToString = typeof(int).GetMethod("ToString", new Type[0]);
-			var addWithValue = typeof(MySqlParameterCollection).GetMethod("AddWithValue", new Type[] { typeof(string), typeof(object) });
-			var countProperty = paramsType.GetProperty("Count");
-			var stringConcat = typeof(string).GetMethod("Concat", new Type[] { typeof(string), typeof(string) });
-			var appendToSb = sbType.GetMethod("Append", new Type[] { typeof(string) });
-			var expressions = new List<Expression>();
-
-			expressions.Add(Expression.Call(paramSb, appendToSb, Expression.Constant("(")));
-			for (int i = 0; i < properties.Length; i++) {
-				var p = properties[i];
-				var pt = p.PropertyType;
-
-				expressions.Add(Expression.Assign(name, Expression.Call(null, stringConcat, Expression.Constant("@v"), Expression.Call(Expression.Property(paramParams, countProperty), intToString))));
-
-				if (i != 0) {
-					expressions.Add(Expression.Call(paramSb, appendToSb, Expression.Constant(", ")));
-				}
-				expressions.Add(Expression.Call(paramSb, appendToSb, name));
-
-				var value = Expression.Property(paramValue, p);
-				if (pt.IsGenericType && pt.GetGenericTypeDefinition() == typeof(Col<>)) {
-					value = Expression.Field(value, pt.GetField("Value"));
-				}
-				expressions.Add(Expression.Call(paramParams, addWithValue, name, Expression.Convert(value, typeof(object))));
-			}
-			expressions.Add(Expression.Call(paramSb, appendToSb, Expression.Constant(")")));
-
-			var block = Expression.Block(new ParameterExpression[] { name }, expressions);
-
-			Invoke = Expression.Lambda<Action<MySqlParameterCollection, StringBuilder, T>>(block, new[] { paramParams, paramSb, paramValue }).Compile();
-		}
-	}
-
-	/// <summary>
 	/// 指定の列一覧クラスを基にエイリアスをセットした列一覧クラスを生成する
 	/// </summary>
 	/// <typeparam name="T">フィールドまたはプロパティとして<see cref="Col{S}"/>を持つ列一覧クラス型</typeparam>
@@ -1908,8 +2002,9 @@ namespace Db {
 			var colsType = typeof(T);
 			var inputCols = Expression.Parameter(colsType);
 			var inputAliasName = Expression.Parameter(typeof(string));
-			var fieldsOfCols = Col.GetFields(colsType);
-			var propertiesOfCols = Col.GetProperties(colsType);
+			var members = Col.GetFieldsAndProperties(colsType);
+			var fieldsOfCols = members.Item1;
+			var propertiesOfCols = members.Item2;
 			var cols = Expression.Parameter(colsType);
 			var expressions = new List<Expression>();
 			var colsCtor = colsType.GetConstructor(new Type[0]);
@@ -1944,11 +2039,11 @@ namespace Db {
 	}
 
 	/// <summary>
-	/// <see cref="MySqlDataReader"/>からの基本的な値取得用、１列毎のアクセスを提供する
+	/// <see cref="DbDataReader"/>からの基本的な値取得用、１列毎のアクセスを提供する
 	/// <para>失敗時にはカラム名が分かる様に例外を投げる</para>
 	/// </summary>
 	public static class SingleColumnAccessor {
-		public static byte[] GetBytesByIndex(MySqlDataReader dr, int index) {
+		public static byte[] GetBytesByIndex(DbDataReader dr, int index) {
 			try {
 				var v = dr[index];
 				return v == DBNull.Value ? null : (byte[])v;
@@ -1956,7 +2051,7 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static byte[] GetBytesByName(MySqlDataReader dr, string colName) {
+		public static byte[] GetBytesByName(DbDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? null : (byte[])v;
@@ -1965,7 +2060,7 @@ namespace Db {
 			}
 		}
 
-		public static string GetStringByIndex(MySqlDataReader dr, int index) {
+		public static string GetStringByIndex(DbDataReader dr, int index) {
 			try {
 				var v = dr[index];
 				return v == DBNull.Value ? null : (string)v;
@@ -1973,7 +2068,7 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static string GetStringByName(MySqlDataReader dr, string colName) {
+		public static string GetStringByName(DbDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? null : (string)v;
@@ -1982,14 +2077,14 @@ namespace Db {
 			}
 		}
 
-		public static bool GetBoolByIndex(MySqlDataReader dr, int index) {
+		public static bool GetBoolByIndex(DbDataReader dr, int index) {
 			try {
 				return Convert.ToBoolean(dr[index]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static bool? GetNullableBoolByIndex(MySqlDataReader dr, int index) {
+		public static bool? GetNullableBoolByIndex(DbDataReader dr, int index) {
 			try {
 				var v = dr[index];
 				return v == DBNull.Value ? default(bool?) : Convert.ToBoolean(v);
@@ -1997,14 +2092,14 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static bool GetBoolByName(MySqlDataReader dr, string colName) {
+		public static bool GetBoolByName(DbDataReader dr, string colName) {
 			try {
 				return Convert.ToBoolean(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static bool? GetNullableBoolByName(MySqlDataReader dr, string colName) {
+		public static bool? GetNullableBoolByName(DbDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(bool?) : Convert.ToBoolean(v);
@@ -2013,14 +2108,14 @@ namespace Db {
 			}
 		}
 
-		public static sbyte GetInt8ByIndex(MySqlDataReader dr, int index) {
+		public static sbyte GetInt8ByIndex(DbDataReader dr, int index) {
 			try {
 				return Convert.ToSByte(dr[index]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static sbyte? GetNullableInt8ByIndex(MySqlDataReader dr, int index) {
+		public static sbyte? GetNullableInt8ByIndex(DbDataReader dr, int index) {
 			try {
 				var v = dr[index];
 				return v == DBNull.Value ? default(sbyte?) : Convert.ToSByte(v);
@@ -2028,14 +2123,14 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static sbyte GetInt8ByName(MySqlDataReader dr, string colName) {
+		public static sbyte GetInt8ByName(DbDataReader dr, string colName) {
 			try {
 				return Convert.ToSByte(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static sbyte? GetNullableInt8ByName(MySqlDataReader dr, string colName) {
+		public static sbyte? GetNullableInt8ByName(DbDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(sbyte?) : Convert.ToSByte(v);
@@ -2044,14 +2139,14 @@ namespace Db {
 			}
 		}
 
-		public static short GetInt16ByIndex(MySqlDataReader dr, int index) {
+		public static short GetInt16ByIndex(DbDataReader dr, int index) {
 			try {
 				return Convert.ToInt16(dr[index]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static short? GetNullableInt16ByIndex(MySqlDataReader dr, int index) {
+		public static short? GetNullableInt16ByIndex(DbDataReader dr, int index) {
 			try {
 				var v = dr[index];
 				return v == DBNull.Value ? default(short?) : Convert.ToInt16(v);
@@ -2059,14 +2154,14 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static short GetInt16ByName(MySqlDataReader dr, string colName) {
+		public static short GetInt16ByName(DbDataReader dr, string colName) {
 			try {
 				return Convert.ToInt16(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static short? GetNullableInt16ByName(MySqlDataReader dr, string colName) {
+		public static short? GetNullableInt16ByName(DbDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(short?) : Convert.ToInt16(v);
@@ -2075,14 +2170,14 @@ namespace Db {
 			}
 		}
 
-		public static int GetInt32ByIndex(MySqlDataReader dr, int index) {
+		public static int GetInt32ByIndex(DbDataReader dr, int index) {
 			try {
 				return Convert.ToInt32(dr[index]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static int? GetNullableInt32ByIndex(MySqlDataReader dr, int index) {
+		public static int? GetNullableInt32ByIndex(DbDataReader dr, int index) {
 			try {
 				var v = dr[index];
 				return v == DBNull.Value ? default(int?) : Convert.ToInt32(v);
@@ -2090,14 +2185,14 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static int GetInt32ByName(MySqlDataReader dr, string colName) {
+		public static int GetInt32ByName(DbDataReader dr, string colName) {
 			try {
 				return Convert.ToInt32(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static int? GetNullableInt32ByName(MySqlDataReader dr, string colName) {
+		public static int? GetNullableInt32ByName(DbDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(int?) : Convert.ToInt32(v);
@@ -2106,14 +2201,14 @@ namespace Db {
 			}
 		}
 
-		public static long GetInt64ByIndex(MySqlDataReader dr, int index) {
+		public static long GetInt64ByIndex(DbDataReader dr, int index) {
 			try {
 				return Convert.ToInt64(dr[index]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static long? GetNullableInt64ByIndex(MySqlDataReader dr, int index) {
+		public static long? GetNullableInt64ByIndex(DbDataReader dr, int index) {
 			try {
 				var v = dr[index];
 				return v == DBNull.Value ? default(long?) : Convert.ToInt64(v);
@@ -2121,14 +2216,14 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static long GetInt64ByName(MySqlDataReader dr, string colName) {
+		public static long GetInt64ByName(DbDataReader dr, string colName) {
 			try {
 				return Convert.ToInt64(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static long? GetNullableInt64ByName(MySqlDataReader dr, string colName) {
+		public static long? GetNullableInt64ByName(DbDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(long?) : Convert.ToInt64(v);
@@ -2137,14 +2232,14 @@ namespace Db {
 			}
 		}
 
-		public static DateTime GetDateTimeByIndex(MySqlDataReader dr, int index) {
+		public static DateTime GetDateTimeByIndex(DbDataReader dr, int index) {
 			try {
 				return Convert.ToDateTime(dr[index]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static DateTime? GetNullableDateTimeByIndex(MySqlDataReader dr, int index) {
+		public static DateTime? GetNullableDateTimeByIndex(DbDataReader dr, int index) {
 			try {
 				var v = dr[index];
 				return v == DBNull.Value ? default(DateTime?) : Convert.ToDateTime(v);
@@ -2152,14 +2247,14 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static DateTime GetDateTimeByName(MySqlDataReader dr, string colName) {
+		public static DateTime GetDateTimeByName(DbDataReader dr, string colName) {
 			try {
 				return Convert.ToDateTime(dr[colName]);
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static DateTime? GetNullableDateTimeByName(MySqlDataReader dr, string colName) {
+		public static DateTime? GetNullableDateTimeByName(DbDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(DateTime?) : Convert.ToDateTime(v);
@@ -2168,14 +2263,14 @@ namespace Db {
 			}
 		}
 
-		public static Guid GetGuidByIndex(MySqlDataReader dr, int index) {
+		public static Guid GetGuidByIndex(DbDataReader dr, int index) {
 			try {
 				return (Guid)dr[index];
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static Guid? GetNullableGuidByIndex(MySqlDataReader dr, int index) {
+		public static Guid? GetNullableGuidByIndex(DbDataReader dr, int index) {
 			try {
 				var v = dr[index];
 				return v == DBNull.Value ? default(Guid?) : (Guid)v;
@@ -2183,14 +2278,14 @@ namespace Db {
 				throw new ApplicationException("カラム名 " + dr.GetName(index) + " " + ex.Message, ex);
 			}
 		}
-		public static Guid GetGuidByName(MySqlDataReader dr, string colName) {
+		public static Guid GetGuidByName(DbDataReader dr, string colName) {
 			try {
 				return (Guid)dr[colName];
 			} catch (Exception ex) {
 				throw new ApplicationException("カラム名 " + colName + " " + ex.Message, ex);
 			}
 		}
-		public static Guid? GetNullableGuidByName(MySqlDataReader dr, string colName) {
+		public static Guid? GetNullableGuidByName(DbDataReader dr, string colName) {
 			try {
 				var v = dr[colName];
 				return v == DBNull.Value ? default(Guid?) : (Guid)v;
@@ -2249,11 +2344,11 @@ namespace Db {
 	/// </summary>
 	/// <typeparam name="T">取得値型</typeparam>
 	public class DataReaderEnumerableByIndex<T> : IDisposable, IEnumerable<T> {
-		MySqlDataReader DataReader;
-		Func<MySqlDataReader, int, T> Getter;
+		DbDataReader DataReader;
+		Func<DbDataReader, int, T> Getter;
 		int Index;
 
-		public DataReaderEnumerableByIndex(MySqlDataReader dataReader, Func<MySqlDataReader, int, T> getter, int index) {
+		public DataReaderEnumerableByIndex(DbDataReader dataReader, Func<DbDataReader, int, T> getter, int index) {
 			this.DataReader = dataReader;
 			this.Getter = getter;
 			this.Index = index;
@@ -2299,11 +2394,11 @@ namespace Db {
 	/// </summary>
 	/// <typeparam name="T">取得値型、基本的に匿名クラス</typeparam>
 	public class DataReaderEnumerable<T> : IDisposable, IEnumerable<T> {
-		MySqlDataReader DataReader;
-		Func<MySqlDataReader, T, T> Getter;
+		DbDataReader DataReader;
+		Func<DbDataReader, T, T> Getter;
 		T BaseValue;
 
-		public DataReaderEnumerable(MySqlDataReader dataReader, Func<MySqlDataReader, T, T> getter, T baseValue) {
+		public DataReaderEnumerable(DbDataReader dataReader, Func<DbDataReader, T, T> getter, T baseValue) {
 			this.DataReader = dataReader;
 			this.Getter = getter;
 			this.BaseValue = baseValue;
@@ -2345,16 +2440,16 @@ namespace Db {
 	}
 
 	/// <summary>
-	/// <see cref="MySqlDataReader"/>から<typeparamref name="T"/>型の値を取得する処理を提供
+	/// <see cref="DbDataReader"/>から<typeparamref name="T"/>型の値を取得する処理を提供
 	/// </summary>
 	/// <typeparam name="T">取得先の値の型</typeparam>
 	public static class DataReaderToValue<T> {
-		public static readonly Func<MySqlDataReader, int, T> InvokeByIndex;
+		public static readonly Func<DbDataReader, int, T> InvokeByIndex;
 
 		static DataReaderToValue() {
 			var type = typeof(T);
 			var getter = SingleColumnAccessor.GetMethodByType(type, false);
-			InvokeByIndex = (Func<MySqlDataReader, int, T>)getter.CreateDelegate(typeof(Func<MySqlDataReader, int, T>));
+			InvokeByIndex = (Func<DbDataReader, int, T>)getter.CreateDelegate(typeof(Func<DbDataReader, int, T>));
 		}
 	}
 
@@ -3224,12 +3319,12 @@ namespace Db {
 	}
 
 	/// <summary>
-	/// <see cref="MySqlDataReader"/>から値を読み込みプロパティまたはフィールドへ値を設定する処理を提供
+	/// <see cref="DbDataReader"/>から値を読み込みプロパティまたはフィールドへ値を設定する処理を提供
 	/// </summary>
 	/// <typeparam name="T">プロパティまたはフィールドを持つクラス型、基本的に匿名クラス</typeparam>
 	public static class DataReaderToCols<T> {
-		public static readonly Func<MySqlDataReader, T, T> InvokeByIndex;
-		public static readonly Func<MySqlDataReader, T, T> InvokeByName;
+		public static readonly Func<DbDataReader, T, T> InvokeByIndex;
+		public static readonly Func<DbDataReader, T, T> InvokeByName;
 
 		static DataReaderToCols() {
 			InvokeByIndex = Generate(false);
@@ -3241,11 +3336,11 @@ namespace Db {
 		/// </summary>
 		/// <param name="byName">列名とプロパティ名をマッチングさせて取得するなら true 、列順とプロパティ順を使うなら false</param>
 		/// <returns>DataReader から<typeparamref name="T"/>へ値を読み込むデリゲート</returns>
-		static Func<MySqlDataReader, T, T> Generate(bool byName) {
+		static Func<DbDataReader, T, T> Generate(bool byName) {
 			var type = typeof(T);
 
 			// 作成するデリゲートの入力引数となる式
-			var dataReader = Expression.Parameter(typeof(MySqlDataReader));
+			var dataReader = Expression.Parameter(typeof(DbDataReader));
 			var baseValue = Expression.Parameter(type);
 
 			// アクセス先の列インデックス
@@ -3254,125 +3349,11 @@ namespace Db {
 			// DataReader から値を読み込み T 型のオブジェクトを生成する式を生成
 			var expression = DataReaderExpression.ReadClass(type, dataReader, ref index, baseValue);
 
-			return Expression.Lambda<Func<MySqlDataReader, T, T>>(
+			return Expression.Lambda<Func<DbDataReader, T, T>>(
 				expression,
 				dataReader,
 				baseValue
 			).Compile();
-
-
-			//// プロパティとフィールド一覧取得、両方存在する場合は順序が定かではなくなるため対応できない
-			//var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-			//var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
-			//if (properties.Length != 0 && fields.Length != 0) {
-			//	throw new ApplicationException(type + " 型はフィールドとプロパティ両方を使用しており、マッピングする列順を判定できないため使用できません。");
-			//}
-
-			//// メンバー型、名前一覧作成
-			//Type[] memberTypes;
-			//string[] memberNames;
-			//if (properties.Length != 0) {
-			//	memberTypes = properties.Select(p => p.PropertyType).ToArray();
-			//	memberNames = properties.Select(p => p.Name).ToArray();
-			//} else {
-			//	memberTypes = fields.Select(f => f.FieldType).ToArray();
-			//	memberNames = fields.Select(f => f.Name).ToArray();
-			//}
-
-			//// 指定インデックスメンバーを表す式の取得
-			//Func<Expression, int, Expression> member = (obj, i) => {
-			//	return properties.Length != 0 ? Expression.Property(obj, properties[i]) : Expression.Field(obj, fields[i]);
-			//};
-
-			//// 作成するデリゲートの入力引数となる式
-			//var inputDr = Expression.Parameter(typeof(MySqlDataReader));
-			//var inputBaseCols = Expression.Parameter(type);
-
-			//// メンバーの基となる値一覧作成
-			//var memberSourceExprs = new Expression[memberTypes.Length];
-			//for (int i = 0; i < memberTypes.Length; i++) {
-			//	var name = memberNames[i];
-			//	var mt = memberTypes[i];
-
-			//	// カラム指定
-			//	var colId = byName ? Expression.Constant(name) : Expression.Constant(i);
-
-			//	if (mt.IsGenericType && mt.GetGenericTypeDefinition() == typeof(Col<>)) {
-			//		// メンバが Col<> 型の場合
-
-			//		// Col<> に指定されたジェネリック型の取得
-			//		var ct = mt.GetGenericArguments()[0];
-
-			//		// DataReader から指定型の値を取得するデリゲートの取得
-			//		MethodInfo getter;
-			//		try {
-			//			getter = SingleColumnAccessor.GetMethodByType(ct, byName);
-			//		} catch (Exception ex) {
-			//			throw new ApplicationException("DataReader から " + type + "." + name + " の値への変換メソッドが存在しません。", ex);
-			//		}
-
-			//		// Col<> のコンストラクタ取得、ベースとなる Col<> と値を指定して初期化するコンストラクタを取得する
-			//		var pctor = mt.GetConstructor(new Type[] { mt, ct });
-			//		if (pctor == null) {
-			//			throw new ApplicationException("内部エラー、Col<T>(" + mt.Name + ", " + ct.Name + ") コンストラクタが存在しません。");
-			//		}
-
-			//		// ベースとなる Col<>
-			//		var col = member(inputBaseCols, i);
-
-			//		// DataReader から取得した値を基に Col<> を new する処理
-			//		memberSourceExprs[i] = Expression.New(pctor, col, Expression.Call(null, getter, inputDr, colId));
-			//	} else {
-			//		// DataReader から指定型の値を取得するデリゲートの取得
-			//		MethodInfo getter;
-			//		try {
-			//			getter = SingleColumnAccessor.GetMethodByType(mt, byName);
-			//		} catch (Exception ex) {
-			//			throw new ApplicationException("DataReader から " + type + "." + name + " の値への変換メソッドが存在しません。", ex);
-			//		}
-
-			//		// DataReader から値取得する処理
-			//		memberSourceExprs[i] = Expression.Call(null, getter, inputDr, colId);
-			//	}
-			//}
-
-			//var ctor = type.GetConstructor(memberTypes);
-			//if (ctor != null) {
-			//	// コンストラクタが使えるなら new でコンストラクタ呼び出し
-			//	return Expression.Lambda<Func<MySqlDataReader, T, T>>(
-			//		Expression.New(ctor, memberSourceExprs),
-			//		inputDr,
-			//		inputBaseCols
-			//	).Compile();
-			//} else {
-			//	// コンストラクタ使えないならデフォルトコンストラクタで生成してメンバー毎に設定していく処理を生成
-
-			//	// デフォルトコンストラクタ取得
-			//	ctor = type.GetConstructor(new Type[0]);
-			//	if (ctor == null) {
-			//		throw new ApplicationException(type + " にデフォルトコンストラクタが存在しません。");
-			//	}
-
-			//	var result = Expression.Parameter(type);
-			//	var expressions = new List<Expression>();
-
-			//	// type 型の一時変数作成
-			//	expressions.Add(Expression.Assign(result, Expression.New(ctor)));
-
-			//	// 一時変数のメンバに値を取得していく
-			//	for (int i = 0; i < memberSourceExprs.Length; i++) {
-			//		expressions.Add(Expression.Assign(member(result, i), memberSourceExprs[i]));
-			//	}
-
-			//	// 一時変数を戻り値とする
-			//	expressions.Add(result);
-
-			//	return Expression.Lambda<Func<MySqlDataReader, T, T>>(
-			//		Expression.Block(new ParameterExpression[] { result }, expressions),
-			//		inputDr,
-			//		inputBaseCols
-			//	).Compile();
-			//}
 		}
 	}
 }

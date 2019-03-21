@@ -150,33 +150,24 @@ namespace Db {
 		static bool r;
 
 		static void Main(string[] args) {
-			var a = new KeyOf<ClassB>(new ClassB { I1 = 1 });
-			var b = new KeyOf<ClassB>(new ClassB { I1 = 1 });
-			//var a = new KeyOf<ClassB>(new ClassB { A = 1, B = 2, Strs = new[] { "a", "b" }, Bytes = new byte[] { 1, 2, 3 }, Ints = new[] { 1, 2, 3 } });
-			//var b = new KeyOf<ClassB>(new ClassB { A = 1, B = 2, Strs = new[] { "a", "b" }, Bytes = new byte[] { 1, 2, 3 }, Ints = new[] { 1, 2, 3 } });
-			var s = new HashSet<KeyOf<ClassB>>();
-			s.Add(a);
-			s.Add(b);
-			Console.WriteLine(s.Count);
-			var sw1 = new System.Diagnostics.Stopwatch();
-			for (int loop = 0; loop < 10; loop++) {
-				sw1.Reset();
-				sw1.Start();
-				for (int i = 0; i < 100000000; i++) {
-					r = a == b;
-				}
-				Console.WriteLine(sw1.ElapsedMilliseconds);
-			}
-			return;
-
-
-			//Tbls.Test v = new Tbls.Test {
-			//	binary_id = Cols.binary_id.ValueAs(new byte[] { 1, 2, 3 }),
-			//	int_data = Cols.int_data.ValueAs(13),
-			//};
-			//Console.WriteLine(EqualTester<Tbls.Test>.GetHashCode(v));
-			return;
-
+			//var a = new KeyOf<ClassB>(new ClassB { I1 = 1 });
+			//var b = new KeyOf<ClassB>(new ClassB { I1 = 1 });
+			////var a = new KeyOf<ClassB>(new ClassB { A = 1, B = 2, Strs = new[] { "a", "b" }, Bytes = new byte[] { 1, 2, 3 }, Ints = new[] { 1, 2, 3 } });
+			////var b = new KeyOf<ClassB>(new ClassB { A = 1, B = 2, Strs = new[] { "a", "b" }, Bytes = new byte[] { 1, 2, 3 }, Ints = new[] { 1, 2, 3 } });
+			//var s = new HashSet<KeyOf<ClassB>>();
+			//s.Add(a);
+			//s.Add(b);
+			//Console.WriteLine(s.Count);
+			//var sw1 = new System.Diagnostics.Stopwatch();
+			//for (int loop = 0; loop < 10; loop++) {
+			//	sw1.Reset();
+			//	sw1.Start();
+			//	for (int i = 0; i < 100000000; i++) {
+			//		r = a == b;
+			//	}
+			//	Console.WriteLine(sw1.ElapsedMilliseconds);
+			//}
+			//return;
 
 			var rnd = new Random();
 
@@ -185,7 +176,6 @@ namespace Db {
 
 				using (var cmd = con.CreateCommand()) {
 					cmd.CommandTimeout = 0;
-
 
 					var t1 = Tbls.test1.As("t1");
 					var t2 = Tbls.test2.As("t2");
@@ -196,97 +186,150 @@ namespace Db {
 					var t7 = Tbls.test7.As("t7");
 					var t8 = Tbls.test8.As("t8");
 
-					//Db.DropTableIfExists(cmd, Tbls.test1);
-					//Db.DropTableIfExists(cmd, Tbls.test2);
-					//Db.DropTableIfExists(cmd, Tbls.test3);
-					//Db.DropTableIfExists(cmd, Tbls.test4);
-					//Db.DropTableIfExists(cmd, Tbls.test5);
-					//Db.DropTableIfExists(cmd, Tbls.test6);
-					//Db.DropTableIfExists(cmd, Tbls.test7);
-					//Db.DropTableIfExists(cmd, Tbls.test8);
+					//Tbls.test1.DropTableIfExists(cmd);
+					//Tbls.test2.DropTableIfExists(cmd);
+					//Tbls.test3.DropTableIfExists(cmd);
+					//Tbls.test4.DropTableIfExists(cmd);
+					//Tbls.test5.DropTableIfExists(cmd);
+					//Tbls.test6.DropTableIfExists(cmd);
+					//Tbls.test7.DropTableIfExists(cmd);
+					//Tbls.test8.DropTableIfExists(cmd);
 
-					//Db.CreateTableIfNotExists(cmd, Tbls.test1);
-					//Db.CreateTableIfNotExists(cmd, Tbls.test2);
-					//Db.CreateTableIfNotExists(cmd, Tbls.test3);
-					//Db.CreateTableIfNotExists(cmd, Tbls.test4);
-					//Db.CreateTableIfNotExists(cmd, Tbls.test5);
-					//Db.CreateTableIfNotExists(cmd, Tbls.test6);
-					//Db.CreateTableIfNotExists(cmd, Tbls.test7);
-					//Db.CreateTableIfNotExists(cmd, Tbls.test8);
+					//Tbls.test1.CreateTableIfNotExists(cmd);
+					//Tbls.test2.CreateTableIfNotExists(cmd);
+					//Tbls.test3.CreateTableIfNotExists(cmd);
+					//Tbls.test4.CreateTableIfNotExists(cmd);
+					//Tbls.test5.CreateTableIfNotExists(cmd);
+					//Tbls.test6.CreateTableIfNotExists(cmd);
+					//Tbls.test7.CreateTableIfNotExists(cmd);
+					//Tbls.test8.CreateTableIfNotExists(cmd);
 
-					//var paramId1 = new Param(0);
-					//var paramId2 = new Param(0);
-					//var paramBulk = new Param[500, 2];
+					var paramId1 = new Param(0);
+					var paramId2 = new Param(0);
+					var paramBulk1 = new Param[500, 2];
+					var paramBulk2 = new Param[500, 2];
+					var paramBulk3 = new Param[500, 2];
+					var paramBulk4 = new Param[500, 2];
+					var paramBulk5 = new Param[500, 2];
+					var paramBulk6 = new Param[500, 2];
+					var paramBulk7 = new Param[500, 2];
+					var paramBulk8 = new Param[500, 2];
 
-					//for (int i = 0; i < paramBulk.GetLength(0); i++) {
-					//	paramBulk[i, 0] = new Param(0);
-					//	paramBulk[i, 1] = new Param(0);
-					//}
+					for (int i = 0; i < paramBulk1.GetLength(0); i++) {
+						paramBulk1[i, 0] = new Param(0);
+						paramBulk1[i, 1] = new Param(0);
+						paramBulk2[i, 0] = new Param(0);
+						paramBulk2[i, 1] = new Param(0);
+						paramBulk3[i, 0] = new Param(0);
+						paramBulk3[i, 1] = new Param(0);
+						paramBulk4[i, 0] = new Param(0);
+						paramBulk4[i, 1] = new Param(0);
+						paramBulk5[i, 0] = new Param(0);
+						paramBulk5[i, 1] = new Param(0);
+						paramBulk6[i, 0] = new Param(0);
+						paramBulk6[i, 1] = new Param(0);
+						paramBulk7[i, 0] = new Param(0);
+						paramBulk7[i, 1] = new Param(0);
+						paramBulk8[i, 0] = new Param(0);
+						paramBulk8[i, 1] = new Param(0);
+					}
 
-					//var insertBulk1 = Db.Sql(Db.InsertInto(t1, t1.Cols.id1, t1.Cols.id2), Db.Values(paramBulk));
-					//var insertBulk2 = Db.Sql(Db.InsertInto(t2, t2.Cols.id2, t2.Cols.id3), Db.Values(paramBulk));
-					//var insertBulk3 = Db.Sql(Db.InsertInto(t3, t3.Cols.id3, t3.Cols.id4), Db.Values(paramBulk));
-					//var insertBulk4 = Db.Sql(Db.InsertInto(t4, t4.Cols.id4, t4.Cols.id5), Db.Values(paramBulk));
-					//var insertBulk5 = Db.Sql(Db.InsertInto(t5, t5.Cols.id5, t5.Cols.id6), Db.Values(paramBulk));
-					//var insertBulk6 = Db.Sql(Db.InsertInto(t6, t6.Cols.id6, t6.Cols.id7), Db.Values(paramBulk));
-					//var insertBulk7 = Db.Sql(Db.InsertInto(t7, t7.Cols.id7, t7.Cols.id8), Db.Values(paramBulk));
-					//var insertBulk8 = Db.Sql(Db.InsertInto(t8, t8.Cols.id8, t8.Cols.int_data), Db.Values(paramBulk));
+					var insertBulk1 = Db.InsertInto(t1, t1.Cols.id1, t1.Cols.id2).Values(paramBulk1).OnDuplicateKeyUpdate(Db.Assign(t1.Cols.id2, Db.Values(t1.Cols.id2))).ToFunc();
+					var insertBulk2 = Db.InsertInto(t2, t2.Cols.id2, t2.Cols.id3).Values(paramBulk2).ToFunc();
+					var insertBulk3 = Db.InsertInto(t3, t3.Cols.id3, t3.Cols.id4).Values(paramBulk3).ToFunc();
+					var insertBulk4 = Db.InsertInto(t4, t4.Cols.id4, t4.Cols.id5).Values(paramBulk4).ToFunc();
+					var insertBulk5 = Db.InsertInto(t5, t5.Cols.id5, t5.Cols.id6).Values(paramBulk5).ToFunc();
+					var insertBulk6 = Db.InsertInto(t6, t6.Cols.id6, t6.Cols.id7).Values(paramBulk6).ToFunc();
+					var insertBulk7 = Db.InsertInto(t7, t7.Cols.id7, t7.Cols.id8).Values(paramBulk7).ToFunc();
+					var insertBulk8 = Db.InsertInto(t8, t8.Cols.id8, t8.Cols.int_data).Values(paramBulk8).ToFunc();
 
-					//var insert1 = Db.Sql(Db.InsertInto(t1, t1.Cols.id1, t1.Cols.id2), Db.Values(paramId1, paramId2));
-					//var insert2 = Db.Sql(Db.InsertInto(t2, t2.Cols.id2, t2.Cols.id3), Db.Values(paramId1, paramId2));
-					//var insert3 = Db.Sql(Db.InsertInto(t3, t3.Cols.id3, t3.Cols.id4), Db.Values(paramId1, paramId2));
-					//var insert4 = Db.Sql(Db.InsertInto(t4, t4.Cols.id4, t4.Cols.id5), Db.Values(paramId1, paramId2));
-					//var insert5 = Db.Sql(Db.InsertInto(t5, t5.Cols.id5, t5.Cols.id6), Db.Values(paramId1, paramId2));
-					//var insert6 = Db.Sql(Db.InsertInto(t6, t6.Cols.id6, t6.Cols.id7), Db.Values(paramId1, paramId2));
-					//var insert7 = Db.Sql(Db.InsertInto(t7, t7.Cols.id7, t7.Cols.id8), Db.Values(paramId1, paramId2));
-					//var insert8 = Db.Sql(Db.InsertInto(t8, t8.Cols.id8, t8.Cols.int_data), Db.Values(paramId1, paramId2));
+					var insert1 = Db.InsertInto(t1, t1.Cols.id1, t1.Cols.id2).Values(paramId1, paramId2).OnDuplicateKeyUpdate(Db.Assign(t1.Cols.id2, Db.Values(t1.Cols.id2))).ToFunc();
+					var insert2 = Db.InsertInto(t2, t2.Cols.id2, t2.Cols.id3).Values(paramId1, paramId2).ToFunc();
+					var insert3 = Db.InsertInto(t3, t3.Cols.id3, t3.Cols.id4).Values(paramId1, paramId2).ToFunc();
+					var insert4 = Db.InsertInto(t4, t4.Cols.id4, t4.Cols.id5).Values(paramId1, paramId2).ToFunc();
+					var insert5 = Db.InsertInto(t5, t5.Cols.id5, t5.Cols.id6).Values(paramId1, paramId2).ToFunc();
+					var insert6 = Db.InsertInto(t6, t6.Cols.id6, t6.Cols.id7).Values(paramId1, paramId2).ToFunc();
+					var insert7 = Db.InsertInto(t7, t7.Cols.id7, t7.Cols.id8).Values(paramId1, paramId2).ToFunc();
+					var insert8 = Db.InsertInto(t8, t8.Cols.id8, t8.Cols.int_data).Values(paramId1, paramId2).ToFunc();
 
-					//var count = 0;
-					//for (int i = 0; i < 65536; i++) {
-					//	paramBulk[count, 0].Value = i;
-					//	paramBulk[count, 1].Value = i;
-					//	count++;
-					//	if (count == paramBulk.GetLength(0)) {
-					//		count = 0;
-					//		insertBulk1(cmd).ExecuteNonQuery();
-					//		insertBulk2(cmd).ExecuteNonQuery();
-					//		insertBulk3(cmd).ExecuteNonQuery();
-					//		insertBulk4(cmd).ExecuteNonQuery();
-					//		insertBulk5(cmd).ExecuteNonQuery();
-					//		insertBulk6(cmd).ExecuteNonQuery();
-					//		insertBulk7(cmd).ExecuteNonQuery();
-					//		insertBulk8(cmd).ExecuteNonQuery();
-					//	}
-					//}
-					//for (int i = 0; i < count; i++) {
-					//	paramId1.Value = paramBulk[i, 0].Value;
-					//	paramId2.Value = paramBulk[1, 1].Value;
-					//	insert1(cmd).ExecuteNonQuery();
-					//	insert2(cmd).ExecuteNonQuery();
-					//	insert3(cmd).ExecuteNonQuery();
-					//	insert4(cmd).ExecuteNonQuery();
-					//	insert5(cmd).ExecuteNonQuery();
-					//	insert6(cmd).ExecuteNonQuery();
-					//	insert7(cmd).ExecuteNonQuery();
-					//	insert8(cmd).ExecuteNonQuery();
-					//}
+					var count = 0;
+					for (int i = 0; i < 100; i++) {
+						paramBulk1[count, 0].Value = i;
+						paramBulk1[count, 1].Value = i * 2;
+						paramBulk2[count, 0].Value = i * 2;
+						paramBulk2[count, 1].Value = i * 3;
+						paramBulk3[count, 0].Value = i * 3;
+						paramBulk3[count, 1].Value = i * 4;
+						paramBulk4[count, 0].Value = i * 4;
+						paramBulk4[count, 1].Value = i * 5;
+						paramBulk5[count, 0].Value = i * 5;
+						paramBulk5[count, 1].Value = i * 6;
+						paramBulk6[count, 0].Value = i * 6;
+						paramBulk6[count, 1].Value = i * 7;
+						paramBulk7[count, 0].Value = i * 7;
+						paramBulk7[count, 1].Value = i * 8;
+						paramBulk8[count, 0].Value = i * 8;
+						paramBulk8[count, 1].Value = i * 9;
+						count++;
+						if (count == paramBulk1.GetLength(0)) {
+							count = 0;
+							insertBulk1(cmd).ExecuteNonQuery();
+							insertBulk2(cmd).ExecuteNonQuery();
+							insertBulk3(cmd).ExecuteNonQuery();
+							insertBulk4(cmd).ExecuteNonQuery();
+							insertBulk5(cmd).ExecuteNonQuery();
+							insertBulk6(cmd).ExecuteNonQuery();
+							insertBulk7(cmd).ExecuteNonQuery();
+							insertBulk8(cmd).ExecuteNonQuery();
+						}
+					}
+					for (int i = 0; i < count; i++) {
+						paramId1.Value = paramBulk1[i, 0].Value;
+						paramId2.Value = paramBulk1[i, 1].Value;
+						insert1(cmd).ExecuteNonQuery();
 
-					var selectTest1 = Db.Sql(
-						Db.Select(t1.Cols),
-						Db.From(t1)
-					);
+						paramId1.Value = paramBulk2[i, 0].Value;
+						paramId2.Value = paramBulk2[i, 1].Value;
+						insert2(cmd).ExecuteNonQuery();
 
-					var select = Db.Sql(
-						Db.Select(),
-						Db.From(t1),
-						Db.InnerJoin(t2).On(t2.Cols.id2, "=", t1.Cols.id2),
-						Db.InnerJoin(t3).On(t3.Cols.id3, "=", t2.Cols.id3),
-						Db.InnerJoin(t4).On(t4.Cols.id4, "=", t3.Cols.id4),
-						Db.InnerJoin(t5).On(t5.Cols.id5, "=", t4.Cols.id5),
-						Db.InnerJoin(t6).On(t6.Cols.id6, "=", t5.Cols.id6),
-						Db.InnerJoin(t7).On(t7.Cols.id7, "=", t6.Cols.id7),
-						Db.InnerJoin(t8).On(t8.Cols.id8, "=", t7.Cols.id8)
-					);
+						paramId1.Value = paramBulk3[i, 0].Value;
+						paramId2.Value = paramBulk3[i, 1].Value;
+						insert3(cmd).ExecuteNonQuery();
+
+						paramId1.Value = paramBulk4[i, 0].Value;
+						paramId2.Value = paramBulk4[i, 1].Value;
+						insert4(cmd).ExecuteNonQuery();
+
+						paramId1.Value = paramBulk5[i, 0].Value;
+						paramId2.Value = paramBulk5[i, 1].Value;
+						insert5(cmd).ExecuteNonQuery();
+
+						paramId1.Value = paramBulk6[i, 0].Value;
+						paramId2.Value = paramBulk6[i, 1].Value;
+						insert6(cmd).ExecuteNonQuery();
+
+						paramId1.Value = paramBulk7[i, 0].Value;
+						paramId2.Value = paramBulk7[i, 1].Value;
+						insert7(cmd).ExecuteNonQuery();
+
+						paramId1.Value = paramBulk8[i, 0].Value;
+						paramId2.Value = paramBulk8[i, 1].Value;
+						insert8(cmd).ExecuteNonQuery();
+					}
+
+					//var selectCols = new { t1 = t1.Cols, t2 = t2.Cols, t3 = t3.Cols, t4 = t4.Cols, t5 = t5.Cols, t6 = t6.Cols, t7 = t7.Cols, t8 = t8.Cols };
+					var selectCols = new { t8 = t8.Cols };
+					var select =
+						Db.Select(selectCols)
+						.From(t1)
+						.InnerJoin(t2).On(t2.Cols.id2, "=", t1.Cols.id2)
+						.InnerJoin(t3).On(t3.Cols.id3, "=", t2.Cols.id3)
+						.InnerJoin(t4).On(t4.Cols.id4, "=", t3.Cols.id4)
+						.InnerJoin(t5).On(t5.Cols.id5, "=", t4.Cols.id5)
+						.InnerJoin(t6).On(t6.Cols.id6, "=", t5.Cols.id6)
+						.InnerJoin(t7).On(t7.Cols.id7, "=", t6.Cols.id7)
+						.InnerJoin(t8).On(t8.Cols.id8, "=", t7.Cols.id8)
+						.ToFunc();
 
 
 					var sw = new System.Diagnostics.Stopwatch();
@@ -310,7 +353,8 @@ namespace Db {
 					//		//Console.WriteLine(r.i1 + " " + r.i2);
 					//	}
 					//}
-					using (var records = Db.Enumerate(select(cmd), new { t1 = t1.Cols, t2 = t2.Cols, t3 = t3.Cols, t4 = t4.Cols, t5 = t5.Cols, t6 = t6.Cols, t7 = t7.Cols, t8 = t8.Cols })) {
+
+					using (var records = Db.Enumerate(select(cmd), selectCols)) {
 						foreach (var r in records) {
 							//Console.WriteLine(r.t8.int_data.Value);
 						}
@@ -319,26 +363,27 @@ namespace Db {
 					Console.WriteLine(sw.ElapsedMilliseconds);
 
 
-					//Db.DropTableIfExists(cmd, Tbls.test);
-					//Db.DropTableIfExists(cmd, Tbls.employee);
-					//Db.CreateTableIfNotExists(cmd, Tbls.test);
-					//Db.CreateTableIfNotExists(cmd, Tbls.employee);
+					Tbls.test.DropTableIfExists(cmd);
+					Tbls.employee.DropTableIfExists(cmd);
+					Tbls.test.CreateTableIfNotExists(cmd);
+					Tbls.employee.CreateTableIfNotExists(cmd);
 
-					//var t = Tbls.test.Alias("t");
-					//var paramValuesBulk = new Param[500][];
-					//var paramBinaryId = new Param(null);
-					//var paramIntValue = new Param(0);
+					var t = Tbls.test.As("t");
+					var paramValuesBulk = new Param[500][];
+					var paramBinaryId = new Param(null);
+					var paramIntValue = new Param(0);
 
-					//for (int i = 0; i < paramValuesBulk.Length; i++) {
-					//	paramValuesBulk[i] = new Param[] { new Param(null), new Param(0) };
-					//}
+					for (int i = 0; i < paramValuesBulk.Length; i++) {
+						paramValuesBulk[i] = new Param[] { new Param(null), new Param(0) };
+					}
 
-					//var insertBulk = Db.Sql(
-					//	Db.InsertInto(t, t.Cols.binary_id, t.Cols.int_data),
-					//	Db.Values(paramValuesBulk),
-					//	Db.OnDuplicateKeyUpdate()
-					//		.Set(t.Cols.int_data, Db.Values(t.Cols.int_data))
-					//);
+					var upsert =
+						Db.InsertInto(t, t.Cols.binary_id, t.Cols.int_data)
+						.Values(paramValuesBulk)
+						.OnDuplicateKeyUpdate(
+							Db.Assign(t.Cols.int_data, Db.Values(t.Cols.int_data))
+						)
+						.ToFunc();
 
 					//var insert = Db.Sql(
 					//	Db.InsertInto(t, t.Cols.binary_id, t.Cols.int_data),
