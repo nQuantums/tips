@@ -295,7 +295,7 @@ namespace Db {
 		public static Tuple<List<FieldInfo>, List<FieldInfo>> Distribute(FieldInfo[] source) {
 			var colmembers = new List<FieldInfo>();
 			var noncolmembers = new List<FieldInfo>();
-			for(int i = 0; i < source.Length; i++) {
+			for (int i = 0; i < source.Length; i++) {
 				var m = source[i];
 				var t = m.FieldType;
 				if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Col<>)) {
@@ -1338,11 +1338,22 @@ namespace Db {
 		}
 	}
 
+	public class SqlEnd : SqlElement {
+		public SqlEnd(SqlElement prev) : base(prev) {
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append(";");
+		}
+	}
+
 	public static class SqlExtensionForMySql {
 		public static void CreateTableIfNotExists(this Tbl tbl, MySqlCommand cmd) { Db.CreateTableIfNotExists(cmd, tbl); }
 		public static void DropTableIfExists(this Tbl tbl, MySqlCommand cmd) { Db.DropTableIfExists(cmd, tbl); }
 		public static Func<MySqlCommand, MySqlCommand> ToFunc(this SqlElement element) { return Db.Sql(element); }
 		public static SqlSelect Select(this SqlInsertInto element, params object[] cols) { return new SqlSelect(element, cols); }
+		public static SqlSelect Select(this SqlEnd element, params object[] cols) { return new SqlSelect(element, cols); }
+		public static SqlUpdate Update(this SqlEnd element, object tbl) { return new SqlUpdate(element, tbl); }
 		public static SqlFrom From(this SqlSelect element, object tbl) { return new SqlFrom(element, tbl); }
 		public static SqlJoin InnerJoin(this SqlFrom element, object tbl) { return new SqlJoin(element, JoinType.Inner, tbl); }
 		public static SqlJoin LeftJoin(this SqlFrom element, object tbl) { return new SqlJoin(element, JoinType.Left, tbl); }
@@ -1365,6 +1376,14 @@ namespace Db {
 		public static SqlSet Set(this SqlJoin element, params SqlAssign[] assigns) { return new SqlSet(element, assigns); }
 		public static SqlValues Values(this SqlInsertInto element, params object[] value) { return new SqlValues(element, value); }
 		public static SqlValues Values(this SqlInsertInto element, object[,] values) { return new SqlValues(element, values); }
+		public static SqlEnd End(this SqlFrom element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlJoin element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlWhere element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlGroupBy element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlOrderBy element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlValues element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlSet element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlOnDuplicateKeyUpdate element) { return new SqlEnd(element); }
 	}
 
 	/// <summary>
@@ -1904,7 +1923,7 @@ namespace Db {
 		/// <param name="byName">列名とプロパティ名をマッチングさせて取得するなら true 、列順とプロパティ順を使うなら false</param>
 		/// <param name="columns">マッピングする<see cref="Col{T}"/>を指定する new { Cols.title, Cols.date } の様な匿名クラス</param>
 		/// <returns>レコードコレクション</returns>
-		public static List<T> ReadList<T>(MySqlCommand cmd, T columns, bool byName) {
+		public static List<T> ReadList<T>(MySqlCommand cmd, T columns, bool byName = false) {
 			var result = new List<T>();
 			var dr2cols = byName ? DataReaderToCols<T>.InvokeByName : DataReaderToCols<T>.InvokeByIndex;
 			using (var dr = cmd.ExecuteReader()) {
@@ -2918,7 +2937,7 @@ namespace Db {
 			}
 
 			var zero = Expression.Constant((int)0);
-			
+
 			if (type == typeof(string)) {
 				// 文字列なら null チェック後に GetHashCode 呼び出し
 				return GetNullTest(value, Expression.Call(value, getHashCode), zero);
@@ -3155,20 +3174,20 @@ namespace Db {
 		static readonly Func<T, int> _GetHashCode = EqualTester<T>.GetHashCode;
 		static readonly Func<T, T, bool> _Equals = EqualTester<T>.Equals;
 
+		int _HashCode;
+
 		/// <summary>
 		/// 値
 		/// </summary>
-		public T Value;
-
-		public KeyOf() {
-		}
+		public readonly T Value;
 
 		public KeyOf(T value) {
 			this.Value = value;
+			_HashCode = _GetHashCode(value);
 		}
 
 		public override int GetHashCode() {
-			return _GetHashCode(this.Value);
+			return _HashCode;
 		}
 
 		public override bool Equals(object obj) {
