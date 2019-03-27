@@ -1838,7 +1838,7 @@ namespace Db {
 					if (i == 0) {
 						hashCode = (uint)c.Name.GetHashCode();
 					} else {
-						hashCode *= (uint)c.Name.GetHashCode();
+						hashCode = (uint)EqualTester.CombineHashCode((int)hashCode, c.Name.GetHashCode());
 					}
 				}
 
@@ -2615,6 +2615,33 @@ namespace Db {
 			return ((int)rol5 + h1) ^ h2;
 		}
 
+		/// <summary>
+		/// 指定のメモリ内容の一致判定を行う
+		/// </summary>
+		/// <param name="l">左辺値</param>
+		/// <param name="r">右辺値</param>
+		/// <param name="n"></param>
+		/// <returns>一致するなら true</returns>
+		public static unsafe bool Equals(byte* l, byte* r, int n) {
+			int i = 0;
+			for (; ; ) {
+				var ni = i + sizeof(IntPtr);
+				if (n < ni) {
+					break;
+				}
+				if (*(IntPtr*)(l + i) != *(IntPtr*)(r + i)) {
+					return false;
+				}
+				i = ni;
+			}
+			for (; i < n; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
 		public static bool Equals(sbyte[] l, sbyte[] r) {
 			if ((l == null) != (r == null)) {
 				return false;
@@ -2625,9 +2652,19 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					fixed (sbyte* pl = l)
+					fixed (sbyte* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2643,9 +2680,19 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					fixed (byte* pl = l)
+					fixed (byte* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2661,9 +2708,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(short)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(short);
+					fixed (short* pl = l)
+					fixed (short* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2679,9 +2737,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(ushort)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(ushort);
+					fixed (ushort* pl = l)
+					fixed (ushort* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2697,9 +2766,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(int)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(int);
+					fixed (int* pl = l)
+					fixed (int* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2715,9 +2795,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(uint)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(uint);
+					fixed (uint* pl = l)
+					fixed (uint* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2733,9 +2824,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(long)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(long);
+					fixed (long* pl = l)
+					fixed (long* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2751,9 +2853,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(ulong)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(ulong);
+					fixed (ulong* pl = l)
+					fixed (ulong* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2769,9 +2882,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / 16) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(decimal);
+					fixed (decimal* pl = l)
+					fixed (decimal* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2787,9 +2911,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / 16) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(Guid);
+					fixed (Guid* pl = l)
+					fixed (Guid* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2805,9 +2940,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / 8) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(DateTime);
+					fixed (DateTime* pl = l)
+					fixed (DateTime* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
