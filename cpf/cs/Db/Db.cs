@@ -358,9 +358,14 @@ namespace Db {
 				return;
 			}
 
+			// 内部にカラムを含むクラス以外は弾く
 			var type = cols.GetType();
 			if (type.IsSubclassOf(typeof(Col))) {
 				// Col クラスはこれ以上分解できない列なので対象外
+				return;
+			}
+			if (type.IsSubclassOf(typeof(SqlElement))) {
+				// SqlElement はそのオブジェクト自身に文字列化を行わせるためカラムに分解してはいけない
 				return;
 			}
 			if (type.IsValueType || type == typeof(string)) {
@@ -1300,6 +1305,93 @@ namespace Db {
 		}
 	}
 
+	public class SqlCase : SqlElement {
+		public object CaseValue;
+
+		public SqlCase(SqlElement prev, object caseValue = null) : base(prev) {
+			this.CaseValue = caseValue;
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append("CASE");
+			if (this.CaseValue != null) {
+				context.Append(sb, this.CaseValue, flags | SqlBuildContextAppendFlags.WithAlias);
+			}
+		}
+	}
+
+	public class SqlWhen : SqlElement {
+		public object[] Expressions;
+
+		public SqlWhen(SqlElement prev, object expression, params object[] expressions) : base(prev) {
+			var exprs = new object[expressions.Length + 1];
+			exprs[0] = expression;
+			if (expressions.Length != 0) {
+				Array.Copy(expressions, 0, exprs, 1, expressions.Length);
+			}
+			this.Expressions = exprs;
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append("WHEN");
+			foreach (var e in this.Expressions) {
+				sb.Append(" ");
+				context.Append(sb, e, flags | SqlBuildContextAppendFlags.WithAlias);
+			}
+		}
+	}
+
+	public class SqlThen : SqlElement {
+		public object[] Expressions;
+
+		public SqlThen(SqlElement prev, object expression, params object[] expressions) : base(prev) {
+			var exprs = new object[expressions.Length + 1];
+			exprs[0] = expression;
+			if (expressions.Length != 0) {
+				Array.Copy(expressions, 0, exprs, 1, expressions.Length);
+			}
+			this.Expressions = exprs;
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append("THEN");
+			foreach (var e in this.Expressions) {
+				sb.Append(" ");
+				context.Append(sb, e, flags | SqlBuildContextAppendFlags.WithAlias);
+			}
+		}
+	}
+
+	public class SqlElse : SqlElement {
+		public object[] Expressions;
+
+		public SqlElse(SqlElement prev, object expression, params object[] expressions) : base(prev) {
+			var exprs = new object[expressions.Length + 1];
+			exprs[0] = expression;
+			if (expressions.Length != 0) {
+				Array.Copy(expressions, 0, exprs, 1, expressions.Length);
+			}
+			this.Expressions = exprs;
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append("ELSE");
+			foreach (var e in this.Expressions) {
+				sb.Append(" ");
+				context.Append(sb, e, flags | SqlBuildContextAppendFlags.WithAlias);
+			}
+		}
+	}
+
+	public class SqlEndCase : SqlElement {
+		public SqlEndCase(SqlElement prev) : base(prev) {
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append("END");
+		}
+	}
+
 	public class SqlOnDuplicateKeyUpdate : SqlElement {
 		public SqlAssign[] Assigns;
 
@@ -1384,6 +1476,12 @@ namespace Db {
 		public static SqlEnd End(this SqlValues element) { return new SqlEnd(element); }
 		public static SqlEnd End(this SqlSet element) { return new SqlEnd(element); }
 		public static SqlEnd End(this SqlOnDuplicateKeyUpdate element) { return new SqlEnd(element); }
+		public static SqlWhen When(this SqlCase element, object expression, params object[] expressions) { return new SqlWhen(element, expression, expressions); }
+		public static SqlWhen When(this SqlThen element, object expression, params object[] expressions) { return new SqlWhen(element, expression, expressions); }
+		public static SqlThen Then(this SqlWhen element, object expression, params object[] expressions) { return new SqlThen(element, expression, expressions); }
+		public static SqlElse Else(this SqlThen element, object expression, params object[] expressions) { return new SqlElse(element, expression, expressions); }
+		public static SqlEndCase End(this SqlThen element) { return new SqlEndCase(element); }
+		public static SqlEndCase End(this SqlElse element) { return new SqlEndCase(element); }
 	}
 
 	/// <summary>
@@ -1751,6 +1849,10 @@ namespace Db {
 		/// <returns><see cref="SqlOnDuplicateKeyUpdate"/></returns>
 		public static SqlOnDuplicateKeyUpdate OnDuplicateKeyUpdate(params SqlAssign[] assigns) {
 			return new SqlOnDuplicateKeyUpdate(null, assigns);
+		}
+
+		public static SqlCase Case(object caseValue = null) {
+			return new SqlCase(null, caseValue);
 		}
 
 		/// <summary>
