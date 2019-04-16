@@ -295,7 +295,7 @@ namespace Db {
 		public static Tuple<List<FieldInfo>, List<FieldInfo>> Distribute(FieldInfo[] source) {
 			var colmembers = new List<FieldInfo>();
 			var noncolmembers = new List<FieldInfo>();
-			for(int i = 0; i < source.Length; i++) {
+			for (int i = 0; i < source.Length; i++) {
 				var m = source[i];
 				var t = m.FieldType;
 				if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Col<>)) {
@@ -358,9 +358,14 @@ namespace Db {
 				return;
 			}
 
+			// 内部にカラムを含むクラス以外は弾く
 			var type = cols.GetType();
 			if (type.IsSubclassOf(typeof(Col))) {
 				// Col クラスはこれ以上分解できない列なので対象外
+				return;
+			}
+			if (type.IsSubclassOf(typeof(SqlElement))) {
+				// SqlElement はそのオブジェクト自身に文字列化を行わせるためカラムに分解してはいけない
 				return;
 			}
 			if (type.IsValueType || type == typeof(string)) {
@@ -1300,6 +1305,93 @@ namespace Db {
 		}
 	}
 
+	public class SqlCase : SqlElement {
+		public object CaseValue;
+
+		public SqlCase(SqlElement prev, object caseValue = null) : base(prev) {
+			this.CaseValue = caseValue;
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append("CASE");
+			if (this.CaseValue != null) {
+				context.Append(sb, this.CaseValue, flags | SqlBuildContextAppendFlags.WithAlias);
+			}
+		}
+	}
+
+	public class SqlWhen : SqlElement {
+		public object[] Expressions;
+
+		public SqlWhen(SqlElement prev, object expression, params object[] expressions) : base(prev) {
+			var exprs = new object[expressions.Length + 1];
+			exprs[0] = expression;
+			if (expressions.Length != 0) {
+				Array.Copy(expressions, 0, exprs, 1, expressions.Length);
+			}
+			this.Expressions = exprs;
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append("WHEN");
+			foreach (var e in this.Expressions) {
+				sb.Append(" ");
+				context.Append(sb, e, flags | SqlBuildContextAppendFlags.WithAlias);
+			}
+		}
+	}
+
+	public class SqlThen : SqlElement {
+		public object[] Expressions;
+
+		public SqlThen(SqlElement prev, object expression, params object[] expressions) : base(prev) {
+			var exprs = new object[expressions.Length + 1];
+			exprs[0] = expression;
+			if (expressions.Length != 0) {
+				Array.Copy(expressions, 0, exprs, 1, expressions.Length);
+			}
+			this.Expressions = exprs;
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append("THEN");
+			foreach (var e in this.Expressions) {
+				sb.Append(" ");
+				context.Append(sb, e, flags | SqlBuildContextAppendFlags.WithAlias);
+			}
+		}
+	}
+
+	public class SqlElse : SqlElement {
+		public object[] Expressions;
+
+		public SqlElse(SqlElement prev, object expression, params object[] expressions) : base(prev) {
+			var exprs = new object[expressions.Length + 1];
+			exprs[0] = expression;
+			if (expressions.Length != 0) {
+				Array.Copy(expressions, 0, exprs, 1, expressions.Length);
+			}
+			this.Expressions = exprs;
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append("ELSE");
+			foreach (var e in this.Expressions) {
+				sb.Append(" ");
+				context.Append(sb, e, flags | SqlBuildContextAppendFlags.WithAlias);
+			}
+		}
+	}
+
+	public class SqlEndCase : SqlElement {
+		public SqlEndCase(SqlElement prev) : base(prev) {
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append("END");
+		}
+	}
+
 	public class SqlOnDuplicateKeyUpdate : SqlElement {
 		public SqlAssign[] Assigns;
 
@@ -1338,11 +1430,22 @@ namespace Db {
 		}
 	}
 
+	public class SqlEnd : SqlElement {
+		public SqlEnd(SqlElement prev) : base(prev) {
+		}
+
+		public override void Build(SqlBuildContext context, SqlBuildContextAppendFlags flags, StringBuilder sb) {
+			sb.Append(";");
+		}
+	}
+
 	public static class SqlExtensionForMySql {
 		public static void CreateTableIfNotExists(this Tbl tbl, MySqlCommand cmd) { Db.CreateTableIfNotExists(cmd, tbl); }
 		public static void DropTableIfExists(this Tbl tbl, MySqlCommand cmd) { Db.DropTableIfExists(cmd, tbl); }
 		public static Func<MySqlCommand, MySqlCommand> ToFunc(this SqlElement element) { return Db.Sql(element); }
 		public static SqlSelect Select(this SqlInsertInto element, params object[] cols) { return new SqlSelect(element, cols); }
+		public static SqlSelect Select(this SqlEnd element, params object[] cols) { return new SqlSelect(element, cols); }
+		public static SqlUpdate Update(this SqlEnd element, object tbl) { return new SqlUpdate(element, tbl); }
 		public static SqlFrom From(this SqlSelect element, object tbl) { return new SqlFrom(element, tbl); }
 		public static SqlJoin InnerJoin(this SqlFrom element, object tbl) { return new SqlJoin(element, JoinType.Inner, tbl); }
 		public static SqlJoin LeftJoin(this SqlFrom element, object tbl) { return new SqlJoin(element, JoinType.Left, tbl); }
@@ -1365,6 +1468,20 @@ namespace Db {
 		public static SqlSet Set(this SqlJoin element, params SqlAssign[] assigns) { return new SqlSet(element, assigns); }
 		public static SqlValues Values(this SqlInsertInto element, params object[] value) { return new SqlValues(element, value); }
 		public static SqlValues Values(this SqlInsertInto element, object[,] values) { return new SqlValues(element, values); }
+		public static SqlEnd End(this SqlFrom element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlJoin element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlWhere element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlGroupBy element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlOrderBy element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlValues element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlSet element) { return new SqlEnd(element); }
+		public static SqlEnd End(this SqlOnDuplicateKeyUpdate element) { return new SqlEnd(element); }
+		public static SqlWhen When(this SqlCase element, object expression, params object[] expressions) { return new SqlWhen(element, expression, expressions); }
+		public static SqlWhen When(this SqlThen element, object expression, params object[] expressions) { return new SqlWhen(element, expression, expressions); }
+		public static SqlThen Then(this SqlWhen element, object expression, params object[] expressions) { return new SqlThen(element, expression, expressions); }
+		public static SqlElse Else(this SqlThen element, object expression, params object[] expressions) { return new SqlElse(element, expression, expressions); }
+		public static SqlEndCase End(this SqlThen element) { return new SqlEndCase(element); }
+		public static SqlEndCase End(this SqlElse element) { return new SqlEndCase(element); }
 	}
 
 	/// <summary>
@@ -1734,6 +1851,10 @@ namespace Db {
 			return new SqlOnDuplicateKeyUpdate(null, assigns);
 		}
 
+		public static SqlCase Case(object caseValue = null) {
+			return new SqlCase(null, caseValue);
+		}
+
 		/// <summary>
 		/// LAST_INSERT_ID を表すSQL要素を生成する
 		/// </summary>
@@ -1819,7 +1940,7 @@ namespace Db {
 					if (i == 0) {
 						hashCode = (uint)c.Name.GetHashCode();
 					} else {
-						hashCode *= (uint)c.Name.GetHashCode();
+						hashCode = (uint)EqualTester.CombineHashCode((int)hashCode, c.Name.GetHashCode());
 					}
 				}
 
@@ -1904,7 +2025,7 @@ namespace Db {
 		/// <param name="byName">列名とプロパティ名をマッチングさせて取得するなら true 、列順とプロパティ順を使うなら false</param>
 		/// <param name="columns">マッピングする<see cref="Col{T}"/>を指定する new { Cols.title, Cols.date } の様な匿名クラス</param>
 		/// <returns>レコードコレクション</returns>
-		public static List<T> ReadList<T>(MySqlCommand cmd, T columns, bool byName) {
+		public static List<T> ReadList<T>(MySqlCommand cmd, T columns, bool byName = false) {
 			var result = new List<T>();
 			var dr2cols = byName ? DataReaderToCols<T>.InvokeByName : DataReaderToCols<T>.InvokeByIndex;
 			using (var dr = cmd.ExecuteReader()) {
@@ -2596,6 +2717,33 @@ namespace Db {
 			return ((int)rol5 + h1) ^ h2;
 		}
 
+		/// <summary>
+		/// 指定のメモリ内容の一致判定を行う
+		/// </summary>
+		/// <param name="l">左辺値</param>
+		/// <param name="r">右辺値</param>
+		/// <param name="n"></param>
+		/// <returns>一致するなら true</returns>
+		public static unsafe bool Equals(byte* l, byte* r, int n) {
+			int i = 0;
+			for (; ; ) {
+				var ni = i + sizeof(IntPtr);
+				if (n < ni) {
+					break;
+				}
+				if (*(IntPtr*)(l + i) != *(IntPtr*)(r + i)) {
+					return false;
+				}
+				i = ni;
+			}
+			for (; i < n; i++) {
+				if (l[i] != r[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
 		public static bool Equals(sbyte[] l, sbyte[] r) {
 			if ((l == null) != (r == null)) {
 				return false;
@@ -2606,9 +2754,19 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					fixed (sbyte* pl = l)
+					fixed (sbyte* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2624,9 +2782,19 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					fixed (byte* pl = l)
+					fixed (byte* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2642,9 +2810,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(short)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(short);
+					fixed (short* pl = l)
+					fixed (short* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2660,9 +2839,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(ushort)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(ushort);
+					fixed (ushort* pl = l)
+					fixed (ushort* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2678,9 +2868,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(int)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(int);
+					fixed (int* pl = l)
+					fixed (int* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2696,9 +2897,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(uint)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(uint);
+					fixed (uint* pl = l)
+					fixed (uint* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2714,9 +2926,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(long)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(long);
+					fixed (long* pl = l)
+					fixed (long* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2732,9 +2955,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / sizeof(ulong)) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(ulong);
+					fixed (ulong* pl = l)
+					fixed (ulong* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2750,9 +2984,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / 16) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(decimal);
+					fixed (decimal* pl = l)
+					fixed (decimal* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2768,9 +3013,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / 16) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(Guid);
+					fixed (Guid* pl = l)
+					fixed (Guid* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2786,9 +3042,20 @@ namespace Db {
 			if (l.Length != r.Length) {
 				return false;
 			}
-			for (int i = 0; i < l.Length; i++) {
-				if (l[i] != r[i]) {
-					return false;
+			var n = l.Length;
+			if (n <= 128 / 8) {
+				for (int i = 0; i < n; i++) {
+					if (l[i] != r[i]) {
+						return false;
+					}
+				}
+			} else {
+				unsafe {
+					n *= sizeof(DateTime);
+					fixed (DateTime* pl = l)
+					fixed (DateTime* pr = r) {
+						return Equals((byte*)pl, (byte*)pr, n);
+					}
 				}
 			}
 			return true;
@@ -2918,7 +3185,7 @@ namespace Db {
 			}
 
 			var zero = Expression.Constant((int)0);
-			
+
 			if (type == typeof(string)) {
 				// 文字列なら null チェック後に GetHashCode 呼び出し
 				return GetNullTest(value, Expression.Call(value, getHashCode), zero);
@@ -3155,20 +3422,20 @@ namespace Db {
 		static readonly Func<T, int> _GetHashCode = EqualTester<T>.GetHashCode;
 		static readonly Func<T, T, bool> _Equals = EqualTester<T>.Equals;
 
+		int _HashCode;
+
 		/// <summary>
 		/// 値
 		/// </summary>
-		public T Value;
-
-		public KeyOf() {
-		}
+		public readonly T Value;
 
 		public KeyOf(T value) {
 			this.Value = value;
+			_HashCode = _GetHashCode(value);
 		}
 
 		public override int GetHashCode() {
-			return _GetHashCode(this.Value);
+			return _HashCode;
 		}
 
 		public override bool Equals(object obj) {
