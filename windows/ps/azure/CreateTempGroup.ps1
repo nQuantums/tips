@@ -1,0 +1,1 @@
+New-AzureRmResourceGroup -Name 'temp'
