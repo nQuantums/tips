@@ -1,3 +1,5 @@
+# 参考元： https://docs.microsoft.com/ja-jp/azure/virtual-machines/scripts/virtual-machines-windows-powershell-sample-create-vm-from-snapshot
+
 #Provide the subscription Id
 $subscriptionId = '54e69b76-27f2-4210-bded-e355384847a2'
 
